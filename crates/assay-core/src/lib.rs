@@ -10,5 +10,6 @@
 extern crate alloc;
 
 pub mod fixed;
+pub mod stats;
 
 pub use fixed::{Fixed, ParseFixedError, SCALE};
