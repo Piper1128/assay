@@ -9,6 +9,7 @@
 
 extern crate alloc;
 
+pub mod canonical;
 pub mod confidence;
 pub mod curve;
 pub mod fixed;
@@ -18,6 +19,7 @@ pub mod resolve;
 pub mod schema;
 pub mod stats;
 
+pub use canonical::canonical_statblock;
 pub use confidence::{Confidence, ConfidenceLevel};
 pub use curve::{Curve, CurveError, Interpolation};
 pub use fixed::{Fixed, ParseFixedError, SCALE};
