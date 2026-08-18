@@ -1,0 +1,64 @@
+//! Loadouts as the core sees them (ADR-009 semantics).
+//!
+//! A loadout references entity ids only and never pins a dataset version —
+//! the version is supplied at resolve time, which is the whole precondition
+//! for the impact diff (ADR-008 level 2). The TOML file format and its
+//! parsing live with `assay-cli`; this is the resolved-input shape.
+
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use crate::fixed::Fixed;
+use crate::ids::{ClassId, ItemId, PerkId, SkillId};
+use crate::schema::AttributeKind;
+
+/// An explicit gear roll chosen in the loadout. Rolls are part of the
+/// *question* ("this exact pair of leggings"), not a wiki claim — so they
+/// enter the pipeline as `Verified` facts, while the item's own base fields
+/// keep their dataset grades.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Roll {
+    /// Whole attribute points rolled on the piece (`dexterity = 4`).
+    Attribute(AttributeKind, i32),
+    /// Flat move speed rolled on the piece (`move_speed = 2`).
+    MoveSpeedAdd(Fixed),
+}
+
+/// One equipped piece: an item id plus the explicit rolls on this copy.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArmorPiece {
+    /// Which item definition this piece instantiates.
+    pub id: ItemId,
+    /// Explicit rolls on this copy; explicit values win over any
+    /// convenience roll level (ADR-009).
+    pub rolls: Vec<Roll>,
+}
+
+/// Buffs granted by party members whose auras cover this character
+/// (ADR-005 stage 3: Fortified Ground from the Fighter, Jokester from the
+/// Rogue). Own perks and skills apply through their own lists; these are the
+/// *external* sources.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct PartyBuffs {
+    /// Party members' skills affecting this character.
+    pub skills: Vec<SkillId>,
+    /// Party members' perks affecting this character.
+    pub perks: Vec<PerkId>,
+}
+
+/// A complete loadout: the input to [`crate::resolve::resolve`].
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Loadout {
+    /// Human-readable name (`rogue-lethal-artillery`).
+    pub name: String,
+    /// The class being resolved.
+    pub class: ClassId,
+    /// Slotted perks, in declaration order (applied in this order).
+    pub perks: Vec<PerkId>,
+    /// Slotted skills, in declaration order.
+    pub skills: Vec<SkillId>,
+    /// Equipped armor pieces.
+    pub armor: Vec<ArmorPiece>,
+    /// External party buffs.
+    pub party: PartyBuffs,
+}

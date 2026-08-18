@@ -13,6 +13,8 @@ pub mod confidence;
 pub mod curve;
 pub mod fixed;
 pub mod ids;
+pub mod loadout;
+pub mod resolve;
 pub mod schema;
 pub mod stats;
 
@@ -20,6 +22,8 @@ pub use confidence::{Confidence, ConfidenceLevel};
 pub use curve::{Curve, CurveError, Interpolation};
 pub use fixed::{Fixed, ParseFixedError, SCALE};
 pub use ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
+pub use loadout::{ArmorPiece, Loadout, PartyBuffs, Roll};
+pub use resolve::{ResolveError, Resolved, StageNote, resolve};
 pub use schema::{
     AttributeBlock, AttributeKind, ClassDef, DatasetSource, DerivedCurves, Effect, InMemoryDataset,
     ItemDef, PerkDef, SkillDef,

@@ -28,7 +28,7 @@ verdict() {
 }
 
 require_clean crates/assay-core/src/lib.rs crates/assay-core/src/confidence.rs \
-    crates/assay-diff/src/lib.rs crates/assay-data/Cargo.toml
+    crates/assay-core/src/resolve.rs crates/assay-diff/src/lib.rs crates/assay-data/Cargo.toml
 
 # ── no_std_violation ─────────────────────────────────────────────────────────
 # `use std::fs` in assay-core must fail the bare-metal build (E0433).
@@ -79,6 +79,19 @@ else
 fi
 git checkout --quiet -- crates/assay-core/src/confidence.rs
 verdict confidence_not_propagated "$gate_rejected"
+
+# ── pipeline_order ───────────────────────────────────────────────────────────
+# Feeding the curves the attribute sum from BEFORE stage 3 (party/perk
+# attributes applied after the curve lookup, ADR-005 stages 3↔4) must fail
+# the pipeline tests — the exact ordering the Rogue/Fighter synergy rests on.
+sed -i '/probe: pipeline-order/ s/attributes_final/attributes_after_gear/' crates/assay-core/src/resolve.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/resolve.rs
+verdict pipeline_order "$gate_rejected"
 
 # ── final tree check ─────────────────────────────────────────────────────────
 if ! git diff --quiet -- crates/; then
