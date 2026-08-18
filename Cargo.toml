@@ -21,6 +21,7 @@ assay-scrape = { path = "crates/assay-scrape" }
 
 # Dev-dependencies (tests run with std):
 proptest = "1"
+serde_json = "1"
 
 # ADR-001 rev 2: the deny-list below covers what `no_std` does not reach —
 # floats, silently truncating casts and panic-as-validation. `disallowed_types`

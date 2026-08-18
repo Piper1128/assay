@@ -1,0 +1,228 @@
+{
+  "description": "Slice vector: pipeline mechanics over a placeholder dataset (unverified test curves). Expected values computed by the independent Python mirror; replayed by the Rust vector test.",
+  "dataset": {
+    "classes": [
+      {
+        "id": "class.rogue",
+        "name": "Rogue",
+        "base_attributes": {
+          "confidence": "unverified",
+          "points": {
+            "strength": 9,
+            "vigor": 6,
+            "agility": 25,
+            "dexterity": 20,
+            "will": 10,
+            "knowledge": 10,
+            "resourcefulness": 25
+          }
+        },
+        "pdr_cap": {
+          "confidence": "unverified",
+          "micro": 60000000
+        },
+        "curves": {
+          "strength_to_physical_power": "curve.slice.str_to_ppb",
+          "agility_to_action_speed": "curve.slice.agi_to_as",
+          "agility_to_move_speed": "curve.slice.agi_to_ms",
+          "vigor_to_health": "curve.slice.vig_to_hp",
+          "armor_to_pdr": "curve.slice.ar_to_pdr"
+        }
+      }
+    ],
+    "curves": [
+      {
+        "id": "curve.slice.str_to_ppb",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -32000000
+          ],
+          [
+            50000000,
+            68000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.slice.agi_to_as",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -17187500
+          ],
+          [
+            32000000,
+            14000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.slice.agi_to_ms",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            281000000
+          ],
+          [
+            25000000,
+            306000000
+          ],
+          [
+            75000000,
+            331000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.slice.vig_to_hp",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            90000000
+          ],
+          [
+            6000000,
+            108500000
+          ],
+          [
+            50000000,
+            220000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.slice.ar_to_pdr",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -22000000
+          ],
+          [
+            100000000,
+            20000000
+          ],
+          [
+            400000000,
+            83000000
+          ]
+        ]
+      }
+    ],
+    "items": [
+      {
+        "id": "item.dark_leather_leggings",
+        "name": "Dark Leather Leggings",
+        "armor_rating": {
+          "confidence": "unverified",
+          "micro": 36000000
+        },
+        "move_speed_add": {
+          "confidence": "unverified",
+          "micro": -4000000
+        }
+      }
+    ],
+    "perks": [
+      {
+        "id": "perk.rogue.jokester",
+        "name": "Jokester",
+        "effects": [
+          {
+            "confidence": "unverified",
+            "kind": "all_attributes",
+            "points": 2
+          }
+        ]
+      },
+      {
+        "id": "perk.fighter.defense_mastery",
+        "name": "Defense Mastery",
+        "effects": [
+          {
+            "confidence": "unverified",
+            "kind": "raise_pdr_cap",
+            "micro": 75000000
+          }
+        ]
+      }
+    ],
+    "skills": [
+      {
+        "id": "skill.fighter.fortified_ground",
+        "name": "Fortified Ground",
+        "effects": [
+          {
+            "confidence": "unverified",
+            "kind": "all_attributes",
+            "points": 3
+          }
+        ]
+      }
+    ]
+  },
+  "loadouts": [
+    {
+      "name": "naked-rogue",
+      "class": "class.rogue",
+      "perks": [],
+      "skills": [],
+      "armor": [],
+      "party": {
+        "perks": [],
+        "skills": []
+      },
+      "expected_canonical": "{\"action_speed\":{\"confidence\":\"unverified\",\"micro\":7177734},\"armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":25,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":9,\"vigor\":6,\"will\":10}},\"health\":{\"confidence\":\"unverified\",\"micro\":108500000},\"move_speed\":{\"confidence\":\"unverified\",\"micro\":306000000},\"pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-14000000}}"
+    },
+    {
+      "name": "rogue-duo-buffed",
+      "class": "class.rogue",
+      "perks": [
+        "perk.rogue.jokester"
+      ],
+      "skills": [],
+      "armor": [],
+      "party": {
+        "perks": [],
+        "skills": [
+          "skill.fighter.fortified_ground"
+        ]
+      },
+      "expected_canonical": "{\"action_speed\":{\"confidence\":\"unverified\",\"micro\":12050781},\"armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":30,\"dexterity\":25,\"knowledge\":15,\"resourcefulness\":30,\"strength\":14,\"vigor\":11,\"will\":15}},\"health\":{\"confidence\":\"unverified\",\"micro\":121170455},\"move_speed\":{\"confidence\":\"unverified\",\"micro\":308500000},\"pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-4000000}}"
+    },
+    {
+      "name": "rogue-geared",
+      "class": "class.rogue",
+      "perks": [
+        "perk.fighter.defense_mastery"
+      ],
+      "skills": [],
+      "armor": [
+        {
+          "id": "item.dark_leather_leggings",
+          "rolls": [
+            {
+              "kind": "attribute",
+              "attribute": "dexterity",
+              "points": 4
+            },
+            {
+              "kind": "move_speed_add",
+              "micro": 2000000
+            }
+          ]
+        }
+      ],
+      "party": {
+        "perks": [],
+        "skills": []
+      },
+      "expected_canonical": "{\"action_speed\":{\"confidence\":\"unverified\",\"micro\":7177734},\"armor_rating\":{\"confidence\":\"unverified\",\"micro\":36000000},\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":25,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":9,\"vigor\":6,\"will\":10}},\"health\":{\"confidence\":\"unverified\",\"micro\":108500000},\"move_speed\":{\"confidence\":\"unverified\",\"micro\":304000000},\"pdr\":{\"confidence\":\"unverified\",\"micro\":-6880000},\"physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-14000000}}"
+    }
+  ]
+}

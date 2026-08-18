@@ -9,10 +9,9 @@
 # Ports still waiting for their subject:
 #   - fuzz-smoke on the assay-data decoder (ADR-001 rev 2 §4) — lands with the
 #     first real dataset loader.
-#   - mirror agreement over the vector corpus (ADR-010 rev 2 §3) — lands with
-#     the resolution pipeline.
-#   - determinism run (twice in-process, once in a fresh process, byte-identical
-#     canonical output, two platforms) — lands with canonical encoding.
+#   - fresh-process + second-platform determinism run (ADR-001 rev 2 §5) —
+#     lands when the CLI exposes resolution; the in-process half lives in
+#     crates/assay-core/tests/vectors_slice.rs.
 name: ci
 
 on:
@@ -56,6 +55,12 @@ jobs:
       # explicit textual gate (ADR-003 §5).
       - name: Trust boundary (assay-data must not depend on assay-scrape)
         run: bash tools/gates/dep_direction.sh
+
+      # One side of the mirror gate (ADR-010 rev 2 §3): the committed vector
+      # must regenerate identically from the independent Python mirror. The
+      # Rust side replays the same file in cargo test (vectors_slice).
+      - name: Mirror check
+        run: python3 mirror/gen_slice_vector.py --check
 
       # Every gate above must be proven able to fail (ADR-010 rev 2 §4).
       # Mutates the tree and restores it via git — runs last.

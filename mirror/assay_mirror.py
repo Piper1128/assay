@@ -1,0 +1,362 @@
+"""Independent Python mirror of Assay's resolution pipeline (ADR-010 rev 2).
+
+Written from the ADRs in docs/adr/ — never from the Rust code. A mirror
+derived from the implementation inherits its misunderstandings and is
+worthless. If Rust and mirror disagree, both are suspect until the ADR
+decides who is right; if the ADR is ambiguous, the ADR is the bug.
+
+Mirrors:
+- fixed-point i64 micro-units with banker's rounding   (ADR-001 rev 2)
+- linear curve sampling, one rounding per sample        (ADR-004)
+- confidence with minimum-rule propagation              (ADR-007)
+- the locked resolution stage order 1-8                 (ADR-005)
+- the canonical statblock grammar                       (ADR-001 rev 2 §3)
+
+Only pure ints — a float anywhere in this file is a bug.
+"""
+
+from __future__ import annotations
+
+SCALE = 1_000_000
+
+# ── fixed-point (ADR-001 rev 2) ──────────────────────────────────────────────
+
+
+def div_round_half_even(n: int, d: int) -> int:
+    """n / d rounded half to even. d must be positive; callers normalise sign.
+
+    Python's divmod is floor division with a remainder in 0..d for d > 0,
+    which matches Rust's div_euclid/rem_euclid — the tie test is sign-free.
+    """
+    assert d > 0
+    q, r = divmod(n, d)
+    twice = 2 * r
+    if twice > d or (twice == d and q % 2 != 0):
+        q += 1
+    return q
+
+
+def mul_div(a: int, num: int, den: int) -> int:
+    """a * num / den in micro-units, one banker's rounding at the division."""
+    assert den != 0
+    prod = a * num
+    if den < 0:
+        prod, den = -prod, -den
+    return div_round_half_even(prod, den)
+
+
+def fx_mul(a: int, b: int) -> int:
+    """Fixed multiplication: full product, one rounding back to micro."""
+    return mul_div(a, b, SCALE)
+
+
+# ── curves (ADR-004) ─────────────────────────────────────────────────────────
+
+
+def curve_sample(points: list[tuple[int, int]], x: int) -> int:
+    """Linear sample: clamped outside the range, exact at points, one
+    rounding between neighbours: y = y0 + (y1-y0)*(x-x0)/(x1-x0)."""
+    assert points, "curve has no points"
+    for (a, _), (b, _) in zip(points, points[1:]):
+        assert b > a, "curve inputs must be strictly ascending"
+    if x <= points[0][0]:
+        return points[0][1]
+    if x >= points[-1][0]:
+        return points[-1][1]
+    hi = next(i for i, p in enumerate(points) if p[0] > x)
+    x0, y0 = points[hi - 1]
+    x1, y1 = points[hi]
+    if x == x0:
+        return y0
+    return y0 + mul_div(y1 - y0, x - x0, x1 - x0)
+
+
+# ── confidence (ADR-007) ─────────────────────────────────────────────────────
+
+_RANK = {"unknown": 0, "unverified": 1, "verified": 2}
+
+
+def conf(level: str, value, note: str | None = None) -> dict:
+    """A graded value. note exists exactly when level is unknown."""
+    assert level in _RANK
+    assert (note is not None) == (level == "unknown")
+    return {"level": level, "value": value, "note": note}
+
+
+def zip_with(a: dict, b: dict, f) -> dict:
+    """Minimum-rule combination: the result's grade is the minimum of the
+    inputs' grades; notes from unknown inputs are joined with '; '."""
+    level = a["level"] if _RANK[a["level"]] <= _RANK[b["level"]] else b["level"]
+    notes = [c["note"] for c in (a, b) if c["note"] is not None]
+    note = "; ".join(notes) if level == "unknown" else None
+    return conf(level, f(a["value"], b["value"]), note)
+
+
+def map_conf(c: dict, f) -> dict:
+    """Transforms the value; grade and note travel unchanged (the Rust
+    Confidence::map — NOT zip_with(c, c, …), which would join the note with
+    itself)."""
+    return conf(c["level"], f(c["value"]), c["note"])
+
+
+def fold_sum(values: list[dict]) -> dict:
+    """Sums graded micro values. The empty sum is Verified(0): the absence
+    of modifiers is a certain fact, not a guess."""
+    acc = conf("verified", 0)
+    for v in values:
+        acc = zip_with(acc, v, lambda x, y: x + y)
+    return acc
+
+
+# ── resolution pipeline (ADR-005, locked stage order) ────────────────────────
+
+ATTRIBUTES = ["strength", "vigor", "agility", "dexterity", "will", "knowledge", "resourcefulness"]
+
+
+def _effects(dataset: dict, loadout: dict) -> list[dict]:
+    """Own perks, own skills, party perks, party skills — in that order, each
+    list in loadout declaration order."""
+    out: list[dict] = []
+    for perk_id in loadout["perks"]:
+        out.extend(dataset["perks"][perk_id]["effects"])
+    for skill_id in loadout["skills"]:
+        out.extend(dataset["skills"][skill_id]["effects"])
+    for perk_id in loadout["party"]["perks"]:
+        out.extend(dataset["perks"][perk_id]["effects"])
+    for skill_id in loadout["party"]["skills"]:
+        out.extend(dataset["skills"][skill_id]["effects"])
+    return out
+
+
+def _sample_attribute_curve(dataset: dict, curve_id: str, attributes: dict, kind: str) -> dict:
+    curve = dataset["curves"][curve_id]
+    return zip_with(
+        attributes,
+        curve,
+        lambda block, points: curve_sample(points, block[kind] * SCALE),
+    )
+
+
+def resolve(dataset: dict, loadout: dict) -> dict:
+    """Resolves a loadout; returns the resolved stat block as graded values.
+
+    Stage order is the ADR-005 lock: the attribute sum is final after stage 3,
+    strictly before any curve lookup in stage 4.
+    """
+    cls = dataset["classes"][loadout["class"]]
+
+    # Stage 1: class base attributes.
+    attributes = {
+        "level": cls["base_attributes"]["level"],
+        "value": dict(cls["base_attributes"]["value"]),
+        "note": cls["base_attributes"]["note"],
+    }
+
+    # Stage 2: attributes from gear rolls (facts of the question: Verified,
+    # so they do not degrade the block's grade).
+    for piece in loadout["armor"]:
+        for roll in piece["rolls"]:
+            if roll["kind"] == "attribute":
+                attributes["value"][roll["attribute"]] += roll["points"]
+
+    # Stage 3: attributes from perks/skills/party. FINAL after this loop.
+    effects = _effects(dataset, loadout)
+    for effect in effects:
+        payload = effect["value"]
+        if payload["kind"] == "all_attributes":
+            attributes = zip_with(
+                attributes,
+                effect,
+                lambda block, _p, pts=payload["points"]: {k: v + pts for k, v in block.items()},
+            )
+        elif payload["kind"] == "attribute":
+            attributes = zip_with(
+                attributes,
+                effect,
+                lambda block, _p, kk=payload["attribute"], pts=payload["points"]: {
+                    **block,
+                    kk: block[kk] + pts,
+                },
+            )
+
+    # Stage 4: attributes → derived stats via curves (reads the FINAL sum).
+    curves = cls["curves"]
+    physical_power_bonus = _sample_attribute_curve(
+        dataset, curves["strength_to_physical_power"], attributes, "strength"
+    )
+    action_speed = _sample_attribute_curve(
+        dataset, curves["agility_to_action_speed"], attributes, "agility"
+    )
+    move_speed = _sample_attribute_curve(
+        dataset, curves["agility_to_move_speed"], attributes, "agility"
+    )
+    health = _sample_attribute_curve(dataset, curves["vigor_to_health"], attributes, "vigor")
+
+    # Stage 5: flat adds.
+    adds: list[dict] = []
+    for piece in loadout["armor"]:
+        item = dataset["items"][piece["id"]]
+        if item["move_speed_add"] is not None:
+            adds.append(item["move_speed_add"])
+        for roll in piece["rolls"]:
+            if roll["kind"] == "move_speed_add":
+                adds.append(conf("verified", roll["micro"]))
+    for effect in effects:
+        if effect["value"]["kind"] == "move_speed_add":
+            adds.append(map_conf(effect, lambda p: p["micro"]))
+    move_speed = zip_with(move_speed, fold_sum(adds), lambda ms, add: ms + add)
+
+    # Stage 6: percentage bonuses: ms × (100 + Σ) / 100, one rounding.
+    bonuses: list[dict] = []
+    for effect in effects:
+        if effect["value"]["kind"] == "move_speed_bonus":
+            bonuses.append(map_conf(effect, lambda p: p["micro"]))
+    hundred = 100 * SCALE
+    move_speed = zip_with(
+        move_speed,
+        fold_sum(bonuses),
+        lambda ms, bonus: mul_div(ms, hundred + bonus, hundred),
+    )
+
+    # Stage 7: defensive chain: armor rating → PDR curve → cap.
+    ar_parts = [
+        dataset["items"][piece["id"]]["armor_rating"]
+        for piece in loadout["armor"]
+        if dataset["items"][piece["id"]]["armor_rating"] is not None
+    ]
+    armor_rating = fold_sum(ar_parts)
+    pdr_curve = dataset["curves"][curves["armor_to_pdr"]]
+    pdr = zip_with(armor_rating, pdr_curve, lambda ar, points: curve_sample(points, ar))
+    cap = cls["pdr_cap"]
+    for effect in effects:
+        if effect["value"]["kind"] == "raise_pdr_cap":
+            cap = zip_with(cap, effect, lambda c, p: max(c, p["micro"]))
+    pdr = zip_with(pdr, cap, min)
+
+    # Stage 8: situational mods stay separate (exchange layer, ADR-006).
+
+    return {
+        "attributes": attributes,
+        "physical_power_bonus": physical_power_bonus,
+        "action_speed": action_speed,
+        "move_speed": move_speed,
+        "health": health,
+        "armor_rating": armor_rating,
+        "pdr": pdr,
+    }
+
+
+# ── canonical encoding (ADR-001 rev 2 §3) ────────────────────────────────────
+
+
+def _js(s: str) -> str:
+    """Closed string escaping: quote, backslash, control chars < 0x20."""
+    out = ['"']
+    for ch in s:
+        if ch == '"':
+            out.append('\\"')
+        elif ch == "\\":
+            out.append("\\\\")
+        elif ord(ch) < 0x20:
+            out.append(f"\\u{ord(ch):04x}")
+        else:
+            out.append(ch)
+    out.append('"')
+    return "".join(out)
+
+
+def _graded_fixed(key: str, c: dict) -> str:
+    parts = [f'{_js(key)}:{{"confidence":{_js(c["level"])},"micro":{c["value"]}']
+    if c["note"] is not None:
+        parts.append(f',"note":{_js(c["note"])}')
+    parts.append("}")
+    return "".join(parts)
+
+
+def _graded_attributes(key: str, c: dict) -> str:
+    parts = [f'{_js(key)}:{{"confidence":{_js(c["level"])}']
+    if c["note"] is not None:
+        parts.append(f',"note":{_js(c["note"])}')
+    inner = ",".join(f"{_js(k)}:{c['value'][k]}" for k in sorted(c["value"]))
+    parts.append(f',"points":{{{inner}}}}}')
+    return "".join(parts)
+
+
+def canonical_statblock(resolved: dict) -> str:
+    """The canonical form: no whitespace, lexicographic keys, integers only,
+    absence distinct from null, note exactly for unknown."""
+    return (
+        "{"
+        + ",".join(
+            [
+                _graded_fixed("action_speed", resolved["action_speed"]),
+                _graded_fixed("armor_rating", resolved["armor_rating"]),
+                _graded_attributes("attributes", resolved["attributes"]),
+                _graded_fixed("health", resolved["health"]),
+                _graded_fixed("move_speed", resolved["move_speed"]),
+                _graded_fixed("pdr", resolved["pdr"]),
+                _graded_fixed("physical_power_bonus", resolved["physical_power_bonus"]),
+            ]
+        )
+        + "}"
+    )
+
+
+# ── vector-JSON adapters ─────────────────────────────────────────────────────
+
+
+def graded_from_json(node: dict, value_key: str) -> dict:
+    """Reads {"confidence": …, <value_key>: …[, "note": …]} into a graded value."""
+    return conf(node["confidence"], node[value_key], node.get("note"))
+
+
+def dataset_from_json(node: dict) -> dict:
+    """Indexes a vector-file dataset by id for resolution."""
+    classes = {}
+    for c in node["classes"]:
+        classes[c["id"]] = {
+            "name": c["name"],
+            "base_attributes": graded_from_json(c["base_attributes"], "points"),
+            "pdr_cap": graded_from_json(c["pdr_cap"], "micro"),
+            "curves": c["curves"],
+        }
+    curves = {}
+    for cu in node["curves"]:
+        curves[cu["id"]] = conf(
+            cu["confidence"], [tuple(p) for p in cu["points"]], cu.get("note")
+        )
+    items = {}
+    for it in node["items"]:
+        items[it["id"]] = {
+            "name": it["name"],
+            "armor_rating": (
+                graded_from_json(it["armor_rating"], "micro")
+                if it.get("armor_rating") is not None
+                else None
+            ),
+            "move_speed_add": (
+                graded_from_json(it["move_speed_add"], "micro")
+                if it.get("move_speed_add") is not None
+                else None
+            ),
+        }
+
+    def effect_list(defs: list[dict]) -> dict:
+        table = {}
+        for d in defs:
+            table[d["id"]] = {
+                "name": d["name"],
+                "effects": [
+                    conf(e["confidence"], {k: v for k, v in e.items() if k != "confidence"}, e.get("note"))
+                    for e in d["effects"]
+                ],
+            }
+        return table
+
+    return {
+        "classes": classes,
+        "curves": curves,
+        "items": items,
+        "perks": effect_list(node["perks"]),
+        "skills": effect_list(node["skills"]),
+    }
