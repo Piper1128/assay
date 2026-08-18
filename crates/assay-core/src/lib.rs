@@ -10,8 +10,17 @@
 extern crate alloc;
 
 pub mod confidence;
+pub mod curve;
 pub mod fixed;
+pub mod ids;
+pub mod schema;
 pub mod stats;
 
 pub use confidence::{Confidence, ConfidenceLevel};
+pub use curve::{Curve, CurveError, Interpolation};
 pub use fixed::{Fixed, ParseFixedError, SCALE};
+pub use ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
+pub use schema::{
+    AttributeBlock, AttributeKind, ClassDef, DatasetSource, DerivedCurves, Effect, InMemoryDataset,
+    ItemDef, PerkDef, SkillDef,
+};
