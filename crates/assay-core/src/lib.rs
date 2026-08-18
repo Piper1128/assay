@@ -8,3 +8,7 @@
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
+
+pub mod fixed;
+
+pub use fixed::{Fixed, ParseFixedError, SCALE};
