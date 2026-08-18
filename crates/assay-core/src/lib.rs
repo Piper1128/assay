@@ -9,7 +9,9 @@
 
 extern crate alloc;
 
+pub mod confidence;
 pub mod fixed;
 pub mod stats;
 
+pub use confidence::{Confidence, ConfidenceLevel};
 pub use fixed::{Fixed, ParseFixedError, SCALE};

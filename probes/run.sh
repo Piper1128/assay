@@ -27,7 +27,8 @@ verdict() {
     fi
 }
 
-require_clean crates/assay-core/src/lib.rs crates/assay-diff/src/lib.rs crates/assay-data/Cargo.toml
+require_clean crates/assay-core/src/lib.rs crates/assay-core/src/confidence.rs \
+    crates/assay-diff/src/lib.rs crates/assay-data/Cargo.toml
 
 # ── no_std_violation ─────────────────────────────────────────────────────────
 # `use std::fs` in assay-core must fail the bare-metal build (E0433).
@@ -65,6 +66,19 @@ else
 fi
 git checkout --quiet -- crates/assay-data/Cargo.toml
 verdict dep_direction "$gate_rejected"
+
+# ── confidence_not_propagated ────────────────────────────────────────────────
+# Combining confidence with max instead of min (ADR-007) must fail the
+# propagation tests. Mutates the anchored line; a vanished anchor makes the
+# sed a no-op, the tests pass, and the probe fails loudly — the right way.
+sed -i '/probe: confidence-propagation/ s/\.min(/.max(/' crates/assay-core/src/confidence.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/confidence.rs
+verdict confidence_not_propagated "$gate_rejected"
 
 # ── final tree check ─────────────────────────────────────────────────────────
 if ! git diff --quiet -- crates/; then
