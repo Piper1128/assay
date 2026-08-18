@@ -1,0 +1,16 @@
+[package]
+name = "assay-data"
+description = "Versioned dataset I/O: filesystem, parsing, validation, version lookup (ADR-003, ADR-004)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+assay-core.workspace = true
+
+[lints]
+workspace = true

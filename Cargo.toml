@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+authors = ["Piper"]
+license = "MIT"
+repository = "https://github.com/Piper1128/assay"
+publish = false
+
+# ADR-000 rev 2: assay-core is `no_std + alloc`. Internal dependencies are
+# declared here so versions exist in exactly one place.
+[workspace.dependencies]
+assay-core = { path = "crates/assay-core" }
+assay-data = { path = "crates/assay-data" }
+assay-diff = { path = "crates/assay-diff" }
+assay-scrape = { path = "crates/assay-scrape" }
+
+# Dev-dependencies (tests run with std):
+proptest = "1"
+
+# ADR-001 rev 2: the deny-list below covers what `no_std` does not reach —
+# floats, silently truncating casts and panic-as-validation. `disallowed_types`
+# and `disallowed_methods` are allow-by-default and must be set explicitly for
+# clippy.toml to bite at all.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+float_arithmetic = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+cast_lossless = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+disallowed_types = "deny"
+disallowed_methods = "deny"
+
+[profile.release]
+overflow-checks = true

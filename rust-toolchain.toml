@@ -1,0 +1,7 @@
+[toolchain]
+channel = "1.97.1"
+components = ["clippy", "rustfmt"]
+# ADR-000 rev 2: CI also builds assay-core for a bare-metal target. That build
+# is what proves the `no_std` boundary holds — a host build would let std sneak
+# in through a transitive dependency.
+targets = ["thumbv7em-none-eabi"]

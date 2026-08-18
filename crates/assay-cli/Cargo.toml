@@ -1,0 +1,22 @@
+[package]
+name = "assay-cli"
+description = "The assay binary. The only crate that may write to stdout (ADR-000 rev 2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "assay"
+path = "src/main.rs"
+
+[dependencies]
+assay-core.workspace = true
+assay-data.workspace = true
+assay-diff.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,20 @@
+# Mechanical enforcement of determinism (ADR-001 rev 2).
+#
+# The list applies to the whole workspace. BTreeMap/BTreeSet are the default
+# collections everywhere order can reach output, so a violation is something
+# that must be argued explicitly — not something that happens by accident.
+#
+# If a crate ever needs a documented exception (ADR-001 rev 2 allows f64 in
+# assay-cli's presentation layer; assay-scrape legitimately reads wall-clock
+# time for provenance stamps), it gets a narrower clippy.toml in its own
+# directory (clippy reads the nearest file). Such a file REPLACES this list
+# for that crate and must restate every ban it does not relax.
+
+disallowed-types = [
+    { path = "f32", reason = "floating point breaks byte-identical output (ADR-001 rev 2); exact decimal formatting from i64 micro-units is preferred even in presentation" },
+    { path = "f64", reason = "floating point breaks byte-identical output (ADR-001 rev 2); exact decimal formatting from i64 micro-units is preferred even in presentation" },
+    { path = "std::collections::HashMap", reason = "randomised iteration order breaks byte-identical output (ADR-001 rev 2); use BTreeMap" },
+    { path = "std::collections::HashSet", reason = "randomised iteration order breaks byte-identical output (ADR-001 rev 2); use BTreeSet" },
+    { path = "std::time::SystemTime", reason = "ambient time inside a pure computation; provenance timestamps enter as data (ADR-003)" },
+    { path = "std::time::Instant", reason = "ambient time inside a pure computation" },
+]

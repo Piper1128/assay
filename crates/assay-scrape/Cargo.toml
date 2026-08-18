@@ -1,0 +1,17 @@
+[package]
+name = "assay-scrape"
+description = "Proposal tool: scrapes community sources into a proposal diff, never truth (ADR-003)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+assay-core.workspace = true
+assay-data.workspace = true
+
+[lints]
+workspace = true

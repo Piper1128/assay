@@ -1,0 +1,63 @@
+# CI gates (ADR-010 rev 2).
+#
+# A commit passes only with: clean formatting, clippy without warnings, a host
+# build, assay-core building for a bare-metal target (the no_std purity gate,
+# ADR-000 rev 2), all tests green, the one-way trust boundary intact
+# (ADR-003), and every negative probe proving its gate can still fail
+# (ADR-010 rev 2 §4).
+#
+# Ports still waiting for their subject:
+#   - fuzz-smoke on the assay-data decoder (ADR-001 rev 2 §4) — lands with the
+#     first real dataset loader.
+#   - mirror agreement over the vector corpus (ADR-010 rev 2 §3) — lands with
+#     the resolution pipeline.
+#   - determinism run (twice in-process, once in a fresh process, byte-identical
+#     canonical output, two platforms) — lands with canonical encoding.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # rust-toolchain.toml controls version, components and targets
+      - name: Toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy (all targets, warnings are errors)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build (host)
+        run: cargo build --workspace
+
+      # The proof that the no_std boundary holds: assay-core must build for a
+      # target with no std at all (ADR-000 rev 2).
+      - name: Build (no_std target)
+        run: cargo build --target thumbv7em-none-eabi -p assay-core
+
+      - name: Test
+        run: cargo test --workspace
+
+      # no_std cannot see this boundary (both crates are std), so it stays an
+      # explicit textual gate (ADR-003 §5).
+      - name: Trust boundary (assay-data must not depend on assay-scrape)
+        run: bash tools/gates/dep_direction.sh
+
+      # Every gate above must be proven able to fail (ADR-010 rev 2 §4).
+      # Mutates the tree and restores it via git — runs last.
+      - name: Negative probes
+        run: bash probes/run.sh
