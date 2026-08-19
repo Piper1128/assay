@@ -6,7 +6,7 @@
 # (ADR-003), and every negative probe proving its gate can still fail
 # (ADR-010 rev 2 §4).
 #
-Every port ADR-010 rev 2 names now has a job. The in-process half of the
+# Every port ADR-010 rev 2 names now has a job. The in-process half of the
 # determinism requirement lives in crates/assay-core/tests/vectors_slice.rs;
 # the fresh-process and second-platform halves are the `determinism` job.
 name: ci
