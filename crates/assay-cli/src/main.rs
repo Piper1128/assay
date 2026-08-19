@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use assay_core::confidence::ConfidenceLevel;
+use assay_core::exchange::{Exchange, ExchangeContext, Strike};
 use assay_core::resolve::Resolved;
+use assay_core::schema::DatasetSource;
 use assay_core::{Confidence, canonical_statblock, resolve};
 
 const USAGE: &str = "\
@@ -19,6 +21,7 @@ assay — headless stat resolver and patch differ for Dark and Darker
 
 USAGE:
     assay resolve <loadout.toml> [OPTIONS]
+    assay exchange <attacker.toml> <defender.toml> [OPTIONS]
     assay diff <build-a> <build-b> [--loadouts <dir>] [--data <dir>]
     assay versions [--data <dir>]
 
@@ -29,6 +32,10 @@ RESOLVE OPTIONS:
     --explain        print every pipeline stage: input, transformation, output
     --json           print the canonical form instead of a table
     --strict         exit 2 if any value is below `verified` (ADR-007)
+
+EXCHANGE OPTIONS:
+    --explain        print all nine damage steps (ADR-006)
+    --build / --data as for resolve
 
 DIFF OPTIONS:
     --loadouts <dir>  also resolve every .toml in <dir> against both versions
@@ -55,6 +62,7 @@ fn main() -> ExitCode {
 fn run(args: &[String]) -> Result<ExitCode, String> {
     match args.first().map(String::as_str) {
         Some("resolve") => cmd_resolve(&args[1..]),
+        Some("exchange") => cmd_exchange(&args[1..]),
         Some("versions") => cmd_versions(&args[1..]),
         Some("--help" | "-h" | "help") | None => {
             print!("{USAGE}");
@@ -154,8 +162,7 @@ fn cmd_resolve(args: &[String]) -> Result<ExitCode, String> {
     };
     let dataset = assay_data::load(&flags.data, &build).map_err(|e| e.to_string())?;
 
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-    let loadout = loadout_file::parse(&text).map_err(|e| format!("{path}: {e}"))?;
+    let loadout = read_loadout(path)?;
 
     let resolved = resolve(&loadout, &dataset.entities).map_err(|e| e.to_string())?;
 
@@ -280,6 +287,85 @@ fn read_loadouts(dir: &Path) -> Result<Vec<assay_core::Loadout>, String> {
             loadout_file::parse(&text).map_err(|e| format!("{}: {e}", path.display()))
         })
         .collect()
+}
+
+fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
+    let flags = parse_flags(args, &["--data", "--build", "--explain"])?;
+    let [attacker_path, defender_path] = flags.positional.as_slice() else {
+        return Err("exchange needs an attacker and a defender loadout".to_string());
+    };
+
+    let build = match &flags.build {
+        Some(build) => build.clone(),
+        None => newest_build(&flags.data)?,
+    };
+    let dataset = assay_data::load(&flags.data, &build).map_err(|e| e.to_string())?;
+
+    let attacker_loadout = read_loadout(attacker_path)?;
+    let defender_loadout = read_loadout(defender_path)?;
+    let attacker = resolve(&attacker_loadout, &dataset.entities).map_err(|e| e.to_string())?;
+    let defender = resolve(&defender_loadout, &dataset.entities).map_err(|e| e.to_string())?;
+
+    // A weapon is required: a "basic attack" with no weapon has no base
+    // damage, and inventing one would be the tool guessing.
+    let weapon_id = attacker_loadout.weapons.main_hand.as_ref().ok_or_else(|| {
+        format!(
+            "{} has no [weapons] main_hand, so there is nothing to swing",
+            attacker_loadout.name
+        )
+    })?;
+    let item = dataset
+        .entities
+        .item(weapon_id)
+        .ok_or_else(|| format!("item not in dataset: {weapon_id}"))?;
+    let profile = item
+        .weapon
+        .as_ref()
+        .ok_or_else(|| format!("{} is not a weapon", item.name))?;
+
+    let strike = Strike::basic_swing(profile);
+    let context = ExchangeContext::default();
+    let outcome = Exchange::new(&attacker, &defender, &strike, &context)
+        .damage()
+        .map_err(|e| e.to_string())?;
+
+    println!(
+        "{} swinging {} at {}   {} ({build})",
+        attacker_loadout.name, item.name, defender_loadout.name, dataset.manifest.label
+    );
+    println!();
+    println!(
+        "  {} damage                {:>12}",
+        marker(outcome.damage.level()),
+        outcome.damage.value().value()
+    );
+    println!(
+        "  {} defender effective PDR {:>11}",
+        marker(outcome.effective_pdr.level()),
+        outcome.effective_pdr.value().value()
+    );
+    if let Some(note) = outcome.damage.note() {
+        println!(
+            "
+  assumptions:
+    {note}"
+        );
+    }
+    if flags.explain {
+        println!(
+            "
+  exchange (ADR-006):"
+        );
+        for step in &outcome.trace {
+            println!("    {}. {:<24} {}", step.stage, step.label, step.detail);
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn read_loadout(path: &str) -> Result<assay_core::Loadout, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    loadout_file::parse(&text).map_err(|e| format!("{path}: {e}"))
 }
 
 /// The newest committed build, by the sort order `versions` returns.

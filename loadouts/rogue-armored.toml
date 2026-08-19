@@ -1,0 +1,6 @@
+# A defender with armour, so penetration actually matters.
+name  = "rogue-armored"
+class = "class.rogue"
+
+[[armor]]
+id = "item.dark_leather_leggings"

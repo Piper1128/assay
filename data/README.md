@@ -26,14 +26,18 @@ with armour rating and flat move speed, and perks/skills whose effects are in
 the ADR-004 vocabulary. Weapons, cooldowns, spell coefficients and monsters
 are absent because nothing consumes them yet.
 
-**Hotfix 122 therefore differs from Hotfix 123 in exactly one place:** Sprint's
-Additional Move Speed per stack, which the patch notes record as going from 15
-to 13. Every other Hotfix 123 change — Flanged Mace and Morning Star armour
-penetration 15% → 10%, War Hammer −1 damage, Club +1, Leviathan +1, Longbow
-action speed, Lethal Mark becoming reapplicable, the Barbarian/Cleric/Sorcerer
-adjustments, monster health — touches something the schema does not model.
-A diff between these two versions is honest but narrow, and it will widen as
-the schema does.
+**Hotfix 122 differs from Hotfix 123 in seven recorded places:** Sprint's
+Additional Move Speed per stack (15 → 13), and the weapon changes to Flanged
+Mace, Morning Star, War Hammer and Club. Weapon values are the Rarity I base
+from each weapon's wiki page; the Hotfix 122 figures are those minus the delta
+the `Patch:6.12` notes state, which is why they are graded the same as the
+values they were derived from.
+
+Still outside the schema, and therefore absent: Leviathan +1 damage (weapon
+page not located), Longbow's action speed increase (no number given, and
+weapons carry no action speed field yet), Lethal Mark becoming reapplicable,
+the Barbarian/Cleric/Sorcerer adjustments, and monster health. A diff between
+these versions is honest but narrow, and widens as the schema does.
 
 ## Confidence
 

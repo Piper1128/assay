@@ -17,6 +17,9 @@
 //! attributes = { dexterity = 4 }
 //! move_speed_add = "2"
 //!
+//! [weapons]
+//! main_hand = "item.flanged_mace"
+//!
 //! [party]
 //! skills = ["skill.fighter.fortified_ground"]
 //! ```
@@ -29,19 +32,20 @@
 //! *which* ally granted it. Id lists match how every other reference in the
 //! format works.
 //!
-//! **Weapons, rarity and roll levels are not accepted yet.** The ADR sketches
-//! `[weapons]` and `rarity = "epic"`/`roll = "max"`, but nothing in the
-//! resolver consumes them: per-rarity modifier ranges are the dataset arc's
-//! subject. Accepting a field and ignoring it would be a silent lie, so they
-//! are rejected with an error that says why. Explicit rolls already work,
-//! which is what those fields would have been shorthand for.
+//! **Only the main hand, and no rarity or roll levels.** `[weapons]` accepts
+//! `main_hand` because the exchange model consumes it; `off_hand` is absent
+//! because dual-wield changes how attacks alternate and that mechanic does
+//! not exist yet. `rarity = "epic"` and `roll = "max"` are still rejected:
+//! per-rarity modifier ranges are the dataset arc's subject, and accepting a
+//! field that changes nothing would be a silent lie. Explicit rolls already
+//! work, which is what those fields would have been shorthand for.
 
 use std::collections::BTreeMap;
 use std::fmt;
 
 use assay_core::fixed::Fixed;
 use assay_core::ids::{ClassId, ItemId, PerkId, SkillId};
-use assay_core::loadout::{ArmorPiece, Loadout, PartyBuffs, Roll};
+use assay_core::loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
 use assay_core::schema::AttributeKind;
 use serde::Deserialize;
 
@@ -95,6 +99,9 @@ pub(crate) fn parse(text: &str) -> Result<Loadout, LoadoutError> {
         perks: dto.perks.iter().map(PerkId::new).collect(),
         skills: dto.skills.iter().map(SkillId::new).collect(),
         armor,
+        weapons: Weapons {
+            main_hand: dto.weapons.main_hand.as_deref().map(ItemId::new),
+        },
         party: PartyBuffs {
             perks: dto.party.perks.iter().map(PerkId::new).collect(),
             skills: dto.party.skills.iter().map(SkillId::new).collect(),
@@ -121,7 +128,16 @@ struct LoadoutDto {
     #[serde(default)]
     armor: Vec<ArmorDto>,
     #[serde(default)]
+    weapons: WeaponsDto,
+    #[serde(default)]
     party: PartyDto,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WeaponsDto {
+    #[serde(default)]
+    main_hand: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -183,12 +199,33 @@ skills = ["skill.fighter.fortified_ground"]
 
     #[test]
     fn unmodelled_fields_are_rejected_rather_than_ignored() {
-        // ADR-009 sketches these; nothing consumes them yet, and silently
-        // accepting them would let a user believe rarity was applied.
-        let with_weapons = "name = \"x\"\nclass = \"class.rogue\"\n[weapons]\nmain_hand = \"item.rondel_dagger\"\n";
-        assert!(matches!(parse(with_weapons), Err(LoadoutError::Syntax(_))));
+        // A main hand is accepted now: the exchange model consumes it.
+        let main_hand = r#"
+name  = "x"
+class = "class.rogue"
+[weapons]
+main_hand = "item.flanged_mace"
+"#;
+        assert!(parse(main_hand).is_ok());
 
-        let with_rarity = "name = \"x\"\nclass = \"class.rogue\"\n[[armor]]\nid = \"item.x\"\nrarity = \"epic\"\n";
+        // An off hand still changes nothing — dual-wield is not modelled,
+        // and accepting the field would let a user believe it was.
+        let off_hand = r#"
+name  = "x"
+class = "class.rogue"
+[weapons]
+off_hand = "item.x"
+"#;
+        assert!(matches!(parse(off_hand), Err(LoadoutError::Syntax(_))));
+
+        // Rarity and roll levels likewise: per-rarity ranges are deferred.
+        let with_rarity = r#"
+name  = "x"
+class = "class.rogue"
+[[armor]]
+id = "item.x"
+rarity = "epic"
+"#;
         assert!(matches!(parse(with_rarity), Err(LoadoutError::Syntax(_))));
     }
 

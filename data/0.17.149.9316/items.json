@@ -1,6 +1,24 @@
 {
   "items": [
     {
+      "id": "item.club",
+      "name": "Club",
+      "move_speed_add": {
+        "confidence": "unverified",
+        "micro": -22000000
+      },
+      "weapon": {
+        "base_damage": {
+          "confidence": "unverified",
+          "micro": 28000000
+        },
+        "armor_pen": {
+          "confidence": "unverified",
+          "micro": 5000000
+        }
+      }
+    },
+    {
       "id": "item.dark_leather_leggings",
       "name": "Dark Leather Leggings",
       "armor_rating": {
@@ -10,6 +28,60 @@
       "move_speed_add": {
         "confidence": "unverified",
         "micro": -4000000
+      }
+    },
+    {
+      "id": "item.flanged_mace",
+      "name": "Flanged Mace",
+      "move_speed_add": {
+        "confidence": "unverified",
+        "micro": -20000000
+      },
+      "weapon": {
+        "base_damage": {
+          "confidence": "unverified",
+          "micro": 32000000
+        },
+        "armor_pen": {
+          "confidence": "unverified",
+          "micro": 15000000
+        }
+      }
+    },
+    {
+      "id": "item.morning_star",
+      "name": "Morning Star",
+      "move_speed_add": {
+        "confidence": "unverified",
+        "micro": -25000000
+      },
+      "weapon": {
+        "base_damage": {
+          "confidence": "unverified",
+          "micro": 32000000
+        },
+        "armor_pen": {
+          "confidence": "unverified",
+          "micro": 15000000
+        }
+      }
+    },
+    {
+      "id": "item.war_hammer",
+      "name": "War Hammer",
+      "move_speed_add": {
+        "confidence": "unverified",
+        "micro": -25000000
+      },
+      "weapon": {
+        "base_damage": {
+          "confidence": "unverified",
+          "micro": 33000000
+        },
+        "armor_pen": {
+          "confidence": "unverified",
+          "micro": 10000000
+        }
       }
     }
   ]

@@ -54,6 +54,7 @@ use crate::derived::well_known;
 use crate::fixed::Fixed;
 use crate::ids::DerivedStatId;
 use crate::resolve::{Resolved, StageNote};
+use crate::schema::WeaponProfile;
 use crate::stats::{
     ArmorPen, ArmorRating, Damage, EffectivePdr, PdrMod, PdrPercent, ScalingCoefficient,
     TrueDamage, apply_pdr_mod, apply_percent, apply_scaling, penetrate, reduce_by_pdr,
@@ -74,6 +75,28 @@ pub struct Strike {
     pub armor_pen: Confidence<ArmorPen>,
     /// True damage, applied after the whole reduction chain (step 8).
     pub true_damage: Confidence<TrueDamage>,
+}
+
+impl Strike {
+    /// A plain weapon swing: the weapon's own damage and penetration, 100%
+    /// scaling, nothing else.
+    ///
+    /// Skills bring their own scaling coefficient, flat bonus and true
+    /// damage (ADR-006 steps 2, 4 and 8); this is the unmodified attack, and
+    /// building it here means a weapon in the dataset reaches the damage
+    /// model instead of sitting inert next to it.
+    #[must_use]
+    pub fn basic_swing(weapon: &WeaponProfile) -> Strike {
+        Strike {
+            base: weapon.base_damage.clone().map(Damage::new),
+            // 100%: an unmodified swing scales fully. Sneak Attack's 0% is a
+            // property of the skill, never a default (ADR-006 step 2).
+            scaling: Confidence::Verified(ScalingCoefficient::new(Fixed::from_int(100))),
+            flat_bonus: Confidence::Verified(Damage::new(Fixed::ZERO)),
+            armor_pen: weapon.armor_pen.clone().map(ArmorPen::new),
+            true_damage: Confidence::Verified(TrueDamage::new(Fixed::ZERO)),
+        }
+    }
 }
 
 /// Situational modifiers that belong to the exchange, not to either stat
@@ -239,11 +262,28 @@ impl<'a> Exchange<'a> {
         });
 
         // ── 6: → PDR from the curve, capped ──────────────────────────────
+        // ⚠ KNOWN DEFECT — do not read this as merely approximate.
+        //
         // The defender's resolved PDR already went through curve and cap
-        // (ADR-005 stage 7). Penetration changes the armor rating, so the
-        // reduction is rescaled by how much rating survived — a linear
-        // approximation the dataset arc replaces with a re-sample of the
-        // real curve at the penetrated rating.
+        // (ADR-005 stage 7). Penetration lowers the armour rating, and the
+        // correct response is to re-sample the PDR curve at the lowered
+        // rating. This rescales the resolved PDR proportionally instead,
+        // which is **wrong in direction whenever PDR is negative**: light
+        // armour sits below zero, and scaling a negative number toward zero
+        // makes the defender take *less* damage from a penetrating hit.
+        // Penetration must never help the defender.
+        //
+        // Measured on the committed dataset: armour rating 36 resolves to
+        // −6.88% PDR. At 10% penetration the curve gives −8.392%, this gives
+        // −6.192%. The error grows with penetration, so a heavier
+        // penetration reads as a *smaller* hit.
+        //
+        // The fix is architectural, not a patch here: the exchange needs the
+        // defender's PDR curve to re-sample, and ADR-006 states damage is a
+        // pure function of attacker, defender and context. Either `Resolved`
+        // carries enough to recompute PDR at another rating, or ADR-006's
+        // purity clause changes. That is a decision, so it is flagged rather
+        // than worked around.
         let base_pdr = defender_pdr.clone().map(PdrPercent::new);
         let pdr_after_pen = base_pdr.clone().zip_with(
             defender_armor

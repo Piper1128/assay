@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 
 use assay_core::derived::well_known;
-use assay_core::loadout::{Loadout, PartyBuffs};
+use assay_core::loadout::{Loadout, PartyBuffs, Weapons};
 use assay_core::{ClassId, ConfidenceLevel, Fixed, resolve};
 
 fn data_root() -> PathBuf {
@@ -25,6 +25,7 @@ fn naked_rogue() -> Loadout {
         perks: vec![],
         skills: vec![],
         armor: vec![],
+        weapons: Weapons::default(),
         party: PartyBuffs::default(),
     }
 }

@@ -46,6 +46,15 @@ pub struct PartyBuffs {
     pub perks: Vec<PerkId>,
 }
 
+/// Wielded weapons. Only the main hand is modelled: dual-wield changes how
+/// attacks alternate, which is a mechanic the exchange model does not have
+/// yet, and pretending otherwise would produce confident wrong numbers.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Weapons {
+    /// The weapon an attack comes from.
+    pub main_hand: Option<ItemId>,
+}
+
 /// A complete loadout: the input to [`crate::resolve::resolve`].
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Loadout {
@@ -59,6 +68,8 @@ pub struct Loadout {
     pub skills: Vec<SkillId>,
     /// Equipped armor pieces.
     pub armor: Vec<ArmorPiece>,
+    /// Wielded weapons.
+    pub weapons: Weapons,
     /// External party buffs.
     pub party: PartyBuffs,
 }

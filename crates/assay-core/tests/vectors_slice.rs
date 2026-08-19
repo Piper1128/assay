@@ -16,7 +16,7 @@ use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage
 use assay_core::{
     ArmorPiece, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
     DerivedStatDef, DerivedStatId, Effect, Fixed, InMemoryDataset, ItemDef, ItemId, Loadout,
-    PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId,
+    PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId, Weapons,
     canonical_exchange, canonical_statblock, resolve,
 };
 use serde_json::Value;
@@ -186,6 +186,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
             name: item["name"].as_str().expect("item name").to_string(),
             armor_rating: optional("armor_rating"),
             move_speed_add: optional("move_speed_add"),
+            weapon: None,
         });
     }
     for perk in node["perks"].as_array().expect("perks") {
@@ -254,6 +255,13 @@ fn loadout(node: &Value) -> Loadout {
         perks: ids("perks").into_iter().map(PerkId::new).collect(),
         skills: ids("skills").into_iter().map(SkillId::new).collect(),
         armor,
+        weapons: Weapons {
+            main_hand: node
+                .get("weapons")
+                .and_then(|w| w.get("main_hand"))
+                .and_then(serde_json::Value::as_str)
+                .map(ItemId::new),
+        },
         party: PartyBuffs {
             perks: node["party"]["perks"]
                 .as_array()

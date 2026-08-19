@@ -1,0 +1,7 @@
+# A Fighter swinging a Flanged Mace — the weapon Hotfix 123 nerfed twice:
+# base damage -1 and armour penetration 15% -> 10%.
+name  = "fighter-mace"
+class = "class.fighter"
+
+[weapons]
+main_hand = "item.flanged_mace"

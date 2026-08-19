@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use assay_core::{ClassId, Loadout, PartyBuffs, SkillId};
+use assay_core::{ClassId, Loadout, PartyBuffs, SkillId, Weapons};
 use assay_diff::{Change, dataset_diff, impact_diff};
 
 const HF122: &str = "0.17.149.9316";
@@ -25,6 +25,7 @@ fn fighter_with_sprint() -> Loadout {
         perks: vec![],
         skills: vec![SkillId::new("skill.fighter.sprint")],
         armor: vec![],
+        weapons: Weapons::default(),
         party: PartyBuffs::default(),
     }
 }
@@ -74,10 +75,60 @@ fn a_build_the_patch_did_not_touch_reports_unchanged() {
         perks: vec![],
         skills: vec![],
         armor: vec![],
+        weapons: Weapons::default(),
         party: PartyBuffs::default(),
     };
     let impacts = impact_diff(&before, &after, &[naked_rogue]);
     assert!(impacts[0].stats.iter().all(|s| !s.changed()));
+}
+
+#[test]
+fn the_weapon_nerfs_show_up_too() {
+    // Regression: weapon profiles were added to the schema without being
+    // added to the diff's field extractor, so the first real weapon patch
+    // reported nothing at all. Every documented weapon change is asserted
+    // here so a future field cannot go blind the same way.
+    let before = assay_data::load(&data_root(), HF122).expect("hotfix-122 loads");
+    let after = assay_data::load(&data_root(), HF123).expect("hotfix-123 loads");
+    let changes = dataset_diff(&before, &after);
+
+    let modified = |id: &str, field: &str, from: &str, to: &str| {
+        changes.iter().any(|c| {
+            matches!(
+                c,
+                Change::Modified { id: cid, field: cf, from: cfrom, to: cto }
+                    if cid == id && cf == field && cfrom == from && cto == to
+            )
+        })
+    };
+
+    // Patch:6.12 Hotfix 123: "Flanged Mace/Morning Star weapon damage -1,
+    // armor penetration from 15% to 10%", "War Hammer -1 damage",
+    // "Club +1 damage".
+    assert!(
+        modified("item.flanged_mace", "weapon.base_damage", "32", "31"),
+        "{changes:#?}"
+    );
+    assert!(
+        modified("item.flanged_mace", "weapon.armor_pen", "15", "10"),
+        "{changes:#?}"
+    );
+    assert!(
+        modified("item.morning_star", "weapon.base_damage", "32", "31"),
+        "{changes:#?}"
+    );
+    assert!(
+        modified("item.morning_star", "weapon.armor_pen", "15", "10"),
+        "{changes:#?}"
+    );
+    assert!(
+        modified("item.war_hammer", "weapon.base_damage", "33", "32"),
+        "{changes:#?}"
+    );
+    assert!(
+        modified("item.club", "weapon.base_damage", "28", "29"),
+        "{changes:#?}"
+    );
 }
 
 #[test]

@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use assay_core::{ClassId, Loadout, PartyBuffs, PerkId};
+use assay_core::{ClassId, Loadout, PartyBuffs, PerkId, Weapons};
 use assay_diff::{Change, dataset_diff, impact_diff};
 
 /// A version differing from the baseline only where the arguments say.
@@ -111,6 +111,7 @@ fn naked_rogue() -> Loadout {
         perks: vec![],
         skills: vec![],
         armor: vec![],
+        weapons: Weapons::default(),
         party: PartyBuffs::default(),
     }
 }

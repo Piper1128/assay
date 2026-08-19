@@ -460,7 +460,7 @@ mod tests {
     use crate::curve::Curve;
     use crate::derived::{DerivedStatDef, RatingInput};
     use crate::ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
-    use crate::loadout::{ArmorPiece, PartyBuffs};
+    use crate::loadout::{ArmorPiece, PartyBuffs, Weapons};
     use crate::schema::{ClassDef, InMemoryDataset, ItemDef, PerkDef, SkillDef};
     use crate::stats::Attribute;
 
@@ -621,6 +621,7 @@ mod tests {
             name: "Dark Leather Leggings".to_string(),
             armor_rating: Some(Confidence::Unverified(fx(36))),
             move_speed_add: Some(Confidence::Unverified(fx(-4))),
+            weapon: None,
         });
 
         data.insert_perk(PerkDef {
@@ -652,6 +653,7 @@ mod tests {
             perks: vec![],
             skills: vec![],
             armor: vec![],
+            weapons: Weapons::default(),
             party: PartyBuffs::default(),
         }
     }
@@ -784,6 +786,7 @@ mod tests {
             name: "Test Plate".to_string(),
             armor_rating: Some(Confidence::Unverified(fx(400))),
             move_speed_add: None,
+            weapon: None,
         };
         let mut data = test_dataset();
         data.insert_item(heavy);

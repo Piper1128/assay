@@ -18,10 +18,16 @@
 //! diff rather than as silent corruption.
 //!
 //! Fields are compared as rendered strings rather than by walking typed
-//! structures. That is deliberate: every value already has an exact,
-//! lossless rendering (integers and `Fixed`, never floats), the field set
-//! grows with the schema for free, and a new field cannot silently escape
-//! the diff because nobody remembered to add a match arm.
+//! structures, because every value already has an exact, lossless rendering
+//! (integers and `Fixed`, never floats) and comparison then needs no
+//! per-type logic.
+//!
+//! **But the field set is enumerated by hand in [`fields`], so adding a
+//! field to the schema without adding it there makes the diff silently blind
+//! to it.** That happened once already: weapon profiles were added to
+//! `ItemDef` and the first real weapon patch showed no change at all. If you
+//! extend an entity, extend `fields` in the same commit — and check that a
+//! diff of the change you just made actually reports it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -289,6 +295,10 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
                     map.insert("name".into(), def.name.clone());
                     insert_graded(&mut map, "armor_rating", def.armor_rating.as_ref());
                     insert_graded(&mut map, "move_speed_add", def.move_speed_add.as_ref());
+                    if let Some(weapon) = &def.weapon {
+                        insert_graded(&mut map, "weapon.base_damage", Some(&weapon.base_damage));
+                        insert_graded(&mut map, "weapon.armor_pen", Some(&weapon.armor_pen));
+                    }
                 }
             }
             EntityKind::Perk => {

@@ -36,6 +36,7 @@ use assay_core::fixed::Fixed;
 use assay_core::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::schema::{
     AttributeBlock, AttributeKind, ClassDef, Effect, InMemoryDataset, ItemDef, PerkDef, SkillDef,
+    WeaponProfile,
 };
 use serde::Deserialize;
 
@@ -235,6 +236,15 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
             move_speed_add: dto
                 .move_speed_add
                 .map(GradedMicro::into_fixed)
+                .transpose()?,
+            weapon: dto
+                .weapon
+                .map(|w| -> Result<WeaponProfile, LoadError> {
+                    Ok(WeaponProfile {
+                        base_damage: w.base_damage.into_fixed()?,
+                        armor_pen: w.armor_pen.into_fixed()?,
+                    })
+                })
                 .transpose()?,
         });
     }
@@ -492,6 +502,17 @@ struct ItemDto {
     armor_rating: Option<GradedMicro>,
     #[serde(default)]
     move_speed_add: Option<GradedMicro>,
+    #[serde(default)]
+    weapon: Option<WeaponDto>,
+}
+
+/// Wielded-item stats (ADR-006 step 1). Rarity I base values; per-rarity
+/// ranges are the dataset arc's subject.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WeaponDto {
+    base_damage: GradedMicro,
+    armor_pen: GradedMicro,
 }
 
 #[derive(Debug, Clone, Deserialize)]

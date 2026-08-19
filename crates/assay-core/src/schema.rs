@@ -142,8 +142,19 @@ pub struct ClassDef {
     pub derived: Vec<DerivedStatDef>,
 }
 
-/// Fixed stats granted by wearing an item. Per-rarity modifier ranges are
-/// the dataset arc's subject; explicit loadout rolls come in on top.
+/// What an item contributes when it is wielded rather than worn (ADR-006
+/// step 1: "base damage from weapon/skill"). Values are the Rarity I base;
+/// per-rarity modifier ranges remain the dataset arc's subject (ADR-004).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct WeaponProfile {
+    /// Physical base weapon damage (ADR-006 step 1).
+    pub base_damage: Confidence<Fixed>,
+    /// Armor penetration in percentage points (ADR-006 step 5).
+    pub armor_pen: Confidence<Fixed>,
+}
+
+/// Fixed stats granted by an item. Per-rarity modifier ranges are the
+/// dataset arc's subject; explicit loadout rolls come in on top.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ItemDef {
     /// Stable identity (`item.dark_leather_leggings`).
@@ -152,9 +163,11 @@ pub struct ItemDef {
     pub name: String,
     /// Armor rating contributed to the defensive chain, if any.
     pub armor_rating: Option<Confidence<Fixed>>,
-    /// Flat move speed contribution; negative for armor penalties
-    /// (ADR-005 stage 5).
+    /// Flat move speed contribution; negative for armour and heavy weapon
+    /// penalties alike (ADR-005 stage 5).
     pub move_speed_add: Option<Confidence<Fixed>>,
+    /// Present when the item is a weapon.
+    pub weapon: Option<WeaponProfile>,
 }
 
 /// One effect of a perk or skill, in the vocabulary the slice resolves.
