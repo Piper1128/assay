@@ -322,16 +322,120 @@
         "confidence": "unverified",
         "points": [
           [
-            0,
-            -22000000
+            -300000000,
+            -614800000
           ],
           [
-            100000000,
-            20000000
+            -12000000,
+            -38800000
           ],
           [
-            400000000,
-            83000000
+            -4000000,
+            -26800000
+          ],
+          [
+            6000000,
+            -14800000
+          ],
+          [
+            12000000,
+            -7000000
+          ],
+          [
+            20000000,
+            4200000
+          ],
+          [
+            75000000,
+            12450000
+          ],
+          [
+            95000000,
+            15550000
+          ],
+          [
+            115000000,
+            18550000
+          ],
+          [
+            135000000,
+            21450000
+          ],
+          [
+            155000000,
+            24250000
+          ],
+          [
+            175000000,
+            26950000
+          ],
+          [
+            195000000,
+            29550000
+          ],
+          [
+            215000000,
+            32050000
+          ],
+          [
+            235000000,
+            34450000
+          ],
+          [
+            255000000,
+            36750000
+          ],
+          [
+            275000000,
+            38950000
+          ],
+          [
+            295000000,
+            41050000
+          ],
+          [
+            315000000,
+            43050000
+          ],
+          [
+            335000000,
+            44950000
+          ],
+          [
+            355000000,
+            46750000
+          ],
+          [
+            375000000,
+            48450000
+          ],
+          [
+            395000000,
+            50050000
+          ],
+          [
+            415000000,
+            51550000
+          ],
+          [
+            435000000,
+            52950000
+          ],
+          [
+            455000000,
+            54250000
+          ],
+          [
+            475000000,
+            55450000
+          ],
+          [
+            495000000,
+            56550000
+          ],
+          [
+            600000000,
+            61800000
           ]
         ]
       }
@@ -529,7 +633,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":25,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":9,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11562500},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":36000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":108500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":304000000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-6880000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-14000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":25,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":9,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11562500},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":36000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":108500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":304000000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":6600000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-14000000}}"
     }
   ],
   "exchanges": [
@@ -615,7 +719,7 @@
           "micro": 0
         }
       },
-      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":17032000},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-6880000}}"
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":15010000},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":6600000}}"
     },
     {
       "name": "lethal-mark-back-attack",
@@ -657,7 +761,7 @@
           "micro": 2000000
         }
       },
-      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":28196330},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-6403600}}"
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":25525632},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":4053000}}"
     }
   ]
 }

@@ -66,6 +66,47 @@ fn naked_rogue_matches_the_games_character_sheet() {
 }
 
 #[test]
+fn the_armor_curve_hits_its_known_anchors() {
+    // The curve is transcribed from the wiki's conversion table, whose rows
+    // are internally consistent and independently reproduce the -22% the
+    // page states for a character wearing nothing. Both anchors are pinned
+    // here so a future edit that breaks them fails loudly.
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+
+    let naked = resolve(&naked_rogue(), &dataset.entities).expect("resolves");
+    assert_eq!(
+        *naked.stat(well_known::PDR).unwrap().value(),
+        "-22".parse::<Fixed>().unwrap(),
+        "a character with no armour sits at -22% PDR"
+    );
+
+    // Armour rating 36 lands inside the 20..75 segment, at 0.15% per point:
+    // 4.2 + 0.15 x 16 = 6.6.
+    let geared = Loadout {
+        name: "armored".to_string(),
+        class: ClassId::new("class.rogue"),
+        perks: vec![],
+        skills: vec![],
+        armor: vec![assay_core::ArmorPiece {
+            id: assay_core::ItemId::new("item.dark_leather_leggings"),
+            rolls: vec![],
+        }],
+        weapons: Default::default(),
+        stacks: BTreeMap::new(),
+        party: PartyBuffs::default(),
+    };
+    let resolved = resolve(&geared, &dataset.entities).expect("resolves");
+    assert_eq!(
+        *resolved.stat(well_known::ARMOR_RATING).unwrap().value(),
+        "36".parse::<Fixed>().unwrap()
+    );
+    assert_eq!(
+        *resolved.stat(well_known::PDR).unwrap().value(),
+        "6.6".parse::<Fixed>().unwrap()
+    );
+}
+
+#[test]
 fn wiki_sourced_values_stay_unverified() {
     // Two wiki pages agreeing is not independent verification (ADR-007), and
     // the tool must keep saying so rather than presenting these as fact.
