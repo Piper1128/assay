@@ -128,16 +128,30 @@ into a single rating, so applying them late corrupts more, not less. The
   runtime loop
 - A stat with no weights is an error; an empty rating is not a valid stat
 
-## What this ADR does not settle
+## The PDR cap — settled by in-game test
 
-**The PDR cap.** The wiki states a flat 65% cap and describes Defense Mastery
-as granting *Item Armor Rating Bonus* — more rating before the curve, not a
-higher ceiling. `docs/rogue-fighter-duo-hotfix123.md` states a 60% cap raised
-to 75% by Defense Mastery. **The two sources disagree**, and one of them is
-our own fixture document. This ADR fixes the *structure* (a cap belongs to
-the derived-stat definition and perks may raise it, per ADR-005 stage 7); the
-*value* stays `Unverified` (ADR-007) until tested in game. Do not let the
-structural change quietly pick a winner.
+The wiki states a flat 65% cap and describes Defense Mastery as granting
+*Item Armor Rating Bonus*. `docs/rogue-fighter-duo-hotfix123.md` states a 60%
+cap raised to 75% by Defense Mastery. The two sources disagreed, and one of
+them is our own fixture document.
+
+**Confirmed in game (19 August 2026): the base cap is 60% and Defense Mastery
+raises the maximum to 75%.** That is an own-test observation, so the values
+carry `Verified` (ADR-007) — the highest grade the model has, and stronger
+than either document. The duo analysis was right; the wiki's 65% does not
+describe the applied cap.
+
+The structure this ADR defines already accommodates it: a cap belongs to the
+derived-stat definition, and perks raise it through ADR-005 stage 7. No code
+change followed — the implementation had the correct model from the start.
+
+**One open question, deliberately not answered here.** If the wiki's 65% is
+the AR→PDR *curve's* own ceiling rather than an applied cap, then the curve
+would bind before a 75% cap could ever be reached, and Defense Mastery's
+raise would do nothing above 65%. Curve ceiling and applied cap are different
+quantities and both figures can be true at once. This matters when the real
+AR→PDR curve is built, not before; until then the curve's shape stays
+`Unverified` and only the cap values are `Verified`.
 
 ## Consequences
 

@@ -18,7 +18,7 @@
           }
         },
         "pdr_cap": {
-          "confidence": "unverified",
+          "confidence": "verified",
           "micro": 60000000
         },
         "curves": {
@@ -145,7 +145,7 @@
         "name": "Defense Mastery",
         "effects": [
           {
-            "confidence": "unverified",
+            "confidence": "verified",
             "kind": "raise_pdr_cap",
             "micro": 75000000
           }

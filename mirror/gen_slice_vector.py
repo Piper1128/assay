@@ -68,7 +68,10 @@ DATASET = {
                     "resourcefulness": 25,
                 },
             ),
-            "pdr_cap": unverified("micro", m("60")),
+            # Confirmed in game 2026-08-19: base cap 60%, raised to 75% by
+            # Defense Mastery. Own test, so Verified (ADR-007) — while the
+            # curves around it stay unverified placeholders.
+            "pdr_cap": {"confidence": "verified", "micro": m("60")},
             "curves": {
                 "strength_to_physical_power": "curve.slice.str_to_ppb",
                 "agility_to_action_speed": "curve.slice.agi_to_as",
@@ -125,7 +128,7 @@ DATASET = {
             "id": "perk.fighter.defense_mastery",
             "name": "Defense Mastery",
             "effects": [
-                {"confidence": "unverified", "kind": "raise_pdr_cap", "micro": m("75")}
+                {"confidence": "verified", "kind": "raise_pdr_cap", "micro": m("75")}
             ],
         },
     ],
