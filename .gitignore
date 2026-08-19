@@ -4,3 +4,14 @@
 
 # Python mirror bytecode (mirror/ is the independent reference implementation).
 __pycache__/
+
+# fuzz artefacts (fuzz/ is outside the workspace and has its own target dir).
+# seeds/ are curated regressions and MUST be committed; corpus/ is ephemeral.
+/fuzz/target/
+/fuzz/corpus/*/*
+!/fuzz/corpus/
+!/fuzz/corpus/*/
+!/fuzz/corpus/*/.gitkeep
+/fuzz/artifacts/
+/fuzz/coverage/
+/fuzz/Cargo.lock

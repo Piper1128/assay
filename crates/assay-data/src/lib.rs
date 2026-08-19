@@ -125,10 +125,50 @@ pub enum EntityKind {
     Skill,
 }
 
+/// The five entity files plus the manifest, as text.
+///
+/// Decoding is separated from reading so the decoder can be exercised
+/// without a filesystem — by tests, and by the fuzz target ADR-001 rev 2 §4
+/// requires. Malformed input must always produce a typed error.
+#[derive(Debug, Clone, Default)]
+pub struct DatasetText {
+    /// `manifest.json`
+    pub manifest: String,
+    /// `classes.json`
+    pub classes: String,
+    /// `curves.json`
+    pub curves: String,
+    /// `items.json`
+    pub items: String,
+    /// `perks.json`
+    pub perks: String,
+    /// `skills.json`
+    pub skills: String,
+}
+
 /// Loads the dataset for one build from `root/<build>/`.
 pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
     let dir = root.join(build);
-    let manifest: Manifest = read_json(&dir.join("manifest.json"))?;
+    let read = |name: &str| -> Result<String, LoadError> {
+        let path = dir.join(name);
+        fs::read_to_string(&path).map_err(|e| LoadError::Io(path, e))
+    };
+    let text = DatasetText {
+        manifest: read("manifest.json")?,
+        classes: read("classes.json")?,
+        curves: read("curves.json")?,
+        items: read("items.json")?,
+        perks: read("perks.json")?,
+        skills: read("skills.json")?,
+    };
+    decode(&text, build)
+}
+
+/// Decodes a dataset from text. Never panics on malformed input: every
+/// failure is a `LoadError`.
+pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
+    let named = |name: &str| PathBuf::from(name);
+    let manifest: Manifest = parse_json(&text.manifest, &named("manifest.json"))?;
     if manifest.build != build {
         return Err(LoadError::Invalid(format!(
             "manifest build {} does not match directory {build}",
@@ -144,11 +184,11 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
         }
     }
 
-    let classes: ClassFile = read_json(&dir.join("classes.json"))?;
-    let curves: CurveFile = read_json(&dir.join("curves.json"))?;
-    let items: ItemFile = read_json(&dir.join("items.json"))?;
-    let perks: PerkFile = read_json(&dir.join("perks.json"))?;
-    let skills: SkillFile = read_json(&dir.join("skills.json"))?;
+    let classes: ClassFile = parse_json(&text.classes, &named("classes.json"))?;
+    let curves: CurveFile = parse_json(&text.curves, &named("curves.json"))?;
+    let items: ItemFile = parse_json(&text.items, &named("items.json"))?;
+    let perks: PerkFile = parse_json(&text.perks, &named("perks.json"))?;
+    let skills: SkillFile = parse_json(&text.skills, &named("skills.json"))?;
 
     let mut entities = InMemoryDataset::new(build);
     let mut curve_ids: Vec<String> = Vec::new();
@@ -305,9 +345,8 @@ pub fn versions(root: &Path) -> Result<Vec<String>, LoadError> {
     Ok(out)
 }
 
-fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, LoadError> {
-    let raw = fs::read_to_string(path).map_err(|e| LoadError::Io(path.to_path_buf(), e))?;
-    serde_json::from_str(&raw).map_err(|e| LoadError::Schema(path.to_path_buf(), e))
+fn parse_json<T: for<'de> Deserialize<'de>>(raw: &str, name: &Path) -> Result<T, LoadError> {
+    serde_json::from_str(raw).map_err(|e| LoadError::Schema(name.to_path_buf(), e))
 }
 
 fn attribute_kind(name: &str) -> Result<AttributeKind, LoadError> {
@@ -638,6 +677,45 @@ mod tests {
             note: None,
         };
         assert!(dto.into_fixed().is_err());
+    }
+
+    proptest::proptest! {
+        /// The same property the fuzz target chases, as an always-on guard:
+        /// arbitrary text must come back as a typed error, never a panic.
+        /// proptest fails the test on a panic, so the assertion is implicit.
+        /// Fuzzing goes deeper — this catches the shallow regressions without
+        /// needing nightly.
+        #[test]
+        fn decode_never_panics_on_arbitrary_text(
+            manifest in ".{0,200}",
+            classes in ".{0,200}",
+            curves in ".{0,200}",
+            items in ".{0,200}",
+            perks in ".{0,200}",
+            skills in ".{0,200}",
+            build in ".{0,40}",
+        ) {
+            let text = DatasetText { manifest, classes, curves, items, perks, skills };
+            let _ = decode(&text, &build);
+        }
+
+        /// Structurally valid JSON of the wrong shape is the more
+        /// interesting case: it gets past the parser and into the schema.
+        #[test]
+        fn decode_never_panics_on_wrong_shaped_json(
+            n in -1_000_000i64..1_000_000,
+            key in "[a-z_]{0,12}",
+        ) {
+            let text = DatasetText {
+                manifest: format!(r#"{{"build":"b","label":"l","released":"r","previous":null,"sources":[{{"file":"{key}","origin":"o","scraped":"s","reviewed":true}}]}}"#),
+                classes: format!(r#"{{"classes":[{{"id":"{key}","name":"n","base_attributes":{{"confidence":"verified","points":{{"{key}":{n}}}}},"derived":[]}}]}}"#),
+                curves: format!(r#"{{"curves":[{{"id":"{key}","confidence":"verified","points":[[{n},{n}]]}}]}}"#),
+                items: format!(r#"{{"items":[{{"id":"{key}","name":"n"}}]}}"#),
+                perks: format!(r#"{{"perks":[{{"id":"{key}","name":"n","effects":[{{"confidence":"verified","kind":"all_attributes","points":{n}}}]}}]}}"#),
+                skills: r#"{"skills":[]}"#.to_string(),
+            };
+            let _ = decode(&text, "b");
+        }
     }
 
     #[test]

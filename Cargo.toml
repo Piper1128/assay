@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# fuzz/ has its own target dir and needs nightly + sancov; keeping it out
+# means `cargo build` never drags that toolchain in.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.1.0"

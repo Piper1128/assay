@@ -26,6 +26,7 @@ name = "assay-data"
 version = "0.1.0"
 dependencies = [
  "assay-core",
+ "proptest",
  "serde",
  "serde_json",
 ]

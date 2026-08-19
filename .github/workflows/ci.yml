@@ -6,12 +6,9 @@
 # (ADR-003), and every negative probe proving its gate can still fail
 # (ADR-010 rev 2 §4).
 #
-# Ports still waiting for their subject:
-#   - fuzz-smoke on the assay-data decoder (ADR-001 rev 2 §4) — lands with the
-#     first real dataset loader.
-#   - fresh-process + second-platform determinism run (ADR-001 rev 2 §5) —
-#     lands when the CLI exposes resolution; the in-process half lives in
-#     crates/assay-core/tests/vectors_slice.rs.
+Every port ADR-010 rev 2 names now has a job. The in-process half of the
+# determinism requirement lives in crates/assay-core/tests/vectors_slice.rs;
+# the fresh-process and second-platform halves are the `determinism` job.
 name: ci
 
 on:
@@ -69,3 +66,70 @@ jobs:
       # Mutates the tree and restores it via git — runs last.
       - name: Negative probes
         run: bash probes/run.sh
+
+  # ADR-001 rev 2 §5: the same input must produce byte-identical canonical
+  # output across runs AND across platforms. The in-process repeat is a unit
+  # test; this covers a fresh process, and the matrix covers the platform.
+  # Only the canonical form is compared — the human table is presentation.
+  determinism:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+      - name: Build
+        run: cargo build -p assay-cli
+      - name: Byte-identical across processes
+        shell: bash
+        run: |
+          set -eu
+          for loadout in loadouts/*.toml; do
+            a=$(cargo run -q -p assay-cli -- resolve "$loadout" --json)
+            b=$(cargo run -q -p assay-cli -- resolve "$loadout" --json)
+            if [ "$a" != "$b" ]; then
+              echo "non-deterministic across processes: $loadout"
+              diff <(echo "$a") <(echo "$b") || true
+              exit 1
+            fi
+            # Printed so the two matrix legs can be compared by eye in the
+            # log as well as by the checksum below.
+            echo "$loadout: $a"
+          done
+      - name: Checksum the whole corpus
+        shell: bash
+        run: |
+          set -eu
+          for loadout in loadouts/*.toml; do
+            cargo run -q -p assay-cli -- resolve "$loadout" --json
+          done | shasum -a 256 | tee canonical.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canonical-${{ matrix.os }}
+          path: canonical.sha256
+
+  # ADR-001 rev 2 §4: the dataset decoder must never panic. Property tests in
+  # `gates` cover the shallow cases without nightly; this digs deeper.
+  # fuzz/seeds/ are committed regressions and are replayed every run.
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Nightly + cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo install cargo-fuzz --locked
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: Fuzz decode_dataset (60s)
+        run: >
+          cargo +nightly fuzz run decode_dataset fuzz/corpus/decode_dataset
+          fuzz/seeds/decode_dataset -- -max_total_time=60 -timeout=10
+          -rss_limit_mb=4096
+        working-directory: .
