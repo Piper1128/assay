@@ -101,6 +101,27 @@ pub struct Dataset {
     pub manifest: Manifest,
     /// Entities, ready for `assay_core::resolve`.
     pub entities: InMemoryDataset,
+    /// Explicit renames, `new_id -> old_id` (ADR-008). Set by a human under
+    /// review; the diff never guesses that two ids are the same thing.
+    pub renames: BTreeMap<String, String>,
+    /// Every entity id this version defines, so a diff can spot additions
+    /// and removals without reaching back into the files.
+    pub ids: BTreeMap<String, EntityKind>,
+}
+
+/// Which table an id lives in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EntityKind {
+    /// A playable class.
+    Class,
+    /// A curve definition.
+    Curve,
+    /// An item.
+    Item,
+    /// A perk.
+    Perk,
+    /// A skill.
+    Skill,
 }
 
 /// Loads the dataset for one build from `root/<build>/`.
@@ -130,6 +151,8 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
 
     let mut entities = InMemoryDataset::new();
     let mut curve_ids: Vec<String> = Vec::new();
+    let mut renames: BTreeMap<String, String> = BTreeMap::new();
+    let mut ids: BTreeMap<String, EntityKind> = BTreeMap::new();
 
     for dto in curves.curves {
         let points: Vec<(Fixed, Fixed)> = dto
@@ -140,6 +163,10 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
         let curve = Curve::linear(points)
             .map_err(|e| LoadError::Invalid(format!("curve {}: {e}", dto.id)))?;
         curve_ids.push(dto.id.clone());
+        ids.insert(dto.id.clone(), EntityKind::Curve);
+        if let Some(from) = &dto.renamed_from {
+            renames.insert(dto.id.clone(), from.clone());
+        }
         entities.insert_curve(
             CurveId::new(&dto.id),
             dto.confidence.wrap_with_note(curve, dto.note.as_deref())?,
@@ -180,6 +207,10 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
                 cap: def.cap.map(Fixed::from_micro),
             });
         }
+        ids.insert(dto.id.clone(), EntityKind::Class);
+        if let Some(from) = &dto.renamed_from {
+            renames.insert(dto.id.clone(), from.clone());
+        }
         let block = attribute_block(&dto.base_attributes.points)?;
         entities.insert_class(ClassDef {
             id: ClassId::new(&dto.id),
@@ -193,6 +224,10 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
     }
 
     for dto in items.items {
+        ids.insert(dto.id.clone(), EntityKind::Item);
+        if let Some(from) = &dto.renamed_from {
+            renames.insert(dto.id.clone(), from.clone());
+        }
         entities.insert_item(ItemDef {
             id: ItemId::new(&dto.id),
             name: dto.name,
@@ -205,6 +240,10 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
     }
 
     for dto in perks.perks {
+        ids.insert(dto.id.clone(), EntityKind::Perk);
+        if let Some(from) = &dto.renamed_from {
+            renames.insert(dto.id.clone(), from.clone());
+        }
         entities.insert_perk(PerkDef {
             id: PerkId::new(&dto.id),
             name: dto.name,
@@ -213,6 +252,10 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
     }
 
     for dto in skills.skills {
+        ids.insert(dto.id.clone(), EntityKind::Skill);
+        if let Some(from) = &dto.renamed_from {
+            renames.insert(dto.id.clone(), from.clone());
+        }
         entities.insert_skill(SkillDef {
             id: SkillId::new(&dto.id),
             name: dto.name,
@@ -220,7 +263,20 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
         });
     }
 
-    Ok(Dataset { manifest, entities })
+    for (new_id, old_id) in &renames {
+        if ids.contains_key(old_id) {
+            return Err(LoadError::Invalid(format!(
+                "{new_id} claims to be renamed from {old_id}, but {old_id} still exists in this version"
+            )));
+        }
+    }
+
+    Ok(Dataset {
+        manifest,
+        entities,
+        renames,
+        ids,
+    })
 }
 
 /// Lists the build ids available under `root`, sorted.
@@ -388,6 +444,10 @@ struct DerivedDto {
 #[serde(deny_unknown_fields)]
 struct ClassDto {
     id: String,
+    /// Explicit rename (ADR-008): the id this entity had in the previous
+    /// version. Never inferred.
+    #[serde(default)]
+    renamed_from: Option<String>,
     name: String,
     base_attributes: GradedPoints,
     derived: Vec<DerivedDto>,
@@ -403,6 +463,10 @@ struct ClassFile {
 #[serde(deny_unknown_fields)]
 struct CurveDto {
     id: String,
+    /// Explicit rename (ADR-008): the id this entity had in the previous
+    /// version. Never inferred.
+    #[serde(default)]
+    renamed_from: Option<String>,
     confidence: ConfidenceDto,
     points: Vec<[i64; 2]>,
     #[serde(default)]
@@ -419,6 +483,10 @@ struct CurveFile {
 #[serde(deny_unknown_fields)]
 struct ItemDto {
     id: String,
+    /// Explicit rename (ADR-008): the id this entity had in the previous
+    /// version. Never inferred.
+    #[serde(default)]
+    renamed_from: Option<String>,
     name: String,
     #[serde(default)]
     armor_rating: Option<GradedMicro>,
@@ -463,6 +531,10 @@ struct EffectDto {
 #[serde(deny_unknown_fields)]
 struct PerkDto {
     id: String,
+    /// Explicit rename (ADR-008): the id this entity had in the previous
+    /// version. Never inferred.
+    #[serde(default)]
+    renamed_from: Option<String>,
     name: String,
     effects: Vec<EffectDto>,
 }
@@ -477,6 +549,10 @@ struct PerkFile {
 #[serde(deny_unknown_fields)]
 struct SkillDto {
     id: String,
+    /// Explicit rename (ADR-008): the id this entity had in the previous
+    /// version. Never inferred.
+    #[serde(default)]
+    renamed_from: Option<String>,
     name: String,
     effects: Vec<EffectDto>,
 }

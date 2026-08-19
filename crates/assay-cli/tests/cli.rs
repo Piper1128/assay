@@ -96,10 +96,27 @@ fn unknown_options_and_commands_fail_loudly() {
 }
 
 #[test]
-fn diff_says_it_is_absent_rather_than_pretending() {
+fn diff_without_two_builds_says_which_exist() {
+    // Better than an empty result that reads like "nothing changed".
     let out = assay(&["diff"]);
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("ADR-008"));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("needs two build ids"), "{err}");
+    assert!(err.contains("0.17.150.9384"), "{err}");
+}
+
+#[test]
+fn diffing_a_version_against_itself_reports_no_changes() {
+    let build = "0.17.150.9384";
+    let out = assay(&["diff", build, build, "--loadouts", "loadouts"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = stdout(&out);
+    assert!(text.contains("no data changes"), "{text}");
+    assert!(text.contains("unchanged"), "{text}");
 }
 
 #[test]

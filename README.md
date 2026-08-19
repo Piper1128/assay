@@ -19,6 +19,7 @@ assay resolve loadouts/naked-rogue.toml         # a stat block, with confidence
 assay resolve loadouts/naked-rogue.toml --explain   # every pipeline stage
 assay resolve loadouts/naked-rogue.toml --json      # the canonical form
 assay resolve loadouts/naked-rogue.toml --strict    # exit 2 if anything is unverified
+assay diff <build-a> <build-b> --loadouts loadouts  # what a patch did, and to whom
 ```
 
 Every number carries its confidence, unasked:
@@ -39,8 +40,11 @@ naked-rogue   hotfix-123 (0.17.150.9384)
 
 Those four derived numbers are what the game's own character sheet shows for
 a naked Rogue at Hotfix 123 — and they are still marked unverified, because
-they come from the wiki rather than from an in-game test. `diff` is not here
-yet; it lands with the diff engine (ADR-008).
+they come from the wiki rather than from an in-game test.
+
+`diff` works but has nothing to chew on yet: only one dataset version is
+committed. Adding the Hotfix 122 numbers is a data task, and the point at
+which the tool starts answering the question it exists for.
 
 ## Layout
 
@@ -48,7 +52,7 @@ yet; it lands with the diff engine (ADR-008).
 |---|---|---|
 | `crates/assay-core` | `no_std + alloc` | Domain types, schema types, newtypes, resolution pipeline, exchange model, canonical form |
 | `crates/assay-data` | std | Filesystem, parsing, validation, version lookup |
-| `crates/assay-diff` | std | Structural diff + impact diff over canonical forms |
+| `crates/assay-diff` | std | Structural diff (level 1) + impact diff (level 2), ADR-008 |
 | `crates/assay-scrape` | std | Proposal tool; outside the trust boundary (ADR-003) |
 | `crates/assay-cli` | std | The `assay` binary; the only crate that may print |
 | `mirror/` | Python | Independent reference implementation (ADR-010 rev 2) — written from the ADRs, never from the Rust code |

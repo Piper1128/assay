@@ -1,9 +1,9 @@
 //! The `assay` binary — the only crate that may write to stdout
 //! (ADR-000 rev 2).
 //!
-//! Two subcommands exist because two subcommands work. `diff` lands with the
-//! diff engine (ADR-008) and is deliberately absent rather than stubbed: a
-//! command that prints nothing useful is worse than one that is not there.
+//! Subcommands exist when they work. `diff` needs two dataset versions to
+//! say anything; with only one committed it reports that plainly rather than
+//! printing an empty result that reads like "nothing changed".
 
 mod loadout_file;
 
@@ -19,6 +19,7 @@ assay — headless stat resolver and patch differ for Dark and Darker
 
 USAGE:
     assay resolve <loadout.toml> [OPTIONS]
+    assay diff <build-a> <build-b> [--loadouts <dir>] [--data <dir>]
     assay versions [--data <dir>]
 
 RESOLVE OPTIONS:
@@ -28,6 +29,10 @@ RESOLVE OPTIONS:
     --explain        print every pipeline stage: input, transformation, output
     --json           print the canonical form instead of a table
     --strict         exit 2 if any value is below `verified` (ADR-007)
+
+DIFF OPTIONS:
+    --loadouts <dir>  also resolve every .toml in <dir> against both versions
+                      and report the stat deltas (ADR-008 level 2)
 
 Confidence is shown on every number, because a tool that cannot tell a
 measured value from a guess makes you act on guesses with confidence:
@@ -55,9 +60,7 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
             print!("{USAGE}");
             Ok(ExitCode::SUCCESS)
         }
-        Some("diff") => {
-            Err("diff is not implemented yet: it lands with the diff engine (ADR-008)".to_string())
-        }
+        Some("diff") => cmd_diff(&args[1..]),
         Some(other) => Err(format!("unknown command: {other}\n\n{USAGE}")),
     }
 }
@@ -68,6 +71,7 @@ struct Flags {
     positional: Vec<String>,
     data: PathBuf,
     build: Option<String>,
+    loadouts: Option<PathBuf>,
     explain: bool,
     json: bool,
     strict: bool,
@@ -78,6 +82,7 @@ fn parse_flags(args: &[String], allowed: &[&str]) -> Result<Flags, String> {
         positional: Vec::new(),
         data: PathBuf::from("data"),
         build: None,
+        loadouts: None,
         explain: false,
         json: false,
         strict: false,
@@ -100,6 +105,10 @@ fn parse_flags(args: &[String], allowed: &[&str]) -> Result<Flags, String> {
             }
             "--build" => {
                 flags.build = Some(needs_value("--build")?);
+                iter.next();
+            }
+            "--loadouts" => {
+                flags.loadouts = Some(PathBuf::from(needs_value("--loadouts")?));
                 iter.next();
             }
             "--explain" => flags.explain = true,
@@ -178,6 +187,99 @@ fn cmd_resolve(args: &[String]) -> Result<ExitCode, String> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_diff(args: &[String]) -> Result<ExitCode, String> {
+    let flags = parse_flags(args, &["--data", "--loadouts"])?;
+    let [before_build, after_build] = flags.positional.as_slice() else {
+        let available = assay_data::versions(&flags.data)
+            .map(|v| v.join(", "))
+            .unwrap_or_default();
+        return Err(format!(
+            "diff needs two build ids; available: {}",
+            if available.is_empty() {
+                "none".to_string()
+            } else {
+                available
+            }
+        ));
+    };
+    let before = assay_data::load(&flags.data, before_build).map_err(|e| e.to_string())?;
+    let after = assay_data::load(&flags.data, after_build).map_err(|e| e.to_string())?;
+
+    println!(
+        "{} ({}) -> {} ({})",
+        before.manifest.label, before_build, after.manifest.label, after_build
+    );
+
+    let changes = assay_diff::dataset_diff(&before, &after);
+    if changes.is_empty() {
+        println!(
+            "
+  no data changes"
+        );
+    } else {
+        println!(
+            "
+  data ({} change(s)):",
+            changes.len()
+        );
+        for change in &changes {
+            println!("  {change}");
+        }
+    }
+
+    if let Some(dir) = &flags.loadouts {
+        let loadouts = read_loadouts(dir)?;
+        if loadouts.is_empty() {
+            return Err(format!("no .toml loadouts in {}", dir.display()));
+        }
+        println!(
+            "
+  impact on {} loadout(s):",
+            loadouts.len()
+        );
+        for impact in assay_diff::impact_diff(&before, &after, &loadouts) {
+            println!("    {}", impact.name);
+            if let Some(error) = &impact.error {
+                println!("      ! {error}");
+                continue;
+            }
+            let moved: Vec<_> = impact.stats.iter().filter(|s| s.changed()).collect();
+            if moved.is_empty() {
+                println!("      unchanged");
+            }
+            for stat in moved {
+                let label = stat.id.strip_prefix("derived.").unwrap_or(&stat.id);
+                println!(
+                    "      {label:<22} {} -> {}  ({:+})",
+                    stat.from,
+                    stat.to,
+                    stat.delta()
+                );
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn read_loadouts(dir: &Path) -> Result<Vec<assay_core::Loadout>, String> {
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+        .collect();
+    // Sorted so the report is stable run to run.
+    paths.sort();
+    paths
+        .iter()
+        .map(|path| {
+            let text =
+                std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+            loadout_file::parse(&text).map_err(|e| format!("{}: {e}", path.display()))
+        })
+        .collect()
 }
 
 /// The newest committed build, by the sort order `versions` returns.
