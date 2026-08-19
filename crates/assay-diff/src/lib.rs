@@ -349,6 +349,7 @@ fn insert_effects(map: &mut BTreeMap<String, String>, effects: &[StackedEffect])
             Effect::AllAttributes(points) => format!("all_attributes {points:+}"),
             Effect::Attribute(kind, points) => format!("attribute {} {points:+}", kind.as_str()),
             Effect::RaiseCap(id, value) => format!("raise_cap {} {value}", id.as_str()),
+            Effect::ItemArmorBonus(value) => format!("item_armor_bonus {value}"),
             Effect::MoveSpeedAdd(value) => format!("move_speed_add {value}"),
             Effect::MoveSpeedBonus(value) => format!("move_speed_bonus {value}"),
         };

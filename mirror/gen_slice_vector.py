@@ -96,7 +96,10 @@ LOADOUTS = [
     },
     {
         # Gear stages: attribute roll (2), flat move speed (5), armor→PDR (7),
-        # plus a cap-raiser interacting with stage 7.
+        # plus a cap-raiser interacting with stage 7. Defense Mastery also
+        # carries a 15% Item Armor Rating Bonus, and the armor_rating roll is
+        # the enchantment that bonus must leave alone (ADR-005 amendment) —
+        # so this one loadout pins both halves of the split.
         "name": "rogue-geared",
         "class": "class.rogue",
         "perks": ["perk.fighter.defense_mastery"],
@@ -107,6 +110,7 @@ LOADOUTS = [
                 "rolls": [
                     {"kind": "attribute", "attribute": "dexterity", "points": 4},
                     {"kind": "move_speed_add", "micro": m("2")},
+                    {"kind": "armor_rating", "micro": m("10")},
                 ],
             }
         ],

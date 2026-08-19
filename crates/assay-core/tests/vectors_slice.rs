@@ -93,6 +93,9 @@ fn effect(node: &Value) -> Confidence<Effect> {
             DerivedStatId::new(node["target"].as_str().expect("raise_cap target")),
             Fixed::from_micro(node["micro"].as_i64().expect("micro")),
         ),
+        "item_armor_bonus" => {
+            Effect::ItemArmorBonus(Fixed::from_micro(node["micro"].as_i64().expect("micro")))
+        }
         "move_speed_add" => {
             Effect::MoveSpeedAdd(Fixed::from_micro(node["micro"].as_i64().expect("micro")))
         }
@@ -248,6 +251,9 @@ fn loadout(node: &Value) -> Loadout {
                     "move_speed_add" => Roll::MoveSpeedAdd(Fixed::from_micro(
                         roll["micro"].as_i64().expect("micro"),
                     )),
+                    "armor_rating" => {
+                        Roll::ArmorRating(Fixed::from_micro(roll["micro"].as_i64().expect("micro")))
+                    }
                     other => panic!("unknown roll kind: {other}"),
                 })
                 .collect(),

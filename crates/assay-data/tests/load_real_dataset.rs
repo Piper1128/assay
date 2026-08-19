@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use assay_core::derived::well_known;
-use assay_core::loadout::{Loadout, PartyBuffs, Weapons};
-use assay_core::{ClassId, ConfidenceLevel, Fixed, resolve};
+use assay_core::loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
+use assay_core::{ClassId, ConfidenceLevel, Fixed, ItemId, PerkId, resolve};
 
 fn data_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
@@ -134,4 +134,50 @@ fn every_class_resolves_in_every_committed_version() {
         resolve(&naked_rogue(), &dataset.entities)
             .unwrap_or_else(|e| panic!("{build}: naked rogue failed to resolve: {e}"));
     }
+}
+
+#[test]
+fn defense_mastery_multiplies_worn_armour_but_not_enchantments() {
+    // The perk reads "gain an additional 15% Item Armor Rating Bonus from
+    // equipped armor, and raise your Physical Damage Reduction cap to 75%".
+    // We modelled the cap for a long time and the multiplier not at all, so
+    // the perk changed a ceiling nothing could reach and nothing else
+    // (ADR-005 amendment: item armor bonus).
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+    let leggings = ItemId::new("item.dark_leather_leggings");
+
+    let build = |perks: Vec<PerkId>, rolls: Vec<Roll>| {
+        let loadout = Loadout {
+            name: "fighter".to_string(),
+            class: ClassId::new("class.fighter"),
+            perks,
+            skills: vec![],
+            armor: vec![ArmorPiece {
+                id: leggings.clone(),
+                rolls,
+            }],
+            weapons: Weapons::default(),
+            stacks: BTreeMap::new(),
+            party: PartyBuffs::default(),
+        };
+        *resolve(&loadout, &dataset.entities)
+            .expect("fighter resolves")
+            .stat(well_known::ARMOR_RATING)
+            .expect("armour rating is defined")
+            .value()
+    };
+
+    let mastery = vec![PerkId::new("perk.fighter.defense_mastery")];
+    assert_eq!(build(vec![], vec![]), Fixed::from_micro(36_000_000));
+    // 36 × 1.15, exactly — no rounding to argue about.
+    assert_eq!(
+        build(mastery.clone(), vec![]),
+        Fixed::from_micro(41_400_000)
+    );
+    // With 10 enchanted on: 41.4 + 10. Were the enchantment inside the
+    // multiplier's base it would be 52.9 instead.
+    assert_eq!(
+        build(mastery, vec![Roll::ArmorRating(Fixed::from_int(10))]),
+        Fixed::from_micro(51_400_000)
+    );
 }

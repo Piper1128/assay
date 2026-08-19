@@ -274,12 +274,36 @@ def resolve(dataset: dict, loadout: dict) -> dict:
 
     # Stage 7 (prepared): gear-sourced armour rating seeds the graph, and
     # cap raises are collected before evaluation.
-    ar_parts = [
+    #
+    # ADR-005 amendment: an Item Armor Rating Bonus multiplies the armour the
+    # pieces themselves carry, and nothing else. Enchantment rolls are the
+    # formula's "other Armor Rating" term and stay outside the multiply, so
+    # the two sums are kept apart until they are combined below.
+    item_ar_parts = [
         dataset["items"][piece["id"]]["armor_rating"]
         for piece in loadout["armor"]
         if dataset["items"][piece["id"]]["armor_rating"] is not None
     ]
-    seeded = {"derived.armor_rating": fold_sum(ar_parts)}
+    other_ar_parts = [
+        conf("verified", roll["micro"])
+        for piece in loadout["armor"]
+        for roll in piece["rolls"]
+        if roll["kind"] == "armor_rating"
+    ]
+    item_bonus = fold_sum(
+        [
+            {**e, "value": e["value"]["micro"]}
+            for e in effects
+            if e["value"]["kind"] == "item_armor_bonus"
+        ]
+    )
+    scaled_item_ar = zip_with(
+        fold_sum(item_ar_parts),
+        item_bonus,
+        lambda ar, bonus: div_round_half_even(ar * (100_000_000 + bonus), 100_000_000),
+    )
+    armor_rating = zip_with(scaled_item_ar, fold_sum(other_ar_parts), lambda a, b: a + b)
+    seeded = {"derived.armor_rating": armor_rating}
     cap_overrides: dict = {}
     for effect in effects:
         if effect["value"]["kind"] == "raise_cap":

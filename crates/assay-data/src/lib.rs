@@ -381,6 +381,9 @@ fn effects(dtos: &[EffectDto]) -> Result<Vec<StackedEffect>, LoadError> {
                     })?),
                     Fixed::from_micro(require_micro(dto)?),
                 ),
+                EffectKind::ItemArmorBonus => {
+                    Effect::ItemArmorBonus(Fixed::from_micro(require_micro(dto)?))
+                }
                 EffectKind::MoveSpeedAdd => {
                     Effect::MoveSpeedAdd(Fixed::from_micro(require_micro(dto)?))
                 }
@@ -436,10 +439,23 @@ impl ConfidenceDto {
     /// Wraps a value in its grade. `unknown` without a note is a schema
     /// error: ADR-007 requires an assumption to say why, and dropping the
     /// note on the floor would defeat the whole grade.
+    ///
+    /// The converse is a schema error too. Only `Unknown` has somewhere to
+    /// put a note, so a note on any other grade used to be parsed and then
+    /// silently discarded — the project's own failure mode, and a
+    /// disagreement with the Python mirror, which has always held that a
+    /// note and `unknown` imply each other. Provenance for a graded value
+    /// belongs in the ADR that sourced it, not in a field that evaporates.
     fn wrap_with_note<T>(self, value: T, note: Option<&str>) -> Result<Confidence<T>, LoadError> {
         match (self, note) {
-            (ConfidenceDto::Verified, _) => Ok(Confidence::Verified(value)),
-            (ConfidenceDto::Unverified, _) => Ok(Confidence::Unverified(value)),
+            (ConfidenceDto::Verified | ConfidenceDto::Unverified, Some(_)) => {
+                Err(LoadError::Invalid(
+                    "only an `unknown` value carries a `note`; on any other grade the note                      would be dropped (ADR-007)"
+                        .into(),
+                ))
+            }
+            (ConfidenceDto::Verified, None) => Ok(Confidence::Verified(value)),
+            (ConfidenceDto::Unverified, None) => Ok(Confidence::Unverified(value)),
             (ConfidenceDto::Unknown, Some(note)) => Ok(Confidence::Unknown {
                 assumed: value,
                 note: note.to_string(),
@@ -583,6 +599,7 @@ enum EffectKind {
     AllAttributes,
     Attribute,
     RaiseCap,
+    ItemArmorBonus,
     MoveSpeedAdd,
     MoveSpeedBonus,
 }
@@ -677,6 +694,25 @@ mod tests {
             note: None,
         };
         assert!(dto.into_fixed().is_err());
+    }
+
+    #[test]
+    fn a_note_on_a_graded_value_is_rejected_rather_than_dropped() {
+        // The implication runs both ways. Only `Unknown` has a slot for a
+        // note, so accepting one here would parse it and throw it away —
+        // which is how a wiki citation went missing until the Python mirror,
+        // which encodes the same rule, refused to agree with us.
+        for grade in [ConfidenceDto::Verified, ConfidenceDto::Unverified] {
+            let dto = GradedMicro {
+                confidence: grade,
+                micro: 1,
+                note: Some("where this number came from".to_string()),
+            };
+            assert!(
+                dto.into_fixed().is_err(),
+                "a note on {grade:?} must be a schema error, not a silent loss"
+            );
+        }
     }
 
     proptest::proptest! {

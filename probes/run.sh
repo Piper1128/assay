@@ -94,6 +94,19 @@ fi
 git checkout --quiet -- crates/assay-core/src/resolve.rs
 verdict pipeline_order "$gate_rejected"
 
+# ── item_armor_bonus_base ────────────────────────────────────────────────────
+# Widening the Item Armor Rating Bonus base past the item bucket (ADR-005
+# amendment) must fail: enchantments are outside the multiplier, and a test
+# that cannot tell that apart is not testing the amendment.
+sed -i '/probe: item-armor-bonus-base/ s/item_ar\.clone()/item_ar.clone().zip_with(other_ar.clone(), |a, b| a + b)/' crates/assay-core/src/resolve.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/resolve.rs
+verdict item_armor_bonus_base "$gate_rejected"
+
 # ── scaling_ignored ──────────────────────────────────────────────────────────
 # Hardcoding the skill scaling coefficient to 100% (ADR-006 step 2) must fail
 # the Sneak Attack fixture: 0% scaling is what makes it immune to the

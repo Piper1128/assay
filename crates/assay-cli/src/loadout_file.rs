@@ -16,6 +16,7 @@
 //! id = "item.dark_leather_leggings"
 //! attributes = { dexterity = 4 }
 //! move_speed_add = "2"
+//! armor_rating = "5"
 //!
 //! [weapons]
 //! main_hand = "item.flanged_mace"
@@ -90,6 +91,12 @@ pub(crate) fn parse(text: &str) -> Result<Loadout, LoadoutError> {
             })?;
             rolls.push(Roll::MoveSpeedAdd(parsed));
         }
+        if let Some(ar) = &piece.armor_rating {
+            let parsed: Fixed = ar.parse().map_err(|e| {
+                LoadoutError::Invalid(format!("{}: armor_rating {ar:?}: {e}", piece.id))
+            })?;
+            rolls.push(Roll::ArmorRating(parsed));
+        }
         armor.push(ArmorPiece {
             id: ItemId::new(&piece.id),
             rolls,
@@ -158,6 +165,10 @@ struct ArmorDto {
     /// Flat move speed rolled on this copy, as an exact decimal string.
     #[serde(default)]
     move_speed_add: Option<String>,
+    /// Armour rating enchanted onto this copy, as an exact decimal string.
+    /// An enchantment, so no Item Armor Rating Bonus multiplies it.
+    #[serde(default)]
+    armor_rating: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]

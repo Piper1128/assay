@@ -20,6 +20,11 @@
           "kind": "raise_cap",
           "target": "derived.pdr",
           "micro": 75000000
+        },
+        {
+          "confidence": "unverified",
+          "kind": "item_armor_bonus",
+          "micro": 15000000
         }
       ]
     }

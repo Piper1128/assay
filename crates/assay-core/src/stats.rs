@@ -163,6 +163,15 @@ pub fn apply_percent(damage: Damage, percent: Fixed) -> Damage {
     Damage::new(damage.value().mul_div_half_even(PERCENT + percent, PERCENT))
 }
 
+/// Applies an Item Armor Rating Bonus to the item-sourced armour rating:
+/// `item_ar × (100 + bonus) / 100`, one banker's rounding (ADR-005
+/// amendment). Only the item bucket is passed in — keeping the other
+/// bucket out of this call is how the exclusion is enforced.
+#[must_use]
+pub fn apply_item_armor_bonus(item_ar: Fixed, bonus: Fixed) -> Fixed {
+    item_ar.mul_div_half_even(PERCENT + bonus, PERCENT)
+}
+
 /// Applies a skill's scaling coefficient (ADR-006 step 2): `base × coeff`,
 /// where the coefficient is a percentage of the base. A 0% coefficient
 /// yields zero scaled damage — that is the mechanic, not a bug.

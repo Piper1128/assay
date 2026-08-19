@@ -161,7 +161,9 @@ pub struct ItemDef {
     pub id: ItemId,
     /// Display name.
     pub name: String,
-    /// Armor rating contributed to the defensive chain, if any.
+    /// Armor rating contributed to the defensive chain, if any. This is
+    /// the *item* bucket of ADR-005's amended stage 7 — the only armour a
+    /// percentage Item Armor Rating Bonus multiplies.
     pub armor_rating: Option<Confidence<Fixed>>,
     /// Flat move speed contribution; negative for armour and heavy weapon
     /// penalties alike (ADR-005 stage 5).
@@ -183,6 +185,12 @@ pub enum Effect {
     /// Generalised in ADR-012: the cap belongs to the derived-stat
     /// definition, so the effect names which one it lifts.
     RaiseCap(DerivedStatId, Fixed),
+    /// Percentage bonus to armour rating from equipped armour pieces
+    /// (Defense Mastery: +15%). Applied at ADR-005 stage 7, before the
+    /// curve is sampled, and — per the amendment — to the item bucket
+    /// only: enchantment rolls and every other armour source are outside
+    /// its base.
+    ItemArmorBonus(Fixed),
     /// Flat move speed (ADR-005 stage 5).
     MoveSpeedAdd(Fixed),
     /// Percentage move speed bonus (ADR-005 stage 6).
@@ -257,6 +265,9 @@ impl Effect {
                 Effect::Attribute(*kind, points.saturating_mul(stacks.cast_signed()))
             }
             Effect::RaiseCap(id, value) => Effect::RaiseCap(id.clone(), *value),
+            Effect::ItemArmorBonus(value) => {
+                Effect::ItemArmorBonus(*value * Fixed::from_int(count))
+            }
             Effect::MoveSpeedAdd(value) => Effect::MoveSpeedAdd(*value * Fixed::from_int(count)),
             Effect::MoveSpeedBonus(value) => {
                 Effect::MoveSpeedBonus(*value * Fixed::from_int(count))

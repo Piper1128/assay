@@ -23,6 +23,10 @@ pub enum Roll {
     Attribute(AttributeKind, i32),
     /// Flat move speed rolled on the piece (`move_speed = 2`).
     MoveSpeedAdd(Fixed),
+    /// Armour rating rolled on the piece (`armor_rating = 5`). This is an
+    /// enchantment, so it lands in stage 7's *other* bucket and no Item
+    /// Armor Rating Bonus multiplies it.
+    ArmorRating(Fixed),
 }
 
 /// One equipped piece: an item id plus the explicit rolls on this copy.

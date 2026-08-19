@@ -42,6 +42,7 @@ use crate::fixed::Fixed;
 use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::loadout::{Loadout, Roll};
 use crate::schema::{AttributeBlock, AttributeKind, DatasetSource, Effect, StackedEffect};
+use crate::stats::apply_item_armor_bonus;
 
 /// Why a loadout could not be resolved against a dataset. An unknown entity
 /// is useful information in itself (ADR-009: an id can vanish in a later
@@ -232,16 +233,44 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     // The armour rating seeds the derived graph rather than being computed
     // from it, and cap-raising perks are collected before evaluation so a
     // raised cap clamps the value the first time it is produced.
-    let mut ar_parts: Vec<Confidence<Fixed>> = Vec::new();
+    // Two buckets, kept apart on purpose: an Item Armor Rating Bonus
+    // multiplies armour that came from the pieces themselves and nothing
+    // else. Summing first would erase the distinction the formula needs
+    // (ADR-005 amendment: item armor bonus).
+    let mut item_ar_parts: Vec<Confidence<Fixed>> = Vec::new();
+    let mut other_ar_parts: Vec<Confidence<Fixed>> = Vec::new();
     for piece in &loadout.armor {
         let item = data
             .item(&piece.id)
             .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
         if let Some(ar) = &item.armor_rating {
-            ar_parts.push(ar.clone());
+            item_ar_parts.push(ar.clone());
+        }
+        for roll in &piece.rolls {
+            if let Roll::ArmorRating(ar) = roll {
+                other_ar_parts.push(Confidence::Verified(*ar));
+            }
         }
     }
-    let armor_rating = fold_sum(ar_parts);
+    let item_ar = fold_sum(item_ar_parts);
+    let other_ar = fold_sum(other_ar_parts);
+
+    let mut bonus_parts: Vec<Confidence<Fixed>> = Vec::new();
+    for sourced in &effects {
+        if let Effect::ItemArmorBonus(bonus) = sourced.effect.value() {
+            let bonus = *bonus;
+            bonus_parts.push(sourced.effect.clone().map(|_| bonus));
+        }
+    }
+    let item_bonus = fold_sum(bonus_parts);
+
+    // The multiplier's base is the item bucket and nothing else. Widening
+    // it is the defect this line exists to prevent, and the probe of the
+    // same name widens it to prove the tests notice.
+    let bonus_base = item_ar.clone(); // probe: item-armor-bonus-base
+    let armor_rating = bonus_base
+        .zip_with(item_bonus.clone(), apply_item_armor_bonus)
+        .zip_with(other_ar.clone(), |scaled, other| scaled + other);
     let mut cap_overrides: BTreeMap<DerivedStatId, Fixed> = BTreeMap::new();
     for sourced in &effects {
         if let Effect::RaiseCap(id, raised) = sourced.effect.value() {
@@ -349,8 +378,11 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         label: "defensive chain",
         detail: match derived.get(&pdr_id) {
             Some(pdr) => format!(
-                "armor rating {} → PDR {}{}",
+                "armor rating {} = item {} ×(100{:+})% + other {} → PDR {}{}",
                 armor_rating.value(),
+                item_ar.value(),
+                item_bonus.value(),
+                other_ar.value(),
                 pdr.value(),
                 match cap_overrides.get(&pdr_id) {
                     Some(cap) => format!(" (cap raised to {cap})"),
@@ -549,6 +581,7 @@ mod tests {
     use crate::loadout::{ArmorPiece, PartyBuffs, Weapons};
     use crate::schema::{ClassDef, InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect};
     use crate::stats::Attribute;
+    use proptest::prelude::*;
 
     fn fx(units: i64) -> Fixed {
         Fixed::from_int(units)
@@ -720,10 +753,13 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.fighter.defense_mastery"),
             name: "Defense Mastery".to_string(),
-            effects: vec![StackedEffect::once(Confidence::Verified(Effect::RaiseCap(
-                DerivedStatId::new(well_known::PDR),
-                fx(75),
-            )))],
+            effects: vec![
+                StackedEffect::once(Confidence::Verified(Effect::RaiseCap(
+                    DerivedStatId::new(well_known::PDR),
+                    fx(75),
+                ))),
+                StackedEffect::once(Confidence::Unverified(Effect::ItemArmorBonus(fx(15)))),
+            ],
         });
         data.insert_skill(SkillDef {
             id: SkillId::new("skill.fighter.fortified_ground"),
@@ -892,6 +928,122 @@ mod tests {
         loadout.perks = vec![PerkId::new("perk.fighter.defense_mastery")];
         let raised = resolve(&loadout, &data).unwrap();
         assert_eq!(*raised.stat(well_known::PDR).unwrap().value(), fx(75));
+    }
+
+    #[test]
+    fn the_item_bonus_multiplies_worn_armour_and_not_its_enchantments() {
+        // The reason the two buckets exist. 100 armour on the piece itself
+        // and 100 enchanted onto the same copy, with +50%: 100×1.5 + 100.
+        // Had the multiplier reached the enchantment the answer would be
+        // 300, and had it reached neither, 200 — so this one number tells
+        // the three cases apart.
+        let mut data = test_dataset();
+        data.insert_item(ItemDef {
+            id: ItemId::new("item.test_cuirass"),
+            name: "Test Cuirass".to_string(),
+            armor_rating: Some(Confidence::Verified(fx(100))),
+            move_speed_add: None,
+            weapon: None,
+        });
+        data.insert_perk(PerkDef {
+            id: PerkId::new("perk.test.armor_bonus"),
+            name: "Test Armor Bonus".to_string(),
+            effects: vec![StackedEffect::once(Confidence::Verified(
+                Effect::ItemArmorBonus(fx(50)),
+            ))],
+        });
+        let mut loadout = naked_rogue();
+        loadout.armor = vec![ArmorPiece {
+            id: ItemId::new("item.test_cuirass"),
+            rolls: vec![Roll::ArmorRating(fx(100))],
+        }];
+        loadout.perks = vec![PerkId::new("perk.test.armor_bonus")];
+        let resolved = resolve(&loadout, &data).unwrap();
+        assert_eq!(
+            *resolved.stat(well_known::ARMOR_RATING).unwrap().value(),
+            fx(250)
+        );
+    }
+
+    #[test]
+    fn the_defensive_trace_shows_both_buckets() {
+        // A number nobody can take apart is a number nobody can check
+        // against the character sheet.
+        let mut data = test_dataset();
+        data.insert_item(ItemDef {
+            id: ItemId::new("item.test_cuirass"),
+            name: "Test Cuirass".to_string(),
+            armor_rating: Some(Confidence::Verified(fx(100))),
+            move_speed_add: None,
+            weapon: None,
+        });
+        let mut loadout = naked_rogue();
+        loadout.armor = vec![ArmorPiece {
+            id: ItemId::new("item.test_cuirass"),
+            rolls: vec![Roll::ArmorRating(fx(10))],
+        }];
+        loadout.perks = vec![PerkId::new("perk.fighter.defense_mastery")];
+        let resolved = resolve(&loadout, &data).unwrap();
+        let note = resolved
+            .trace
+            .iter()
+            .find(|n| n.stage == 7)
+            .expect("defensive chain leaves a note");
+        assert!(
+            note.detail.contains("item 100") && note.detail.contains("other 10"),
+            "stage 7 must show what it multiplied and what it did not: {}",
+            note.detail
+        );
+        assert!(
+            note.detail.contains("+15"),
+            "and the bonus it applied: {}",
+            note.detail
+        );
+    }
+
+    proptest! {
+        /// Armour is armour: raising the Item Armor Rating Bonus can never
+        /// leave a character with less armour rating than a smaller bonus
+        /// would have. The sibling of the penetration property in
+        /// `exchange`, and the same class of defect it was written for.
+        #[test]
+        fn more_item_bonus_never_means_less_armour(
+            item_ar in 0i64..2_000,
+            other_ar in 0i64..2_000,
+            low in 0i64..200,
+            extra in 0i64..200,
+        ) {
+            let mut data = test_dataset();
+            data.insert_item(ItemDef {
+                id: ItemId::new("item.prop_plate"),
+                name: "Prop Plate".to_string(),
+                armor_rating: Some(Confidence::Verified(fx(item_ar))),
+                move_speed_add: None,
+                weapon: None,
+            });
+            let build = |bonus: i64| {
+                let mut data = data.clone();
+                data.insert_perk(PerkDef {
+                    id: PerkId::new("perk.prop.bonus"),
+                    name: "Prop Bonus".to_string(),
+                    effects: vec![StackedEffect::once(Confidence::Verified(
+                        Effect::ItemArmorBonus(fx(bonus)),
+                    ))],
+                });
+                let mut loadout = naked_rogue();
+                loadout.armor = vec![ArmorPiece {
+                    id: ItemId::new("item.prop_plate"),
+                    rolls: vec![Roll::ArmorRating(fx(other_ar))],
+                }];
+                loadout.perks = vec![PerkId::new("perk.prop.bonus")];
+                *resolve(&loadout, &data)
+                    .unwrap()
+                    .stat(well_known::ARMOR_RATING)
+                    .unwrap()
+                    .value()
+            };
+            prop_assert!(build(low + extra) >= build(low));
+        }
     }
 
     #[test]

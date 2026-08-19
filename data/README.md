@@ -55,19 +55,26 @@ independent verification. Two exceptions:
 
 ## Known gaps
 
-**PDR has a contributor the model does not have.** The armour→PDR curve is now
-transcribed from the wiki's conversion table — 28 segments from armour rating
-−300 to 600, internally consistent, and independently reproducing the −22%
-the page states for a character wearing nothing. But it **tops out at 61.8%
-at armour rating 600**, while 75% PDR with Defense Mastery is *verified in
-game*. The armour curve alone cannot produce that number.
+**Where the armour curve ends is unknown.** The wiki's conversion table runs
+from armour rating −300 to 600 in 28 segments — internally consistent, and
+independently reproducing the −22% the page states for a character wearing
+nothing. It stops at 600, reaching 61.8%, and says nothing about what happens
+above that. `Curve::sample` clamps outside its point range, so we currently
+answer 61.8% for any armour rating past 600. That is a modelling choice
+standing in for a fact we do not have.
 
-So `PDR = clamp(curve(armour rating))` is incomplete: something else adds to
-it — flat PDR rolls on gear are the obvious candidate, since the game rolls
-Physical Damage Reduction as an item stat. Until that is modelled, a
-heavily-armoured build resolves low, and the 75% cap never binds because
-nothing can reach it. Discovered by putting real data in; flagged rather than
-patched, because the fix is a schema question.
+It matters because the PDR cap is 60%, lifted to 75% by Defense Mastery. The
+base cap binds — the curve crosses 60% around armour rating 564 — but whether
+75% is reachable depends entirely on whether the game keeps going at the final
+0.05%/point rate or genuinely stops. Resolving this needs a measurement in
+game at high armour rating, not another reading of the table.
+
+*This entry previously claimed the missing piece was flat PDR rolls on gear.
+It was not. The wiki lists no source of flat PDR from items, enchantments,
+perks or skills; the actual omission was the Item Armor Rating Bonus, upstream
+of the curve, now modelled per the ADR-005 amendment. The wrong guess is
+recorded here because it was wrong for an instructive reason: a shortfall
+downstream was assumed to have a downstream cause.*
 
 **Other gaps**
 
