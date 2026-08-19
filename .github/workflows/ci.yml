@@ -74,7 +74,10 @@ jobs:
   determinism:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # windows rather than macos: a private repo bills macos runners at
+        # 10x and windows at 2x, and windows is where this is developed, so
+        # the cheaper leg is also the more relevant one.
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -107,7 +110,7 @@ jobs:
           set -eu
           for loadout in loadouts/*.toml; do
             cargo run -q -p assay-cli -- resolve "$loadout" --json
-          done | shasum -a 256 | tee canonical.sha256
+          done | sha256sum | tee canonical.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: canonical-${{ matrix.os }}
