@@ -547,6 +547,7 @@ mod tests {
                 rolls: vec![],
             }],
             weapons: Weapons::default(),
+            stacks: BTreeMap::new(),
             party: PartyBuffs::default(),
         };
         resolve(&loadout, data).expect("test loadout resolves")

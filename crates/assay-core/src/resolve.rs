@@ -41,7 +41,7 @@ use crate::derived::{DerivedError, evaluate_all, well_known};
 use crate::fixed::Fixed;
 use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::loadout::{Loadout, Roll};
-use crate::schema::{AttributeBlock, AttributeKind, DatasetSource, Effect};
+use crate::schema::{AttributeBlock, AttributeKind, DatasetSource, Effect, StackedEffect};
 
 /// Why a loadout could not be resolved against a dataset. An unknown entity
 /// is useful information in itself (ADR-009: an id can vanish in a later
@@ -58,6 +58,15 @@ pub enum ResolveError {
     UnknownSkill(SkillId),
     /// The derived-stat graph could not be evaluated (ADR-012).
     Derived(DerivedError),
+    /// The loadout claims more stacks than the effect can carry.
+    TooManyStacks {
+        /// The perk or skill the stacks belong to.
+        source: String,
+        /// What the loadout asked for.
+        requested: u32,
+        /// What the dataset allows.
+        max: u32,
+    },
 }
 
 impl fmt::Display for ResolveError {
@@ -68,6 +77,11 @@ impl fmt::Display for ResolveError {
             ResolveError::UnknownPerk(id) => write!(f, "perk not in dataset: {id}"),
             ResolveError::UnknownSkill(id) => write!(f, "skill not in dataset: {id}"),
             ResolveError::Derived(e) => write!(f, "derived stats: {e}"),
+            ResolveError::TooManyStacks {
+                source,
+                requested,
+                max,
+            } => write!(f, "{source} stacks at most {max} times, not {requested}"),
         }
     }
 }
@@ -374,10 +388,56 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     })
 }
 
-/// An effect with the display name of whatever granted it (for the trace).
+/// An effect with the display name of whatever granted it (for the trace),
+/// already scaled to the number of stacks in force.
 struct SourcedEffect {
     name: String,
     effect: Confidence<Effect>,
+}
+
+/// Resolves one dataset effect against the loadout's stack counts.
+///
+/// A non-stacking effect applies once. A stacking one applies at the count
+/// the loadout states; if it states none, it applies at the maximum and the
+/// value is downgraded to `Unknown` with the assumption written out, so the
+/// number never travels without it.
+fn apply_stacks(
+    entry: &StackedEffect,
+    source_id: &str,
+    source_name: &str,
+    stacks: &BTreeMap<String, u32>,
+) -> Result<(Confidence<Effect>, Option<u32>), ResolveError> {
+    let Some(max) = entry.max_stacks else {
+        return Ok((entry.effect.clone(), None));
+    };
+    match stacks.get(source_id).copied() {
+        Some(requested) if requested > max => Err(ResolveError::TooManyStacks {
+            source: source_id.to_string(),
+            requested,
+            max,
+        }),
+        Some(requested) => Ok((
+            entry.effect.clone().map(|e| e.scaled(requested)),
+            Some(requested),
+        )),
+        None => {
+            let note = format!(
+                "{source_name} resolved at {max} of {max} stacks; the loadout does not say how \
+                 many are active"
+            );
+            let assumed = entry.effect.value().scaled(max);
+            Ok((
+                Confidence::Unknown {
+                    assumed,
+                    note: match entry.effect.note() {
+                        Some(existing) => format!("{existing}; {note}"),
+                        None => note,
+                    },
+                },
+                Some(max),
+            ))
+        }
+    }
 }
 
 /// Gathers every effect from own perks, own skills, party perks and party
@@ -388,49 +448,53 @@ fn collect_effects(
     data: &impl DatasetSource,
 ) -> Result<Vec<SourcedEffect>, ResolveError> {
     let mut out: Vec<SourcedEffect> = Vec::new();
-    for id in &loadout.perks {
+    let push_perk = |out: &mut Vec<SourcedEffect>, id: &PerkId, party: bool| {
         let perk = data
             .perk(id)
             .ok_or_else(|| ResolveError::UnknownPerk(id.clone()))?;
-        for effect in &perk.effects {
+        let name = if party {
+            format!("{} (party)", perk.name)
+        } else {
+            perk.name.clone()
+        };
+        for entry in &perk.effects {
+            let (effect, _) = apply_stacks(entry, id.as_str(), &name, &loadout.stacks)?;
             out.push(SourcedEffect {
-                name: perk.name.clone(),
-                effect: effect.clone(),
+                name: name.clone(),
+                effect,
             });
         }
+        Ok::<(), ResolveError>(())
+    };
+    for id in &loadout.perks {
+        push_perk(&mut out, id, false)?;
     }
-    for id in &loadout.skills {
+    let push_skill = |out: &mut Vec<SourcedEffect>, id: &SkillId, party: bool| {
         let skill = data
             .skill(id)
             .ok_or_else(|| ResolveError::UnknownSkill(id.clone()))?;
-        for effect in &skill.effects {
+        let name = if party {
+            format!("{} (party)", skill.name)
+        } else {
+            skill.name.clone()
+        };
+        for entry in &skill.effects {
+            let (effect, _) = apply_stacks(entry, id.as_str(), &name, &loadout.stacks)?;
             out.push(SourcedEffect {
-                name: skill.name.clone(),
-                effect: effect.clone(),
+                name: name.clone(),
+                effect,
             });
         }
+        Ok::<(), ResolveError>(())
+    };
+    for id in &loadout.skills {
+        push_skill(&mut out, id, false)?;
     }
     for id in &loadout.party.perks {
-        let perk = data
-            .perk(id)
-            .ok_or_else(|| ResolveError::UnknownPerk(id.clone()))?;
-        for effect in &perk.effects {
-            out.push(SourcedEffect {
-                name: format!("{} (party)", perk.name),
-                effect: effect.clone(),
-            });
-        }
+        push_perk(&mut out, id, true)?;
     }
     for id in &loadout.party.skills {
-        let skill = data
-            .skill(id)
-            .ok_or_else(|| ResolveError::UnknownSkill(id.clone()))?;
-        for effect in &skill.effects {
-            out.push(SourcedEffect {
-                name: format!("{} (party)", skill.name),
-                effect: effect.clone(),
-            });
-        }
+        push_skill(&mut out, id, true)?;
     }
     Ok(out)
 }
@@ -483,7 +547,7 @@ mod tests {
     use crate::derived::{DerivedStatDef, RatingInput};
     use crate::ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
     use crate::loadout::{ArmorPiece, PartyBuffs, Weapons};
-    use crate::schema::{ClassDef, InMemoryDataset, ItemDef, PerkDef, SkillDef};
+    use crate::schema::{ClassDef, InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect};
     use crate::stats::Attribute;
 
     fn fx(units: i64) -> Fixed {
@@ -649,20 +713,24 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.rogue.jokester"),
             name: "Jokester".to_string(),
-            effects: vec![Confidence::Unverified(Effect::AllAttributes(2))],
+            effects: vec![StackedEffect::once(Confidence::Unverified(
+                Effect::AllAttributes(2),
+            ))],
         });
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.fighter.defense_mastery"),
             name: "Defense Mastery".to_string(),
-            effects: vec![Confidence::Verified(Effect::RaiseCap(
+            effects: vec![StackedEffect::once(Confidence::Verified(Effect::RaiseCap(
                 DerivedStatId::new(well_known::PDR),
                 fx(75),
-            ))],
+            )))],
         });
         data.insert_skill(SkillDef {
             id: SkillId::new("skill.fighter.fortified_ground"),
             name: "Fortified Ground".to_string(),
-            effects: vec![Confidence::Unverified(Effect::AllAttributes(3))],
+            effects: vec![StackedEffect::once(Confidence::Unverified(
+                Effect::AllAttributes(3),
+            ))],
         });
 
         data
@@ -676,6 +744,7 @@ mod tests {
             skills: vec![],
             armor: vec![],
             weapons: Weapons::default(),
+            stacks: BTreeMap::new(),
             party: PartyBuffs::default(),
         }
     }

@@ -464,10 +464,10 @@
         "name": "Sprint",
         "effects": [
           {
-            "confidence": "unknown",
+            "confidence": "verified",
             "kind": "move_speed_add",
             "micro": 13000000,
-            "note": "one stack of three: Sprint grants this much per stack and the schema does not model stacks, so a full-stack Fighter has up to three times this"
+            "max_stacks": 3
           }
         ]
       }

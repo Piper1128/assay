@@ -16,8 +16,8 @@ use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage
 use assay_core::{
     ArmorPiece, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
     DerivedStatDef, DerivedStatId, Effect, Fixed, InMemoryDataset, ItemDef, ItemId, Loadout,
-    PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId, Weapons,
-    canonical_exchange, canonical_statblock, resolve,
+    PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId, StackedEffect,
+    Weapons, canonical_exchange, canonical_statblock, resolve,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -201,7 +201,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
                 .as_array()
                 .expect("effects")
                 .iter()
-                .map(effect)
+                .map(|e| StackedEffect::once(effect(e)))
                 .collect(),
         });
     }
@@ -213,7 +213,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
                 .as_array()
                 .expect("effects")
                 .iter()
-                .map(effect)
+                .map(|e| StackedEffect::once(effect(e)))
                 .collect(),
         });
     }
@@ -266,6 +266,7 @@ fn loadout(node: &Value) -> Loadout {
                 .and_then(serde_json::Value::as_str)
                 .map(ItemId::new),
         },
+        stacks: BTreeMap::new(),
         party: PartyBuffs {
             perks: node["party"]["perks"]
                 .as_array()

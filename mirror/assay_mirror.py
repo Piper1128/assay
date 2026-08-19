@@ -114,18 +114,61 @@ def fold_sum(values: list[dict]) -> dict:
 ATTRIBUTES = ["strength", "vigor", "agility", "dexterity", "will", "knowledge", "resourcefulness"]
 
 
+def _scaled(payload: dict, stacks: int) -> dict:
+    """An effect payload at `stacks` stacks. A stacking effect's value is per
+    stack, so the magnitude multiplies; a raised ceiling does not stack."""
+    kind = payload["kind"]
+    if kind in ("all_attributes", "attribute"):
+        return {**payload, "points": payload["points"] * stacks}
+    if kind in ("move_speed_add", "move_speed_bonus"):
+        return {**payload, "micro": fx_mul(payload["micro"], stacks * SCALE)}
+    return dict(payload)
+
+
+def _apply_stacks(entry: dict, source_id: str, source_name: str, stacks: dict) -> dict:
+    """Resolves one dataset effect against the loadout's stack counts.
+
+    Stating no count for a stacking effect resolves it at the maximum and
+    downgrades it to unknown, so the assumption travels with the number
+    (ADR-007).
+    """
+    max_stacks = entry["value"].get("max_stacks")
+    if max_stacks is None:
+        return entry
+    requested = stacks.get(source_id)
+    if requested is not None:
+        if requested > max_stacks:
+            raise ValueError(f"{source_id} stacks at most {max_stacks}, not {requested}")
+        return map_conf(entry, lambda payload: _scaled(payload, requested))
+    note = (
+        f"{source_name} resolved at {max_stacks} of {max_stacks} stacks; "
+        "the loadout does not say how many are active"
+    )
+    existing = entry["note"]
+    return conf(
+        "unknown",
+        _scaled(entry["value"], max_stacks),
+        f"{existing}; {note}" if existing else note,
+    )
+
+
 def _effects(dataset: dict, loadout: dict) -> list[dict]:
     """Own perks, own skills, party perks, party skills — in that order, each
-    list in loadout declaration order."""
+    list in loadout declaration order, each already scaled to its stacks."""
     out: list[dict] = []
-    for perk_id in loadout["perks"]:
-        out.extend(dataset["perks"][perk_id]["effects"])
-    for skill_id in loadout["skills"]:
-        out.extend(dataset["skills"][skill_id]["effects"])
-    for perk_id in loadout["party"]["perks"]:
-        out.extend(dataset["perks"][perk_id]["effects"])
-    for skill_id in loadout["party"]["skills"]:
-        out.extend(dataset["skills"][skill_id]["effects"])
+    stacks = loadout.get("stacks", {})
+
+    def add(table: str, ids: list[str], party: bool) -> None:
+        for entity_id in ids:
+            entity = dataset[table][entity_id]
+            name = f"{entity['name']} (party)" if party else entity["name"]
+            for entry in entity["effects"]:
+                out.append(_apply_stacks(entry, entity_id, name, stacks))
+
+    add("perks", loadout["perks"], False)
+    add("skills", loadout["skills"], False)
+    add("perks", loadout["party"]["perks"], True)
+    add("skills", loadout["party"]["skills"], True)
     return out
 
 

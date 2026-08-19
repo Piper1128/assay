@@ -36,7 +36,7 @@ use assay_core::fixed::Fixed;
 use assay_core::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::schema::{
     AttributeBlock, AttributeKind, ClassDef, Effect, InMemoryDataset, ItemDef, PerkDef, SkillDef,
-    WeaponProfile,
+    StackedEffect, WeaponProfile,
 };
 use serde::Deserialize;
 
@@ -325,7 +325,7 @@ fn attribute_block(points: &BTreeMap<String, i32>) -> Result<AttributeBlock, Loa
     Ok(block)
 }
 
-fn effects(dtos: &[EffectDto]) -> Result<Vec<Confidence<Effect>>, LoadError> {
+fn effects(dtos: &[EffectDto]) -> Result<Vec<StackedEffect>, LoadError> {
     dtos.iter()
         .map(|dto| {
             let effect = match dto.kind {
@@ -349,7 +349,24 @@ fn effects(dtos: &[EffectDto]) -> Result<Vec<Confidence<Effect>>, LoadError> {
                     Effect::MoveSpeedBonus(Fixed::from_micro(require_micro(dto)?))
                 }
             };
-            dto.confidence.wrap_with_note(effect, dto.note.as_deref())
+            if let Some(max) = dto.max_stacks {
+                if max == 0 {
+                    return Err(LoadError::Invalid(
+                        "max_stacks must be at least 1; omit it for an effect that applies once"
+                            .into(),
+                    ));
+                }
+                if !effect.can_stack() {
+                    return Err(LoadError::Invalid(format!(
+                        "{:?} cannot stack: a raised ceiling is not a quantity",
+                        dto.kind
+                    )));
+                }
+            }
+            Ok(StackedEffect {
+                effect: dto.confidence.wrap_with_note(effect, dto.note.as_deref())?,
+                max_stacks: dto.max_stacks,
+            })
         })
         .collect()
 }
@@ -544,6 +561,9 @@ struct EffectDto {
     attribute: Option<String>,
     #[serde(default)]
     target: Option<String>,
+    /// Present when the effect stacks; the value above is then per stack.
+    #[serde(default)]
+    max_stacks: Option<u32>,
     #[serde(default)]
     note: Option<String>,
 }

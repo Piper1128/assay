@@ -6,6 +6,7 @@
 //! measurements.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -112,6 +113,7 @@ fn naked_rogue() -> Loadout {
         skills: vec![],
         armor: vec![],
         weapons: Weapons::default(),
+        stacks: BTreeMap::new(),
         party: PartyBuffs::default(),
     }
 }

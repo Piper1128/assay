@@ -5,6 +5,7 @@
 //! for the impact diff (ADR-008 level 2). The TOML file format and its
 //! parsing live with `assay-cli`; this is the resolved-input shape.
 
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -70,6 +71,13 @@ pub struct Loadout {
     pub armor: Vec<ArmorPiece>,
     /// Wielded weapons.
     pub weapons: Weapons,
+    /// Active stacks per stacking source, keyed by perk or skill id.
+    ///
+    /// A stacking effect only has a value once you say how many stacks are
+    /// up, and that is a fact about the moment rather than about the build.
+    /// An unstated count resolves at the maximum and is graded `Unknown`,
+    /// so the assumption travels with the number (ADR-007).
+    pub stacks: BTreeMap<String, u32>,
     /// External party buffs.
     pub party: PartyBuffs,
 }

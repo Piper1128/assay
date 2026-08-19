@@ -6,6 +6,7 @@
 //! datasets; this asserts them against the file a human actually maintains.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use assay_core::derived::well_known;
@@ -26,6 +27,7 @@ fn naked_rogue() -> Loadout {
         skills: vec![],
         armor: vec![],
         weapons: Weapons::default(),
+        stacks: BTreeMap::new(),
         party: PartyBuffs::default(),
     }
 }

@@ -35,7 +35,7 @@ use std::fmt;
 use assay_core::confidence::{Confidence, ConfidenceLevel};
 use assay_core::derived::RatingInput;
 use assay_core::fixed::Fixed;
-use assay_core::schema::{AttributeKind, DatasetSource, Effect};
+use assay_core::schema::{AttributeKind, DatasetSource, Effect, StackedEffect};
 use assay_core::{ClassId, CurveId, ItemId, Loadout, PerkId, SkillId, resolve};
 use assay_data::{Dataset, EntityKind};
 
@@ -342,8 +342,9 @@ fn insert_graded(
     }
 }
 
-fn insert_effects(map: &mut BTreeMap<String, String>, effects: &[Confidence<Effect>]) {
-    for (index, effect) in effects.iter().enumerate() {
+fn insert_effects(map: &mut BTreeMap<String, String>, effects: &[StackedEffect]) {
+    for (index, entry) in effects.iter().enumerate() {
+        let effect = &entry.effect;
         let rendered = match effect.value() {
             Effect::AllAttributes(points) => format!("all_attributes {points:+}"),
             Effect::Attribute(kind, points) => format!("attribute {} {points:+}", kind.as_str()),
@@ -355,6 +356,14 @@ fn insert_effects(map: &mut BTreeMap<String, String>, effects: &[Confidence<Effe
         map.insert(
             format!("effect.{index}.confidence"),
             level(effect.level()).into(),
+        );
+        // Stacking is part of what an effect is: Sprint going from three
+        // stacks to two would change every build that runs it.
+        map.insert(
+            format!("effect.{index}.max_stacks"),
+            entry
+                .max_stacks
+                .map_or_else(|| "—".to_string(), |m| m.to_string()),
         );
     }
 }

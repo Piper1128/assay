@@ -20,6 +20,9 @@
 //! [weapons]
 //! main_hand = "item.flanged_mace"
 //!
+//! [stacks]
+//! "skill.fighter.sprint" = 3
+//!
 //! [party]
 //! skills = ["skill.fighter.fortified_ground"]
 //! ```
@@ -102,6 +105,7 @@ pub(crate) fn parse(text: &str) -> Result<Loadout, LoadoutError> {
         weapons: Weapons {
             main_hand: dto.weapons.main_hand.as_deref().map(ItemId::new),
         },
+        stacks: dto.stacks,
         party: PartyBuffs {
             perks: dto.party.perks.iter().map(PerkId::new).collect(),
             skills: dto.party.skills.iter().map(SkillId::new).collect(),
@@ -129,6 +133,10 @@ struct LoadoutDto {
     armor: Vec<ArmorDto>,
     #[serde(default)]
     weapons: WeaponsDto,
+    /// Active stacks per stacking source. Omit a source and it resolves at
+    /// its maximum, graded as the assumption it is.
+    #[serde(default)]
+    stacks: BTreeMap<String, u32>,
     #[serde(default)]
     party: PartyDto,
 }

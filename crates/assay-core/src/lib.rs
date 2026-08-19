@@ -32,5 +32,5 @@ pub use loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
 pub use resolve::{ResolveError, Resolved, StageNote, resolve};
 pub use schema::{
     AttributeBlock, AttributeKind, ClassDef, DatasetSource, Effect, InMemoryDataset, ItemDef,
-    PerkDef, SkillDef, WeaponProfile,
+    PerkDef, SkillDef, StackedEffect, WeaponProfile,
 };

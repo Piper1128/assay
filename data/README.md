@@ -47,9 +47,11 @@ independent verification. Two exceptions:
 
 - **The PDR cap (60%, raised to 75% by Defense Mastery) is `verified`** — it
   was tested in game, which is why it overrides the wiki's contradictory 65%.
-- **Sprint is `unknown`** — the 13 is from the patch notes, but the schema
-  does not model stacks, so applying it as a flat add describes one stack of
-  three. The note says so, and the grade makes it propagate.
+- **Sprint's per-stack value is `verified`** — it comes straight from the
+  Hotfix 123 patch notes, and now that stacks are modelled the number means
+  what the notes say it means. A loadout that does not state how many stacks
+  are up still resolves at the maximum and is graded `unknown` for *that*
+  reason, which is a property of the question rather than of the data.
 
 ## Known gaps
 

@@ -189,6 +189,34 @@ pub enum Effect {
     MoveSpeedBonus(Fixed),
 }
 
+/// One effect together with whether it stacks.
+///
+/// A stacking effect's value is **per stack** — Sprint grants 13 move speed
+/// *each*, up to three — so the resolved contribution depends on how many
+/// stacks are active. That is a property of the situation, not of the
+/// loadout, so the loadout states it and an unstated count is an assumption
+/// (ADR-007).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StackedEffect {
+    /// The effect, with its own confidence grade (per-field grading,
+    /// ADR-003 review).
+    pub effect: Confidence<Effect>,
+    /// Present when the effect stacks, carrying the maximum stack count.
+    /// `None` means it applies once.
+    pub max_stacks: Option<u32>,
+}
+
+impl StackedEffect {
+    /// A plain, non-stacking effect.
+    #[must_use]
+    pub fn once(effect: Confidence<Effect>) -> Self {
+        StackedEffect {
+            effect,
+            max_stacks: None,
+        }
+    }
+}
+
 /// A perk: passive, always on when slotted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct PerkDef {
@@ -196,9 +224,8 @@ pub struct PerkDef {
     pub id: PerkId,
     /// Display name.
     pub name: String,
-    /// Effects, each with its own confidence grade (per-field grading,
-    /// ADR-003 review).
-    pub effects: Vec<Confidence<Effect>>,
+    /// Effects granted while slotted.
+    pub effects: Vec<StackedEffect>,
 }
 
 /// A skill, as far as stat resolution cares: its passive/aura stat effects.
@@ -210,8 +237,39 @@ pub struct SkillDef {
     pub id: SkillId,
     /// Display name.
     pub name: String,
-    /// Stat effects while active, each with its own confidence grade.
-    pub effects: Vec<Confidence<Effect>>,
+    /// Stat effects while active.
+    pub effects: Vec<StackedEffect>,
+}
+
+impl Effect {
+    /// This effect at `stacks` stacks. A stacking effect's value is per
+    /// stack, so the magnitude multiplies; `RaiseCap` is returned unchanged
+    /// because a raised ceiling does not stack (the loader rejects a dataset
+    /// that says otherwise).
+    #[must_use]
+    pub fn scaled(&self, stacks: u32) -> Effect {
+        let count = i64::from(stacks);
+        match self {
+            Effect::AllAttributes(points) => {
+                Effect::AllAttributes(points.saturating_mul(stacks.cast_signed()))
+            }
+            Effect::Attribute(kind, points) => {
+                Effect::Attribute(*kind, points.saturating_mul(stacks.cast_signed()))
+            }
+            Effect::RaiseCap(id, value) => Effect::RaiseCap(id.clone(), *value),
+            Effect::MoveSpeedAdd(value) => Effect::MoveSpeedAdd(*value * Fixed::from_int(count)),
+            Effect::MoveSpeedBonus(value) => {
+                Effect::MoveSpeedBonus(*value * Fixed::from_int(count))
+            }
+        }
+    }
+
+    /// Whether stacking this effect is meaningful. A cap raise is a ceiling,
+    /// not a quantity.
+    #[must_use]
+    pub fn can_stack(&self) -> bool {
+        !matches!(self, Effect::RaiseCap(_, _))
+    }
 }
 
 /// Everything the core needs from a dataset, as a trait the `std` crates
@@ -337,7 +395,9 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.rogue.jokester"),
             name: "Jokester".to_string(),
-            effects: vec![Confidence::Unverified(Effect::AllAttributes(2))],
+            effects: vec![StackedEffect::once(Confidence::Unverified(
+                Effect::AllAttributes(2),
+            ))],
         });
         assert!(data.perk(&PerkId::new("perk.rogue.jokester")).is_some());
         assert!(data.perk(&PerkId::new("perk.rogue.creep")).is_none());

@@ -6,6 +6,7 @@
 //! per stack of Sprint from 15 to 13"*.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use assay_core::{ClassId, Loadout, PartyBuffs, SkillId, Weapons};
@@ -26,6 +27,7 @@ fn fighter_with_sprint() -> Loadout {
         skills: vec![SkillId::new("skill.fighter.sprint")],
         armor: vec![],
         weapons: Weapons::default(),
+        stacks: BTreeMap::new(),
         party: PartyBuffs::default(),
     }
 }
@@ -55,11 +57,14 @@ fn the_nerf_reaches_a_build_that_runs_sprint() {
     let after = assay_data::load(&data_root(), HF123).expect("hotfix-123 loads");
     let impacts = impact_diff(&before, &after, &[fighter_with_sprint()]);
 
+    // Sprint carries three stacks, so the per-stack nerf costs 3 x 2 = 6
+    // move speed at full stacks - not the 2 a single stack would suggest.
     let moved: Vec<_> = impacts[0].stats.iter().filter(|s| s.changed()).collect();
     assert_eq!(moved.len(), 1, "{:#?}", impacts[0].stats);
     assert_eq!(moved[0].id, "derived.move_speed");
-    assert_eq!(moved[0].from.to_string(), "315");
-    assert_eq!(moved[0].to.to_string(), "313");
+    assert_eq!(moved[0].from.to_string(), "345");
+    assert_eq!(moved[0].to.to_string(), "339");
+    assert_eq!(moved[0].delta().to_string(), "-6");
     assert!(impacts[0].error.is_none());
 }
 
@@ -76,6 +81,7 @@ fn a_build_the_patch_did_not_touch_reports_unchanged() {
         skills: vec![],
         armor: vec![],
         weapons: Weapons::default(),
+        stacks: BTreeMap::new(),
         party: PartyBuffs::default(),
     };
     let impacts = impact_diff(&before, &after, &[naked_rogue]);
