@@ -30,21 +30,19 @@
 //! armor chain; adding it earlier would let armor eat it. Probed by
 //! `true_damage_pre_reduction`.
 //!
-//! ## Flagged ADR ambiguity (ADR-010 rev 2 §3: an ambiguous ADR is the bug)
+//! ## Where the PDR Mod applies
 //!
-//! ADR-006 lists steps 6 and 7 as consecutive operations on the *damage*
-//! ("→ PDR from the curve, capped", "× PDR Mod"), which read literally would
-//! apply PDR to the damage and then multiply the damage by the mod. ADR-002
-//! locks a different shape in a signature: `apply_pdr_mod(base: PdrPercent,
-//! m: PdrMod) -> EffectivePdr` — the mod modifies *the PDR*, producing an
-//! effective PDR that then reduces damage once.
+//! ADR-006's step list reads as though step 7 multiplied the *damage* by the
+//! mod. It does not: the mod is a multiplicative layer on the *PDR*,
+//! producing an effective PDR that reduces damage once — ADR-002's locked
+//! `apply_pdr_mod(PdrPercent, PdrMod) -> EffectivePdr`. Lethal Mark (−30%)
+//! against 60% PDR gives effective PDR 42% and damage × 0.58, not
+//! × 0.40 × 0.70.
 //!
-//! This implementation follows ADR-002's locked signature, because a typed
-//! conversion in an accepted ADR is a stronger statement than prose step
-//! ordering, and because the alternative double-reduces. Consequence with
-//! Lethal Mark (−30%) against 60% PDR: effective PDR 42%, damage × 0.58 —
-//! not damage × 0.40 × 0.70. **This needs an ADR-006 amendment to say so in
-//! one place instead of two.**
+//! Settled in `docs/adr/ADR-006-amendment-pdr-mod-layer.md`: the literal
+//! reading is wrong in direction, since it would make an attacker's debuff
+//! *reduce* the attacker's damage. The magnitude is still wiki-sourced and
+//! therefore `Unverified` (ADR-007) until tested in game.
 
 use alloc::format;
 use alloc::string::String;

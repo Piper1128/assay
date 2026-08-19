@@ -37,8 +37,10 @@ counter matrix are deferred to v2 (ADR-011).
 
 The authoritative ADRs live in [docs/adr/](docs/adr/): `ADR-000-010.md` as
 amended by `ADR-rev2-amendments.md` (rev 2 replaces ADR-000, 001 and 010; the
-index document is kept for decision history). Source documents are preserved
-verbatim (in Danish). [docs/rogue-fighter-duo-hotfix123.md](docs/rogue-fighter-duo-hotfix123.md)
+index document is kept for decision history) and by
+`ADR-006-amendment-pdr-mod-layer.md` (step 7: the PDR Mod applies to the PDR,
+not to the damage). Imported source documents are preserved verbatim (in
+Danish); amendments authored here are in English. [docs/rogue-fighter-duo-hotfix123.md](docs/rogue-fighter-duo-hotfix123.md)
 is the source of v1's golden fixtures.
 
 ## Conventions
