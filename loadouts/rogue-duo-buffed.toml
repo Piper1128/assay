@@ -1,0 +1,16 @@
+# The duo's buff floor (docs/rogue-fighter-duo-hotfix123.md §3): Jokester +2
+# from the Rogue and Fortified Ground +3 from the Fighter, landing on the
+# attribute sum before any rating is formed (ADR-005 stage 3 before 4).
+name  = "rogue-duo-buffed"
+class = "class.rogue"
+
+perks  = ["perk.rogue.jokester"]
+skills = []
+
+[[armor]]
+id = "item.dark_leather_leggings"
+attributes = { dexterity = 4 }
+move_speed_add = "2"
+
+[party]
+skills = ["skill.fighter.fortified_ground"]

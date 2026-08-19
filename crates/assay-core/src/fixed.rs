@@ -149,7 +149,15 @@ impl fmt::Display for Fixed {
     /// the fraction are trimmed; whole numbers render without a point.
     /// Presentation only: canonical encodings carry [`Fixed::micro`].
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let sign = if self.0 < 0 { "-" } else { "" };
+        // Honour `{:+}`: a trace line reading "x(100+0)%" is legible, while
+        // "x(1000)%" is a different number entirely.
+        let sign = if self.0 < 0 {
+            "-"
+        } else if f.sign_plus() {
+            "+"
+        } else {
+            ""
+        };
         let abs = self.0.unsigned_abs();
         let whole = abs / SCALE.unsigned_abs();
         let frac = abs % SCALE.unsigned_abs();
@@ -351,6 +359,16 @@ mod tests {
                 .micro(),
             -250_000
         );
+    }
+
+    #[test]
+    fn display_honours_the_sign_flag() {
+        // Without this, a "+0" in a trace line silently becomes "0" and runs
+        // into the next character: "x(100+0)%" would read "x(1000)%".
+        assert_eq!(format!("{:+}", Fixed::ZERO), "+0");
+        assert_eq!(format!("{:+}", Fixed::from_int(5)), "+5");
+        assert_eq!(format!("{:+}", Fixed::from_int(-5)), "-5");
+        assert_eq!(format!("{}", Fixed::ZERO), "0");
     }
 
     #[test]

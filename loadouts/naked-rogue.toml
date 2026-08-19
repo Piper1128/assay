@@ -1,0 +1,4 @@
+# Baseline: no gear, no perks. Should reproduce the wiki's published Rogue
+# character sheet exactly.
+name  = "naked-rogue"
+class = "class.rogue"

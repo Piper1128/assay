@@ -11,6 +11,37 @@ this week's patch did to it.
 `0.17.150.9384`. v1 scope is stat resolution + patch diff; TTK solver and
 counter matrix are deferred to v2 (ADR-011).
 
+## Using it
+
+```bash
+assay versions                                  # committed dataset builds
+assay resolve loadouts/naked-rogue.toml         # a stat block, with confidence
+assay resolve loadouts/naked-rogue.toml --explain   # every pipeline stage
+assay resolve loadouts/naked-rogue.toml --json      # the canonical form
+assay resolve loadouts/naked-rogue.toml --strict    # exit 2 if anything is unverified
+```
+
+Every number carries its confidence, unasked:
+
+```
+naked-rogue   hotfix-123 (0.17.150.9384)
+
+  ~  attributes            str 9  vig 6  agi 25  dex 20  wil 10  kno 10  res 25
+  ~  action_speed                7.8125
+  ok armor_rating                     0
+  ~  health                        108.5
+  ~  move_speed                      306
+  ~  pdr                             -22
+  ~  physical_power_bonus            -14
+
+  5 of 6 values are not verified against the game.
+```
+
+Those four derived numbers are what the game's own character sheet shows for
+a naked Rogue at Hotfix 123 — and they are still marked unverified, because
+they come from the wiki rather than from an in-game test. `diff` is not here
+yet; it lands with the diff engine (ADR-008).
+
 ## Layout
 
 | Path | Std? | Role |
