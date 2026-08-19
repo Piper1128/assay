@@ -11,6 +11,8 @@ publish.workspace = true
 
 [dependencies]
 assay-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

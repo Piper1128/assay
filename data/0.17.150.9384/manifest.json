@@ -1,0 +1,38 @@
+{
+  "build": "0.17.150.9384",
+  "label": "hotfix-123",
+  "released": "2026-08-13",
+  "previous": null,
+  "sources": [
+    {
+      "file": "classes.json",
+      "origin": "wiki:spellsandguns",
+      "scraped": "2026-08-19T17:30:00Z",
+      "reviewed": true
+    },
+    {
+      "file": "curves.json",
+      "origin": "wiki:spellsandguns",
+      "scraped": "2026-08-19T17:30:00Z",
+      "reviewed": true
+    },
+    {
+      "file": "items.json",
+      "origin": "wiki:spellsandguns",
+      "scraped": "2026-08-19T17:30:00Z",
+      "reviewed": true
+    },
+    {
+      "file": "perks.json",
+      "origin": "wiki:spellsandguns",
+      "scraped": "2026-08-19T17:30:00Z",
+      "reviewed": true
+    },
+    {
+      "file": "skills.json",
+      "origin": "wiki:spellsandguns",
+      "scraped": "2026-08-19T17:30:00Z",
+      "reviewed": true
+    }
+  ]
+}

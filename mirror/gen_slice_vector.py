@@ -51,182 +51,29 @@ def unverified(value_key: str, value) -> dict:
     return {"confidence": "unverified", value_key: value}
 
 
-def attr(name: str, weight: str) -> dict:
-    return {"kind": "attribute", "ref": name, "weight": m(weight)}
+DATASET_BUILD = "0.17.150.9384"
 
 
-def derived_input(ref: str, weight: str) -> dict:
-    return {"kind": "derived", "ref": ref, "weight": m(weight)}
+def load_dataset(build: str = DATASET_BUILD) -> dict:
+    """Reads the committed dataset (ADR-003: the hand-approved JSON in the
+    repo is the only source of truth). The vector embeds a copy of what it
+    loaded, so the fixture stays self-contained while the dataset directory
+    remains the thing that is maintained."""
+    root = pathlib.Path(__file__).resolve().parent.parent / "data" / build
+    parts = {}
+    for name, key in [
+        ("classes.json", "classes"),
+        ("curves.json", "curves"),
+        ("items.json", "items"),
+        ("perks.json", "perks"),
+        ("skills.json", "skills"),
+    ]:
+        parts[key] = json.loads((root / name).read_text(encoding="utf-8"))[key]
+    parts["manifest"] = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    return parts
 
 
-# Real Patch 6.12 / Hotfix 123 shapes, transcribed from the Dark and Darker
-# Wiki (CC BY-SA 4.0). Wiki-sourced, so graded unverified per ADR-007 - two
-# wiki pages agreeing is not independent verification. The PDR cap is the one
-# exception: 60/75 was confirmed in game.
-DATASET = {
-    "classes": [
-        {
-            "id": "class.rogue",
-            "name": "Rogue",
-            "base_attributes": unverified(
-                "points",
-                {
-                    "strength": 9,
-                    "vigor": 6,
-                    "agility": 25,
-                    "dexterity": 20,
-                    "will": 10,
-                    "knowledge": 10,
-                    "resourcefulness": 25,
-                },
-            ),
-            "derived": [
-                {
-                    # Physical Power = Strength 1:1, then the bonus curve.
-                    "id": "derived.physical_power_bonus",
-                    "weights": [attr("strength", "1")],
-                    "curve": "curve.physical_power_bonus",
-                    "floor": m("-100"),
-                },
-                {
-                    # Action Speed Rating = 0.25 AGI + 0.75 DEX. This is the
-                    # hybrid that ADR-012 exists for, and the reason a naked
-                    # Rogue reads exactly 7.8125%.
-                    "id": "derived.action_speed",
-                    "weights": [attr("agility", "0.25"), attr("dexterity", "0.75")],
-                    "curve": "curve.action_speed",
-                },
-                {
-                    "id": "derived.move_speed",
-                    "weights": [attr("agility", "1")],
-                    "curve": "curve.move_speed",
-                    "offset": m("300"),
-                    "cap": m("330"),
-                },
-                {
-                    # Base Health Rating = 0.25 STR + 0.75 VIG, +25 for every
-                    # class.
-                    "id": "derived.health",
-                    "weights": [attr("strength", "0.25"), attr("vigor", "0.75")],
-                    "curve": "curve.health",
-                    "offset": m("25"),
-                },
-                {
-                    # Armour rating is gear-sourced and seeds the graph.
-                    "id": "derived.pdr",
-                    "weights": [derived_input("derived.armor_rating", "1")],
-                    "curve": "curve.pdr",
-                    "cap": m("60"),
-                },
-            ],
-        }
-    ],
-    "curves": [
-        {
-            # Physical Power -> Physical Power Bonus (wiki breakpoints).
-            "id": "curve.physical_power_bonus",
-            "confidence": "unverified",
-            "points": [
-                [m("0"), m("-80")],
-                [m("5"), m("-30")],
-                [m("7"), m("-20")],
-                [m("11"), m("-8")],
-                [m("15"), m("0")],
-                [m("50"), m("35")],
-                [m("60"), m("40")],
-                [m("100"), m("50")],
-            ],
-        },
-        {
-            "id": "curve.action_speed",
-            "confidence": "unverified",
-            "points": [
-                [m("0"), m("-38")],
-                [m("10"), m("-8")],
-                [m("13"), m("-2")],
-                [m("15"), m("0")],
-                [m("33"), m("22.5")],
-                [m("45"), m("34.5")],
-                [m("49"), m("37.5")],
-                [m("100"), m("63")],
-            ],
-        },
-        {
-            # Delta from the 300 baseline, which lives in the offset.
-            "id": "curve.move_speed",
-            "confidence": "unverified",
-            "points": [
-                [m("0"), m("-10")],
-                [m("10"), m("-5")],
-                [m("15"), m("0")],
-                [m("75"), m("36")],
-                [m("100"), m("43.5")],
-            ],
-        },
-        {
-            "id": "curve.health",
-            "confidence": "unverified",
-            "points": [
-                [m("0"), m("70")],
-                [m("15"), m("100")],
-                [m("21"), m("110.5")],
-                [m("44"), m("145")],
-                [m("48"), m("150")],
-                [m("64"), m("166")],
-                [m("100"), m("184")],
-            ],
-        },
-        {
-            # PLACEHOLDER. The exact AR -> PDR table is not extracted yet: the
-            # wiki's breakpoints above AR 75 were not recovered in full, and
-            # inventing them would be exactly the failure this project exists
-            # to prevent. Shape only; replaced in the dataset arc.
-            "id": "curve.pdr",
-            "confidence": "unverified",
-            "points": [[m("0"), m("-22")], [m("100"), m("20")], [m("400"), m("83")]],
-        },
-    ],
-    "items": [
-        {
-            "id": "item.dark_leather_leggings",
-            "name": "Dark Leather Leggings",
-            "armor_rating": unverified("micro", m("36")),
-            "move_speed_add": unverified("micro", m("-4")),
-        }
-    ],
-    "perks": [
-        {
-            "id": "perk.rogue.jokester",
-            "name": "Jokester",
-            "effects": [
-                {"confidence": "unverified", "kind": "all_attributes", "points": 2}
-            ],
-        },
-        {
-            "id": "perk.fighter.defense_mastery",
-            "name": "Defense Mastery",
-            "effects": [
-                {
-                    # Confirmed in game 2026-08-19: raises the PDR cap to 75%,
-                    # and the curve genuinely reaches it.
-                    "confidence": "verified",
-                    "kind": "raise_cap",
-                    "target": "derived.pdr",
-                    "micro": m("75"),
-                }
-            ],
-        },
-    ],
-    "skills": [
-        {
-            "id": "skill.fighter.fortified_ground",
-            "name": "Fortified Ground",
-            "effects": [
-                {"confidence": "unverified", "kind": "all_attributes", "points": 3}
-            ],
-        }
-    ],
-}
+DATASET = load_dataset()
 
 LOADOUTS = [
     {
@@ -358,12 +205,13 @@ def build_vector() -> str:
         exchanges.append({**case, "expected_canonical": canonical_exchange(outcome)})
 
     vector = {
+        "build": DATASET["manifest"]["build"],
         "description": (
-            "Slice vector: pipeline and exchange mechanics over a placeholder "
-            "dataset (unverified test curves). Expected values computed by the "
-            "independent Python mirror; replayed by the Rust vector test."
+            "Slice vector over the committed dataset for the build named "
+            "above. Expected values computed by the independent Python "
+            "mirror; replayed byte-for-byte by the Rust vector test."
         ),
-        "dataset": DATASET,
+        "dataset": {k: v for k, v in DATASET.items() if k != "manifest"},
         "loadouts": loadouts,
         "exchanges": exchanges,
     }

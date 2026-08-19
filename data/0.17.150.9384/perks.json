@@ -1,0 +1,27 @@
+{
+  "perks": [
+    {
+      "id": "perk.rogue.jokester",
+      "name": "Jokester",
+      "effects": [
+        {
+          "confidence": "unverified",
+          "kind": "all_attributes",
+          "points": 2
+        }
+      ]
+    },
+    {
+      "id": "perk.fighter.defense_mastery",
+      "name": "Defense Mastery",
+      "effects": [
+        {
+          "confidence": "verified",
+          "kind": "raise_cap",
+          "target": "derived.pdr",
+          "micro": 75000000
+        }
+      ]
+    }
+  ]
+}

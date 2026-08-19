@@ -19,9 +19,13 @@ assay-data = { path = "crates/assay-data" }
 assay-diff = { path = "crates/assay-diff" }
 assay-scrape = { path = "crates/assay-scrape" }
 
+# assay-data: dataset I/O. serde stays OUT of assay-core - the file format
+# is a separate concern from the domain types (see assay-data's module doc).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
 # Dev-dependencies (tests run with std):
 proptest = "1"
-serde_json = "1"
 
 # ADR-001 rev 2: the deny-list below covers what `no_std` does not reach —
 # floats, silently truncating casts and panic-as-validation. `disallowed_types`

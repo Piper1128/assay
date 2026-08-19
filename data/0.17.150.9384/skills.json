@@ -1,0 +1,15 @@
+{
+  "skills": [
+    {
+      "id": "skill.fighter.fortified_ground",
+      "name": "Fortified Ground",
+      "effects": [
+        {
+          "confidence": "unverified",
+          "kind": "all_attributes",
+          "points": 3
+        }
+      ]
+    }
+  ]
+}

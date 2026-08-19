@@ -1,0 +1,92 @@
+{
+  "classes": [
+    {
+      "id": "class.rogue",
+      "name": "Rogue",
+      "base_attributes": {
+        "confidence": "unverified",
+        "points": {
+          "strength": 9,
+          "vigor": 6,
+          "agility": 25,
+          "dexterity": 20,
+          "will": 10,
+          "knowledge": 10,
+          "resourcefulness": 25
+        }
+      },
+      "derived": [
+        {
+          "id": "derived.physical_power_bonus",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "strength",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.physical_power_bonus",
+          "floor": -100000000
+        },
+        {
+          "id": "derived.action_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "agility",
+              "weight": 250000
+            },
+            {
+              "kind": "attribute",
+              "ref": "dexterity",
+              "weight": 750000
+            }
+          ],
+          "curve": "curve.action_speed"
+        },
+        {
+          "id": "derived.move_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "agility",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.move_speed",
+          "offset": 300000000,
+          "cap": 330000000
+        },
+        {
+          "id": "derived.health",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "strength",
+              "weight": 250000
+            },
+            {
+              "kind": "attribute",
+              "ref": "vigor",
+              "weight": 750000
+            }
+          ],
+          "curve": "curve.health",
+          "offset": 25000000
+        },
+        {
+          "id": "derived.pdr",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.armor_rating",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.pdr",
+          "cap": 60000000
+        }
+      ]
+    }
+  ]
+}

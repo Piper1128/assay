@@ -57,8 +57,11 @@ jobs:
         run: bash tools/gates/dep_direction.sh
 
       # One side of the mirror gate (ADR-010 rev 2 §3): the committed vector
-      # must regenerate identically from the independent Python mirror. The
-      # Rust side replays the same file in cargo test (vectors_slice).
+      # must regenerate identically from the independent Python mirror, which
+      # reads the same data/ directory the Rust loader does. The Rust side
+      # replays the file in cargo test (vectors_slice), and assay-data's
+      # integration test resolves straight from data/ — so mirror, vector,
+      # loader and dataset are pinned to each other from every side.
       - name: Mirror check
         run: python3 mirror/gen_slice_vector.py --check
 

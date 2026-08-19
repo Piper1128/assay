@@ -1,5 +1,6 @@
 {
-  "description": "Slice vector: pipeline and exchange mechanics over a placeholder dataset (unverified test curves). Expected values computed by the independent Python mirror; replayed by the Rust vector test.",
+  "build": "0.17.150.9384",
+  "description": "Slice vector over the committed dataset for the build named above. Expected values computed by the independent Python mirror; replayed byte-for-byte by the Rust vector test.",
   "dataset": {
     "classes": [
       {
