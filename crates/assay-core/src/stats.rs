@@ -132,6 +132,77 @@ fixed_newtype!(
 );
 fixed_newtype_additive!(MoveSpeedBonus);
 
+fixed_newtype!(
+    /// Damage in hit points, at any step of the exchange chain (ADR-006).
+    /// Sums where several sources contribute flat damage.
+    Damage
+);
+fixed_newtype_additive!(Damage);
+
+fixed_newtype!(
+    /// A skill's scaling coefficient in percent (Sneak Attack 0%, Rupture
+    /// 75%, Caltrops 100%) — ADR-006 step 2. Deliberately not additive: two
+    /// coefficients never sum, and 0% is a load-bearing value, not a default.
+    ScalingCoefficient
+);
+
+fixed_newtype!(
+    /// PDR after the multiplicative PDR Mod layer (ADR-002
+    /// `apply_pdr_mod`). Distinct from [`PdrPercent`] because it belongs to
+    /// an *exchange*, not to a defender's stat block.
+    EffectivePdr
+);
+
+/// Percent scale: percentages are stored as points, so 30% is `Fixed(30)`.
+const PERCENT: Fixed = Fixed::from_int(100);
+
+/// Applies a percentage to a damage value: `damage × (100 + percent) / 100`,
+/// one banker's rounding. The named home for "a percent bonus was applied".
+#[must_use]
+pub fn apply_percent(damage: Damage, percent: Fixed) -> Damage {
+    Damage::new(damage.value().mul_div_half_even(PERCENT + percent, PERCENT))
+}
+
+/// Applies a skill's scaling coefficient (ADR-006 step 2): `base × coeff`,
+/// where the coefficient is a percentage of the base. A 0% coefficient
+/// yields zero scaled damage — that is the mechanic, not a bug.
+#[must_use]
+pub fn apply_scaling(base: Damage, coefficient: ScalingCoefficient) -> Damage {
+    Damage::new(base.value().mul_div_half_even(coefficient.value(), PERCENT))
+}
+
+/// Reduces the defender's armor rating by the attacker's penetration
+/// (ADR-006 step 5): `armor × (100 − pen) / 100`, floored at zero.
+/// Penetration is a percentage of the rating, never a flat subtraction.
+#[must_use]
+pub fn penetrate(armor: ArmorRating, pen: ArmorPen) -> ArmorRating {
+    let reduced = armor
+        .value()
+        .mul_div_half_even(PERCENT - pen.value(), PERCENT);
+    ArmorRating::new(reduced.max(Fixed::ZERO))
+}
+
+/// Applies the multiplicative PDR Mod layer (ADR-002's locked conversion):
+/// `pdr × (100 + mod) / 100`. Lethal Mark's −30% turns 60% PDR into 42%,
+/// never into 30% — the additive reading is what `pdr_mod_additive` probes.
+#[must_use]
+pub fn apply_pdr_mod(base: PdrPercent, m: PdrMod) -> EffectivePdr {
+    EffectivePdr::new(
+        base.value().mul_div_half_even(PERCENT + m.value(), PERCENT), // probe: pdr-mod-multiplicative
+    )
+}
+
+/// Applies damage reduction to a damage value: `damage × (100 − pdr) / 100`.
+/// Negative PDR (light armor at low ratings) correctly *increases* damage.
+#[must_use]
+pub fn reduce_by_pdr(damage: Damage, pdr: EffectivePdr) -> Damage {
+    Damage::new(
+        damage
+            .value()
+            .mul_div_half_even(PERCENT - pdr.value(), PERCENT),
+    )
+}
+
 /// A character attribute (Strength, Agility, …). Whole integer by nature —
 /// the game rolls and buffs attributes in whole points; only *derived* stats
 /// are fractional.

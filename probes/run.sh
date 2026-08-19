@@ -28,7 +28,8 @@ verdict() {
 }
 
 require_clean crates/assay-core/src/lib.rs crates/assay-core/src/confidence.rs \
-    crates/assay-core/src/resolve.rs crates/assay-diff/src/lib.rs crates/assay-data/Cargo.toml
+    crates/assay-core/src/resolve.rs crates/assay-core/src/exchange.rs \
+    crates/assay-core/src/stats.rs crates/assay-diff/src/lib.rs crates/assay-data/Cargo.toml
 
 # ── no_std_violation ─────────────────────────────────────────────────────────
 # `use std::fs` in assay-core must fail the bare-metal build (E0433).
@@ -92,6 +93,44 @@ else
 fi
 git checkout --quiet -- crates/assay-core/src/resolve.rs
 verdict pipeline_order "$gate_rejected"
+
+# ── scaling_ignored ──────────────────────────────────────────────────────────
+# Hardcoding the skill scaling coefficient to 100% (ADR-006 step 2) must fail
+# the Sneak Attack fixture: 0% scaling is what makes it immune to the
+# Hide-exit power penalty.
+sed -i '/probe: scaling-coefficient/ s/self\.strike\.scaling\.clone()/crate::confidence::Confidence::Verified(crate::stats::ScalingCoefficient::new(crate::fixed::Fixed::from_int(100)))/' crates/assay-core/src/exchange.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/exchange.rs
+verdict scaling_ignored "$gate_rejected"
+
+# ── true_damage_pre_reduction ────────────────────────────────────────────────
+# True Damage added BEFORE the reduction chain (ADR-006 step 8 moved ahead of
+# 5-7) must fail: armor would eat damage that bypasses armor by definition.
+sed -i '/probe: true-damage-post-reduction/ s/reduced\.clone()/with_flat.clone()/' crates/assay-core/src/exchange.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/exchange.rs
+verdict true_damage_pre_reduction "$gate_rejected"
+
+# ── pdr_mod_additive ─────────────────────────────────────────────────────────
+# Adding PdrMod to PDR instead of multiplying (ADR-006 step 7 / ADR-002's
+# locked apply_pdr_mod signature) must fail: Lethal Mark would read 30%
+# effective PDR instead of 42%.
+sed -i '/probe: pdr-mod-multiplicative/ s/\.mul_div_half_even(PERCENT + m\.value(), PERCENT)/+ m.value()/' crates/assay-core/src/stats.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/stats.rs
+verdict pdr_mod_additive "$gate_rejected"
 
 # ── final tree check ─────────────────────────────────────────────────────────
 if ! git diff --quiet -- crates/; then
