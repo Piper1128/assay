@@ -12,6 +12,7 @@ extern crate alloc;
 pub mod canonical;
 pub mod confidence;
 pub mod curve;
+pub mod derived;
 pub mod exchange;
 pub mod fixed;
 pub mod ids;
@@ -23,12 +24,13 @@ pub mod stats;
 pub use canonical::{canonical_exchange, canonical_statblock};
 pub use confidence::{Confidence, ConfidenceLevel};
 pub use curve::{Curve, CurveError, Interpolation};
+pub use derived::{DerivedError, DerivedStatDef, RatingInput, well_known};
 pub use exchange::{Exchange, ExchangeContext, ExchangeOutcome, Strike};
 pub use fixed::{Fixed, ParseFixedError, SCALE};
-pub use ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
+pub use ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 pub use loadout::{ArmorPiece, Loadout, PartyBuffs, Roll};
 pub use resolve::{ResolveError, Resolved, StageNote, resolve};
 pub use schema::{
-    AttributeBlock, AttributeKind, ClassDef, DatasetSource, DerivedCurves, Effect, InMemoryDataset,
-    ItemDef, PerkDef, SkillDef,
+    AttributeBlock, AttributeKind, ClassDef, DatasetSource, Effect, InMemoryDataset, ItemDef,
+    PerkDef, SkillDef,
 };

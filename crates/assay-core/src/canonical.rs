@@ -29,28 +29,20 @@ use crate::resolve::Resolved;
 use crate::schema::{AttributeBlock, AttributeKind};
 
 /// Renders the canonical form of a resolved stat block.
+///
+/// Derived stats are emitted by id in sorted order (ADR-012), so a dataset
+/// that defines a new stat gets it in the output without a code change and
+/// the lexicographic-key rule still holds. `attributes` sorts before every
+/// `derived.*` id, which is why it leads.
 #[must_use]
 pub fn canonical_statblock(resolved: &Resolved) -> String {
     let mut out = String::new();
     out.push('{');
-    // Top-level keys in lexicographic order.
-    write_graded_fixed(&mut out, "action_speed", &resolved.action_speed);
-    out.push(',');
-    write_graded_fixed(&mut out, "armor_rating", &resolved.armor_rating);
-    out.push(',');
     write_graded_attributes(&mut out, "attributes", &resolved.attributes);
-    out.push(',');
-    write_graded_fixed(&mut out, "health", &resolved.health);
-    out.push(',');
-    write_graded_fixed(&mut out, "move_speed", &resolved.move_speed);
-    out.push(',');
-    write_graded_fixed(&mut out, "pdr", &resolved.pdr);
-    out.push(',');
-    write_graded_fixed(
-        &mut out,
-        "physical_power_bonus",
-        &resolved.physical_power_bonus,
-    );
+    for (id, value) in &resolved.derived {
+        out.push(',');
+        write_graded_fixed(&mut out, id.as_str(), value);
+    }
     out.push('}');
     out
 }
@@ -180,7 +172,11 @@ mod tests {
     use alloc::vec;
     use alloc::vec::Vec;
 
+    use alloc::collections::BTreeMap;
+
     use super::*;
+    use crate::derived::well_known;
+    use crate::ids::DerivedStatId;
     use crate::resolve::StageNote;
 
     fn graded(micro: i64) -> Confidence<Fixed> {
@@ -191,14 +187,28 @@ mod tests {
         let mut block = AttributeBlock::default();
         block.add(AttributeKind::Strength, 9);
         block.add(AttributeKind::Agility, 25);
+        let mut derived = BTreeMap::new();
+        derived.insert(
+            DerivedStatId::new(well_known::ACTION_SPEED),
+            graded(7_812_500),
+        );
+        derived.insert(
+            DerivedStatId::new(well_known::ARMOR_RATING),
+            Confidence::Verified(Fixed::ZERO),
+        );
+        derived.insert(DerivedStatId::new(well_known::HEALTH), graded(108_500_000));
+        derived.insert(
+            DerivedStatId::new(well_known::MOVE_SPEED),
+            graded(306_000_000),
+        );
+        derived.insert(DerivedStatId::new(well_known::PDR), graded(-22_000_000));
+        derived.insert(
+            DerivedStatId::new(well_known::PHYSICAL_POWER_BONUS),
+            graded(-14_000_000),
+        );
         Resolved {
             attributes: Confidence::Unverified(block),
-            physical_power_bonus: graded(-14_000_000),
-            action_speed: graded(7_812_500),
-            move_speed: graded(306_000_000),
-            health: graded(108_500_000),
-            armor_rating: Confidence::Verified(Fixed::ZERO),
-            pdr: graded(-22_000_000),
+            derived,
             trace: Vec::new(),
         }
     }
@@ -207,15 +217,16 @@ mod tests {
     fn canonical_form_is_the_documented_grammar() {
         // The mirror contract, spelled out once in full.
         let expected = concat!(
-            "{\"action_speed\":{\"confidence\":\"unverified\",\"micro\":7812500},",
-            "\"armor_rating\":{\"confidence\":\"verified\",\"micro\":0},",
-            "\"attributes\":{\"confidence\":\"unverified\",\"points\":{",
+            "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{",
             "\"agility\":25,\"dexterity\":0,\"knowledge\":0,\"resourcefulness\":0,",
             "\"strength\":9,\"vigor\":0,\"will\":0}},",
-            "\"health\":{\"confidence\":\"unverified\",\"micro\":108500000},",
-            "\"move_speed\":{\"confidence\":\"unverified\",\"micro\":306000000},",
-            "\"pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},",
-            "\"physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-14000000}}"
+            "\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7812500},",
+            "\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},",
+            "\"derived.health\":{\"confidence\":\"unverified\",\"micro\":108500000},",
+            "\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":306000000},",
+            "\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},",
+            "\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",",
+            "\"micro\":-14000000}}"
         );
         assert_eq!(canonical_statblock(&sample_resolved()), expected);
     }
@@ -224,13 +235,16 @@ mod tests {
     fn note_key_exists_exactly_for_unknown() {
         let mut resolved = sample_resolved();
         assert!(!canonical_statblock(&resolved).contains("\"note\""));
-        resolved.pdr = Confidence::Unknown {
-            assumed: Fixed::from_int(-22),
-            note: "cap interaction untested".to_string(),
-        };
+        resolved.derived.insert(
+            DerivedStatId::new(well_known::PDR),
+            Confidence::Unknown {
+                assumed: Fixed::from_int(-22),
+                note: "cap interaction untested".to_string(),
+            },
+        );
         let canon = canonical_statblock(&resolved);
         assert!(canon.contains(
-            "\"pdr\":{\"confidence\":\"unknown\",\"micro\":-22000000,\"note\":\"cap interaction untested\"}"
+            "\"derived.pdr\":{\"confidence\":\"unknown\",\"micro\":-22000000,\"note\":\"cap interaction untested\"}"
         ));
     }
 
@@ -250,10 +264,13 @@ mod tests {
     #[test]
     fn string_escaping_is_closed_and_unique() {
         let mut resolved = sample_resolved();
-        resolved.health = Confidence::Unknown {
-            assumed: Fixed::ZERO,
-            note: "quote \" backslash \\ newline \n".to_string(),
-        };
+        resolved.derived.insert(
+            DerivedStatId::new(well_known::HEALTH),
+            Confidence::Unknown {
+                assumed: Fixed::ZERO,
+                note: "quote \" backslash \\ newline \n".to_string(),
+            },
+        );
         let canon = canonical_statblock(&resolved);
         assert!(canon.contains("quote \\\" backslash \\\\ newline \\u000a"));
     }

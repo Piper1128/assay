@@ -51,6 +51,18 @@ def unverified(value_key: str, value) -> dict:
     return {"confidence": "unverified", value_key: value}
 
 
+def attr(name: str, weight: str) -> dict:
+    return {"kind": "attribute", "ref": name, "weight": m(weight)}
+
+
+def derived_input(ref: str, weight: str) -> dict:
+    return {"kind": "derived", "ref": ref, "weight": m(weight)}
+
+
+# Real Patch 6.12 / Hotfix 123 shapes, transcribed from the Dark and Darker
+# Wiki (CC BY-SA 4.0). Wiki-sourced, so graded unverified per ADR-007 - two
+# wiki pages agreeing is not independent verification. The PDR cap is the one
+# exception: 60/75 was confirmed in game.
 DATASET = {
     "classes": [
         {
@@ -68,42 +80,108 @@ DATASET = {
                     "resourcefulness": 25,
                 },
             ),
-            # Confirmed in game 2026-08-19: base cap 60%, raised to 75% by
-            # Defense Mastery. Own test, so Verified (ADR-007) — while the
-            # curves around it stay unverified placeholders.
-            "pdr_cap": {"confidence": "verified", "micro": m("60")},
-            "curves": {
-                "strength_to_physical_power": "curve.slice.str_to_ppb",
-                "agility_to_action_speed": "curve.slice.agi_to_as",
-                "agility_to_move_speed": "curve.slice.agi_to_ms",
-                "vigor_to_health": "curve.slice.vig_to_hp",
-                "armor_to_pdr": "curve.slice.ar_to_pdr",
-            },
+            "derived": [
+                {
+                    # Physical Power = Strength 1:1, then the bonus curve.
+                    "id": "derived.physical_power_bonus",
+                    "weights": [attr("strength", "1")],
+                    "curve": "curve.physical_power_bonus",
+                    "floor": m("-100"),
+                },
+                {
+                    # Action Speed Rating = 0.25 AGI + 0.75 DEX. This is the
+                    # hybrid that ADR-012 exists for, and the reason a naked
+                    # Rogue reads exactly 7.8125%.
+                    "id": "derived.action_speed",
+                    "weights": [attr("agility", "0.25"), attr("dexterity", "0.75")],
+                    "curve": "curve.action_speed",
+                },
+                {
+                    "id": "derived.move_speed",
+                    "weights": [attr("agility", "1")],
+                    "curve": "curve.move_speed",
+                    "offset": m("300"),
+                    "cap": m("330"),
+                },
+                {
+                    # Base Health Rating = 0.25 STR + 0.75 VIG, +25 for every
+                    # class.
+                    "id": "derived.health",
+                    "weights": [attr("strength", "0.25"), attr("vigor", "0.75")],
+                    "curve": "curve.health",
+                    "offset": m("25"),
+                },
+                {
+                    # Armour rating is gear-sourced and seeds the graph.
+                    "id": "derived.pdr",
+                    "weights": [derived_input("derived.armor_rating", "1")],
+                    "curve": "curve.pdr",
+                    "cap": m("60"),
+                },
+            ],
         }
     ],
     "curves": [
         {
-            "id": "curve.slice.str_to_ppb",
+            # Physical Power -> Physical Power Bonus (wiki breakpoints).
+            "id": "curve.physical_power_bonus",
             "confidence": "unverified",
-            "points": [[m("0"), m("-32")], [m("50"), m("68")]],
+            "points": [
+                [m("0"), m("-80")],
+                [m("5"), m("-30")],
+                [m("7"), m("-20")],
+                [m("11"), m("-8")],
+                [m("15"), m("0")],
+                [m("50"), m("35")],
+                [m("60"), m("40")],
+                [m("100"), m("50")],
+            ],
         },
         {
-            "id": "curve.slice.agi_to_as",
+            "id": "curve.action_speed",
             "confidence": "unverified",
-            "points": [[m("0"), m("-17.1875")], [m("32"), m("14")]],
+            "points": [
+                [m("0"), m("-38")],
+                [m("10"), m("-8")],
+                [m("13"), m("-2")],
+                [m("15"), m("0")],
+                [m("33"), m("22.5")],
+                [m("45"), m("34.5")],
+                [m("49"), m("37.5")],
+                [m("100"), m("63")],
+            ],
         },
         {
-            "id": "curve.slice.agi_to_ms",
+            # Delta from the 300 baseline, which lives in the offset.
+            "id": "curve.move_speed",
             "confidence": "unverified",
-            "points": [[m("0"), m("281")], [m("25"), m("306")], [m("75"), m("331")]],
+            "points": [
+                [m("0"), m("-10")],
+                [m("10"), m("-5")],
+                [m("15"), m("0")],
+                [m("75"), m("36")],
+                [m("100"), m("43.5")],
+            ],
         },
         {
-            "id": "curve.slice.vig_to_hp",
+            "id": "curve.health",
             "confidence": "unverified",
-            "points": [[m("0"), m("90")], [m("6"), m("108.5")], [m("50"), m("220")]],
+            "points": [
+                [m("0"), m("70")],
+                [m("15"), m("100")],
+                [m("21"), m("110.5")],
+                [m("44"), m("145")],
+                [m("48"), m("150")],
+                [m("64"), m("166")],
+                [m("100"), m("184")],
+            ],
         },
         {
-            "id": "curve.slice.ar_to_pdr",
+            # PLACEHOLDER. The exact AR -> PDR table is not extracted yet: the
+            # wiki's breakpoints above AR 75 were not recovered in full, and
+            # inventing them would be exactly the failure this project exists
+            # to prevent. Shape only; replaced in the dataset arc.
+            "id": "curve.pdr",
             "confidence": "unverified",
             "points": [[m("0"), m("-22")], [m("100"), m("20")], [m("400"), m("83")]],
         },
@@ -128,7 +206,14 @@ DATASET = {
             "id": "perk.fighter.defense_mastery",
             "name": "Defense Mastery",
             "effects": [
-                {"confidence": "verified", "kind": "raise_pdr_cap", "micro": m("75")}
+                {
+                    # Confirmed in game 2026-08-19: raises the PDR cap to 75%,
+                    # and the curve genuinely reaches it.
+                    "confidence": "verified",
+                    "kind": "raise_cap",
+                    "target": "derived.pdr",
+                    "micro": m("75"),
+                }
             ],
         },
     ],

@@ -16,8 +16,9 @@ use alloc::vec::Vec;
 
 use crate::confidence::Confidence;
 use crate::curve::Curve;
+use crate::derived::DerivedStatDef;
 use crate::fixed::Fixed;
-use crate::ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
+use crate::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::stats::Attribute;
 
 /// The game's seven character attributes.
@@ -124,25 +125,9 @@ impl AttributeBlock {
     }
 }
 
-/// Which curve derives which stat for a class (ADR-005 stage 4). Curves are
-/// referenced per class: whether classes share curves is a property of the
-/// dataset, not of the code.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct DerivedCurves {
-    /// Strength → Physical Power Bonus (percent points).
-    pub strength_to_physical_power: CurveId,
-    /// Agility → Action Speed (percent points).
-    pub agility_to_action_speed: CurveId,
-    /// Agility → Move Speed (absolute).
-    pub agility_to_move_speed: CurveId,
-    /// Vigor → Health (absolute).
-    pub vigor_to_health: CurveId,
-    /// Armor Rating → PDR (percent points, capped at ADR-005 stage 7).
-    pub armor_to_pdr: CurveId,
-}
-
-/// A playable class: base attributes and the curves that derive stats from
-/// them.
+/// A playable class: base attributes and the derived stats computed from
+/// them (ADR-012). Definitions are referenced per class: whether classes
+/// share them is a property of the dataset, not of the code.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ClassDef {
     /// Stable identity (`class.rogue`).
@@ -151,10 +136,10 @@ pub struct ClassDef {
     pub name: String,
     /// Base attribute block (ADR-005 stage 1).
     pub base_attributes: Confidence<AttributeBlock>,
-    /// The PDR cap before any cap-raising perk (60%).
-    pub pdr_cap: Confidence<Fixed>,
-    /// Curve references for derived stats.
-    pub curves: DerivedCurves,
+    /// Derived-stat definitions, evaluated in dependency order at ADR-005
+    /// stage 4. Caps live on the definitions, so a cap-raising perk targets
+    /// one by id rather than through a dedicated field.
+    pub derived: Vec<DerivedStatDef>,
 }
 
 /// Fixed stats granted by wearing an item. Per-rarity modifier ranges are
@@ -181,8 +166,10 @@ pub enum Effect {
     AllAttributes(i32),
     /// Whole points to one attribute.
     Attribute(AttributeKind, i32),
-    /// Raises the PDR cap (Defense Mastery: 60% → 75%).
-    RaisePdrCap(Fixed),
+    /// Raises a derived stat's cap (Defense Mastery: PDR 60% → 75%).
+    /// Generalised in ADR-012: the cap belongs to the derived-stat
+    /// definition, so the effect names which one it lifts.
+    RaiseCap(DerivedStatId, Fixed),
     /// Flat move speed (ADR-005 stage 5).
     MoveSpeedAdd(Fixed),
     /// Percentage move speed bonus (ADR-005 stage 6).

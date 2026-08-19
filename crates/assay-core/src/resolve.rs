@@ -1,22 +1,24 @@
-//! The resolution pipeline (ADR-005). **Critical — the stage order is locked
-//! and must not change without a new ADR.**
+//! The resolution pipeline (ADR-005, refined by ADR-012). **The stage order
+//! is locked and must not change without a new ADR.**
 //!
 //! ```text
-//! 1. class base attributes
-//! 2. + attributes from gear rolls
-//! 3. + attributes from perks/skills/party      ← attribute sum FINAL here
-//! 4. attributes → derived stats via curves
-//! 5. + flat adds                               (move speed add, …)
-//! 6. + percentage bonuses
-//! 7. defensive chain: armor rating → PDR curve → cap
-//! 8. situational mods stay SEPARATE            (PDR Mod — exchange layer)
+//! 1.  class base attributes
+//! 2.  + attributes from gear rolls
+//! 3.  + attributes from perks/skills/party      ← attribute sum FINAL here
+//! 4a. attributes → ratings                      weighted sums (ADR-012)
+//! 4b. ratings    → derived stats                curve → offset → clamp
+//! 5.  + flat adds                               (move speed add, …)
+//! 6.  + percentage bonuses
+//! 7.  defensive chain: armor rating seeds the PDR stat, caps may be raised
+//! 8.  situational mods stay SEPARATE            (PDR Mod — exchange layer)
 //! ```
 //!
-//! Stage 3 before stage 4 is not negotiable: Fortified Ground and Jokester
-//! together are +5 All Attributes, and applying them after the curve lookup
-//! makes Physical Power Bonus systematically wrong — precisely the synergy
-//! the Rogue/Fighter duo is built on. The `pipeline_order` probe breaks this
-//! ordering on purpose and expects the tests to fail.
+//! Stage 3 before stage 4 is not negotiable, and ADR-012 makes the lock
+//! stricter rather than looser: a rating now folds *two* attributes into one
+//! number, so applying party buffs late corrupts more than it used to.
+//! Fortified Ground and Jokester together are +5 All Attributes, and the
+//! Rogue/Fighter duo is built on exactly that synergy. The `pipeline_order`
+//! probe breaks this ordering on purpose and expects the tests to fail.
 //!
 //! Stage 8 stays separate because Lethal Mark is not part of the defender's
 //! stat block; it is a modifier on the *exchange*. Mixing it in would make
@@ -28,20 +30,22 @@
 //! like that" is unanswerable and the tool cannot be debugged against the
 //! in-game character sheet.
 
+use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
 use crate::confidence::Confidence;
+use crate::derived::{DerivedError, evaluate_all, well_known};
 use crate::fixed::Fixed;
-use crate::ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
+use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::loadout::{Loadout, Roll};
 use crate::schema::{AttributeBlock, AttributeKind, DatasetSource, Effect};
 
 /// Why a loadout could not be resolved against a dataset. An unknown entity
 /// is useful information in itself (ADR-009: an id can vanish in a later
-/// patch — `EntityNotInDataset` with the version is part of the answer).
+/// patch — naming it, with the version, is part of the answer).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ResolveError {
     /// The loadout's class id is not in the dataset.
@@ -52,8 +56,8 @@ pub enum ResolveError {
     UnknownPerk(PerkId),
     /// A slotted or party skill id is not in the dataset.
     UnknownSkill(SkillId),
-    /// A curve referenced by the class is not in the dataset.
-    UnknownCurve(CurveId),
+    /// The derived-stat graph could not be evaluated (ADR-012).
+    Derived(DerivedError),
 }
 
 impl fmt::Display for ResolveError {
@@ -63,8 +67,14 @@ impl fmt::Display for ResolveError {
             ResolveError::UnknownItem(id) => write!(f, "item not in dataset: {id}"),
             ResolveError::UnknownPerk(id) => write!(f, "perk not in dataset: {id}"),
             ResolveError::UnknownSkill(id) => write!(f, "skill not in dataset: {id}"),
-            ResolveError::UnknownCurve(id) => write!(f, "curve not in dataset: {id}"),
+            ResolveError::Derived(e) => write!(f, "derived stats: {e}"),
         }
+    }
+}
+
+impl From<DerivedError> for ResolveError {
+    fn from(e: DerivedError) -> Self {
+        ResolveError::Derived(e)
     }
 }
 
@@ -82,24 +92,27 @@ pub struct StageNote {
 
 /// The resolved stat block. Presentation-independent; the canonical encoding
 /// (ADR-001 rev 2 §3) is derived from this, the trace is not part of it.
+///
+/// Derived stats live in a sorted map rather than named fields (ADR-012), so
+/// a dataset that defines Magic Resistance or Memory Capacity gets them in
+/// the output without a code change.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Resolved {
     /// Final attribute block after stage 3.
     pub attributes: Confidence<AttributeBlock>,
-    /// Physical Power Bonus in percent points (stage 4, Strength curve).
-    pub physical_power_bonus: Confidence<Fixed>,
-    /// Action Speed in percent points (stage 4, Agility curve).
-    pub action_speed: Confidence<Fixed>,
-    /// Move Speed, absolute, after stages 4–6.
-    pub move_speed: Confidence<Fixed>,
-    /// Health, absolute (stage 4, Vigor curve).
-    pub health: Confidence<Fixed>,
-    /// Summed armor rating entering the defensive chain (stage 7).
-    pub armor_rating: Confidence<Fixed>,
-    /// PDR in percent points, capped (stage 7).
-    pub pdr: Confidence<Fixed>,
+    /// Every derived stat the class defines, by id.
+    pub derived: BTreeMap<DerivedStatId, Confidence<Fixed>>,
     /// The `--explain` trail, in stage order.
     pub trace: Vec<StageNote>,
+}
+
+impl Resolved {
+    /// Looks up one derived stat. Callers that require a stat must handle
+    /// its absence explicitly — a missing stat is never silently zero.
+    #[must_use]
+    pub fn stat(&self, id: &str) -> Option<&Confidence<Fixed>> {
+        self.derived.get(&DerivedStatId::new(id))
+    }
 }
 
 /// Resolves a loadout against a dataset, in the locked stage order.
@@ -144,7 +157,6 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
             }
         }
     }
-
     trace.push(StageNote {
         stage: 2,
         label: "gear rolls applied",
@@ -152,7 +164,6 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     });
 
     // ── Stage 3: attributes from perks/skills/party ──────────────────────
-    // Gather every effect list once; later stages reuse the same list.
     let effects = collect_effects(loadout, data)?;
     let mut attributes_final = attributes_after_gear.clone();
     for sourced in &effects {
@@ -192,44 +203,46 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         detail: render_block(attributes_final.value()),
     });
 
-    // ── Stage 4: attributes → derived stats via curves ───────────────────
-    // The single most consequential line in the file: curves read the
+    // ── Stage 7 (prepared): gear-sourced armour rating and cap raises ────
+    // The armour rating seeds the derived graph rather than being computed
+    // from it, and cap-raising perks are collected before evaluation so a
+    // raised cap clamps the value the first time it is produced.
+    let mut ar_parts: Vec<Confidence<Fixed>> = Vec::new();
+    for piece in &loadout.armor {
+        let item = data
+            .item(&piece.id)
+            .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
+        if let Some(ar) = &item.armor_rating {
+            ar_parts.push(ar.clone());
+        }
+    }
+    let armor_rating = fold_sum(ar_parts);
+    let mut cap_overrides: BTreeMap<DerivedStatId, Fixed> = BTreeMap::new();
+    for sourced in &effects {
+        if let Effect::RaiseCap(id, raised) = sourced.effect.value() {
+            // A cap-raiser lifts the ceiling; it never lowers it.
+            let entry = cap_overrides.entry(id.clone()).or_insert(*raised);
+            *entry = (*entry).max(*raised);
+        }
+    }
+
+    let mut seeded: BTreeMap<DerivedStatId, Confidence<Fixed>> = BTreeMap::new();
+    seeded.insert(
+        DerivedStatId::new(well_known::ARMOR_RATING),
+        armor_rating.clone(),
+    );
+
+    // ── Stage 4a/4b: attributes → ratings → derived stats ────────────────
+    // The single most consequential line in the file: ratings read the
     // attribute sum AFTER stage 3.
-    let curve_input = &attributes_final; // probe: pipeline-order
-    let physical_power_bonus = sample_attribute_curve(
-        data,
-        &class.curves.strength_to_physical_power,
-        curve_input,
-        AttributeKind::Strength,
-    )?;
-    let action_speed = sample_attribute_curve(
-        data,
-        &class.curves.agility_to_action_speed,
-        curve_input,
-        AttributeKind::Agility,
-    )?;
-    let move_speed_base = sample_attribute_curve(
-        data,
-        &class.curves.agility_to_move_speed,
-        curve_input,
-        AttributeKind::Agility,
-    )?;
-    let health = sample_attribute_curve(
-        data,
-        &class.curves.vigor_to_health,
-        curve_input,
-        AttributeKind::Vigor,
-    )?;
+    let rating_input = &attributes_final; // probe: pipeline-order
+    let mut derived = evaluate_all(&class.derived, rating_input, seeded, &cap_overrides, |id| {
+        data.curve(id).cloned()
+    })?;
     trace.push(StageNote {
         stage: 4,
-        label: "curves",
-        detail: format!(
-            "physical power bonus {} · action speed {} · move speed {} · health {}",
-            physical_power_bonus.value(),
-            action_speed.value(),
-            move_speed_base.value(),
-            health.value()
-        ),
+        label: "ratings → derived stats",
+        detail: render_derived(&derived),
     });
 
     // ── Stage 5: flat adds ───────────────────────────────────────────────
@@ -254,16 +267,22 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         }
     }
     let flat_adds = fold_sum(move_speed_adds);
-    let move_speed_flat = move_speed_base.zip_with(flat_adds.clone(), |base, add| base + add);
-    trace.push(StageNote {
-        stage: 5,
-        label: "flat adds",
-        detail: format!(
-            "move speed {:+} → {}",
-            flat_adds.value(),
-            move_speed_flat.value()
-        ),
-    });
+    let move_speed_id = DerivedStatId::new(well_known::MOVE_SPEED);
+    if let Some(move_speed) = derived.get(&move_speed_id).cloned() {
+        let adjusted = move_speed.zip_with(flat_adds.clone(), |base, add| base + add);
+        trace.push(StageNote {
+            stage: 5,
+            label: "flat adds",
+            detail: format!("move speed {:+} → {}", flat_adds.value(), adjusted.value()),
+        });
+        derived.insert(move_speed_id.clone(), adjusted);
+    } else {
+        trace.push(StageNote {
+            stage: 5,
+            label: "flat adds",
+            detail: String::from("no move speed stat defined; nothing to adjust"),
+        });
+    }
 
     // ── Stage 6: percentage bonuses ──────────────────────────────────────
     let mut ms_bonuses: Vec<Confidence<Fixed>> = Vec::new();
@@ -274,56 +293,47 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         }
     }
     let bonus_sum = fold_sum(ms_bonuses);
-    // percent points: ms × (100 + Σ) / 100, one rounding.
     let hundred = Fixed::from_int(100);
-    let move_speed = move_speed_flat.zip_with(bonus_sum.clone(), |ms, bonus| {
-        ms.mul_div_half_even(hundred + bonus, hundred)
-    });
-    trace.push(StageNote {
-        stage: 6,
-        label: "percentage bonuses",
-        detail: format!(
-            "move speed ×(100{:+})% → {}",
-            bonus_sum.value(),
-            move_speed.value()
-        ),
-    });
+    if let Some(move_speed) = derived.get(&move_speed_id).cloned() {
+        // percent points: ms × (100 + Σ) / 100, one rounding.
+        let adjusted = move_speed.zip_with(bonus_sum.clone(), |ms, bonus| {
+            ms.mul_div_half_even(hundred + bonus, hundred)
+        });
+        trace.push(StageNote {
+            stage: 6,
+            label: "percentage bonuses",
+            detail: format!(
+                "move speed ×(100{:+})% → {}",
+                bonus_sum.value(),
+                adjusted.value()
+            ),
+        });
+        derived.insert(move_speed_id, adjusted);
+    } else {
+        trace.push(StageNote {
+            stage: 6,
+            label: "percentage bonuses",
+            detail: String::from("no move speed stat defined; nothing to adjust"),
+        });
+    }
 
-    // ── Stage 7: defensive chain ─────────────────────────────────────────
-    let mut ar_parts: Vec<Confidence<Fixed>> = Vec::new();
-    for piece in &loadout.armor {
-        let item = data
-            .item(&piece.id)
-            .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
-        if let Some(ar) = &item.armor_rating {
-            ar_parts.push(ar.clone());
-        }
-    }
-    let armor_rating = fold_sum(ar_parts);
-    let pdr_curve = data
-        .curve(&class.curves.armor_to_pdr)
-        .ok_or_else(|| ResolveError::UnknownCurve(class.curves.armor_to_pdr.clone()))?;
-    let pdr_uncapped = armor_rating
-        .clone()
-        .zip_with(pdr_curve.clone(), |ar, curve| curve.sample(ar));
-    let mut cap = class.pdr_cap.clone();
-    for sourced in &effects {
-        if let Effect::RaisePdrCap(raised) = sourced.effect.value() {
-            let raised = *raised;
-            // A cap-raiser lifts the cap; it never lowers it.
-            cap = cap.zip_with(sourced.effect.clone(), |current, _| current.max(raised));
-        }
-    }
-    let pdr = pdr_uncapped.zip_with(cap.clone(), Fixed::min);
+    // ── Stage 7: defensive chain (evaluated at 4b, reported here) ────────
+    let pdr_id = DerivedStatId::new(well_known::PDR);
     trace.push(StageNote {
         stage: 7,
         label: "defensive chain",
-        detail: format!(
-            "armor rating {} → PDR {} (cap {})",
-            armor_rating.value(),
-            pdr.value(),
-            cap.value()
-        ),
+        detail: match derived.get(&pdr_id) {
+            Some(pdr) => format!(
+                "armor rating {} → PDR {}{}",
+                armor_rating.value(),
+                pdr.value(),
+                match cap_overrides.get(&pdr_id) {
+                    Some(cap) => format!(" (cap raised to {cap})"),
+                    None => String::new(),
+                }
+            ),
+            None => format!("armor rating {}; no PDR stat defined", armor_rating.value()),
+        },
     });
 
     // ── Stage 8: situational mods stay separate ──────────────────────────
@@ -337,12 +347,7 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
 
     Ok(Resolved {
         attributes: attributes_final,
-        physical_power_bonus,
-        action_speed,
-        move_speed,
-        health,
-        armor_rating,
-        pdr,
+        derived,
         trace,
     })
 }
@@ -408,22 +413,6 @@ fn collect_effects(
     Ok(out)
 }
 
-/// Samples a class curve at one attribute's final value, propagating both the
-/// attribute block's and the curve's confidence (minimum rule).
-fn sample_attribute_curve(
-    data: &impl DatasetSource,
-    curve_id: &CurveId,
-    attributes: &Confidence<AttributeBlock>,
-    kind: AttributeKind,
-) -> Result<Confidence<Fixed>, ResolveError> {
-    let curve = data
-        .curve(curve_id)
-        .ok_or_else(|| ResolveError::UnknownCurve(curve_id.clone()))?;
-    Ok(attributes.clone().zip_with(curve.clone(), |block, curve| {
-        curve.sample(Fixed::from_int(i64::from(block.get(kind).points())))
-    }))
-}
-
 /// Sums graded values; the sum's grade is the minimum over the inputs.
 /// An empty sum is `Verified(0)` — the absence of modifiers is a certain
 /// fact, not a guess.
@@ -435,7 +424,7 @@ fn fold_sum(values: Vec<Confidence<Fixed>>) -> Confidence<Fixed> {
     acc
 }
 
-/// Renders an attribute block for the trace: `STR 9 VIG 6 …`.
+/// Renders an attribute block for the trace: `strength 9 vigor 6 …`.
 fn render_block(block: &AttributeBlock) -> String {
     let mut out = String::new();
     for kind in AttributeKind::ALL {
@@ -443,6 +432,18 @@ fn render_block(block: &AttributeBlock) -> String {
             out.push(' ');
         }
         out.push_str(&format!("{} {}", kind.as_str(), block.get(kind).points()));
+    }
+    out
+}
+
+/// Renders the derived map for the trace, in sorted id order.
+fn render_derived(derived: &BTreeMap<DerivedStatId, Confidence<Fixed>>) -> String {
+    let mut out = String::new();
+    for (id, value) in derived {
+        if !out.is_empty() {
+            out.push_str(" · ");
+        }
+        out.push_str(&format!("{id} {}", value.value()));
     }
     out
 }
@@ -457,19 +458,25 @@ mod tests {
     use super::*;
     use crate::confidence::ConfidenceLevel;
     use crate::curve::Curve;
+    use crate::derived::{DerivedStatDef, RatingInput};
     use crate::ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
     use crate::loadout::{ArmorPiece, PartyBuffs};
-    use crate::schema::{ClassDef, DerivedCurves, InMemoryDataset, ItemDef, PerkDef, SkillDef};
+    use crate::schema::{ClassDef, InMemoryDataset, ItemDef, PerkDef, SkillDef};
     use crate::stats::Attribute;
 
     fn fx(units: i64) -> Fixed {
         Fixed::from_int(units)
     }
 
-    /// Slice test dataset. Curve shapes are test-authored placeholders,
-    /// graded Unverified exactly as real wiki-derived curves will be — the
-    /// tests assert pipeline MECHANICS, not game truth (that is the golden
-    /// fixture arc's job, against the in-game character sheet).
+    fn weights(pairs: &[(RatingInput, &str)]) -> BTreeMap<RatingInput, Fixed> {
+        pairs
+            .iter()
+            .map(|(input, w)| (input.clone(), w.parse().unwrap()))
+            .collect()
+    }
+
+    /// The real Patch 6.12 / Hotfix 123 shapes from the wiki, so the tests
+    /// assert against the game rather than against invented curves.
     fn test_dataset() -> InMemoryDataset {
         let mut data = InMemoryDataset::new();
 
@@ -486,51 +493,123 @@ mod tests {
             id: ClassId::new("class.rogue"),
             name: "Rogue".to_string(),
             base_attributes: Confidence::Unverified(rogue_base),
-            pdr_cap: Confidence::Unverified(fx(60)),
-            curves: DerivedCurves {
-                strength_to_physical_power: CurveId::new("curve.test.str_to_ppb"),
-                agility_to_action_speed: CurveId::new("curve.test.agi_to_as"),
-                agility_to_move_speed: CurveId::new("curve.test.agi_to_ms"),
-                vigor_to_health: CurveId::new("curve.test.vig_to_hp"),
-                armor_to_pdr: CurveId::new("curve.test.ar_to_pdr"),
-            },
+            derived: vec![
+                DerivedStatDef {
+                    id: DerivedStatId::new(well_known::PHYSICAL_POWER_BONUS),
+                    weights: weights(&[(RatingInput::Attribute(AttributeKind::Strength), "1")]),
+                    curve: CurveId::new("curve.ppb"),
+                    offset: Fixed::ZERO,
+                    floor: Some(fx(-100)),
+                    cap: None,
+                },
+                DerivedStatDef {
+                    id: DerivedStatId::new(well_known::ACTION_SPEED),
+                    weights: weights(&[
+                        (RatingInput::Attribute(AttributeKind::Agility), "0.25"),
+                        (RatingInput::Attribute(AttributeKind::Dexterity), "0.75"),
+                    ]),
+                    curve: CurveId::new("curve.action_speed"),
+                    offset: Fixed::ZERO,
+                    floor: None,
+                    cap: None,
+                },
+                DerivedStatDef {
+                    id: DerivedStatId::new(well_known::MOVE_SPEED),
+                    weights: weights(&[(RatingInput::Attribute(AttributeKind::Agility), "1")]),
+                    curve: CurveId::new("curve.move_speed"),
+                    offset: fx(300),
+                    floor: None,
+                    cap: Some(fx(330)),
+                },
+                DerivedStatDef {
+                    id: DerivedStatId::new(well_known::HEALTH),
+                    weights: weights(&[
+                        (RatingInput::Attribute(AttributeKind::Strength), "0.25"),
+                        (RatingInput::Attribute(AttributeKind::Vigor), "0.75"),
+                    ]),
+                    curve: CurveId::new("curve.health"),
+                    offset: fx(25),
+                    floor: None,
+                    cap: None,
+                },
+                DerivedStatDef {
+                    id: DerivedStatId::new(well_known::PDR),
+                    weights: weights(&[(
+                        RatingInput::Derived(DerivedStatId::new(well_known::ARMOR_RATING)),
+                        "1",
+                    )]),
+                    curve: CurveId::new("curve.pdr"),
+                    offset: Fixed::ZERO,
+                    floor: None,
+                    cap: Some(fx(60)),
+                },
+            ],
         });
 
-        // Linear placeholder curves; strictly increasing so ordering
-        // assertions are meaningful.
+        // Wiki curves (Patch 6.12 / Hotfix 123).
         data.insert_curve(
-            CurveId::new("curve.test.str_to_ppb"),
-            Confidence::Unverified(
-                Curve::linear(vec![(fx(0), fx(-32)), (fx(50), fx(68))]).unwrap(),
-            ),
-        );
-        data.insert_curve(
-            CurveId::new("curve.test.agi_to_as"),
-            Confidence::Unverified(
-                Curve::linear(vec![(fx(0), "-17.1875".parse().unwrap()), (fx(32), fx(14))])
-                    .unwrap(),
-            ),
-        );
-        data.insert_curve(
-            CurveId::new("curve.test.agi_to_ms"),
-            Confidence::Unverified(
-                Curve::linear(vec![(fx(0), fx(281)), (fx(25), fx(306)), (fx(75), fx(331))])
-                    .unwrap(),
-            ),
-        );
-        data.insert_curve(
-            CurveId::new("curve.test.vig_to_hp"),
+            CurveId::new("curve.ppb"),
             Confidence::Unverified(
                 Curve::linear(vec![
-                    (fx(0), fx(90)),
-                    (fx(6), "108.5".parse().unwrap()),
-                    (fx(50), fx(220)),
+                    (fx(0), fx(-80)),
+                    (fx(5), fx(-30)),
+                    (fx(7), fx(-20)),
+                    (fx(11), fx(-8)),
+                    (fx(15), fx(0)),
+                    (fx(50), fx(35)),
+                    (fx(60), fx(40)),
+                    (fx(100), fx(50)),
                 ])
                 .unwrap(),
             ),
         );
         data.insert_curve(
-            CurveId::new("curve.test.ar_to_pdr"),
+            CurveId::new("curve.action_speed"),
+            Confidence::Unverified(
+                Curve::linear(vec![
+                    (fx(0), fx(-38)),
+                    (fx(10), fx(-8)),
+                    (fx(13), fx(-2)),
+                    (fx(15), fx(0)),
+                    (fx(33), "22.5".parse().unwrap()),
+                    (fx(45), "34.5".parse().unwrap()),
+                    (fx(49), "37.5".parse().unwrap()),
+                    (fx(100), fx(63)),
+                ])
+                .unwrap(),
+            ),
+        );
+        data.insert_curve(
+            CurveId::new("curve.move_speed"),
+            Confidence::Unverified(
+                Curve::linear(vec![
+                    (fx(0), fx(-10)),
+                    (fx(10), fx(-5)),
+                    (fx(15), fx(0)),
+                    (fx(75), fx(36)),
+                    (fx(100), "43.5".parse().unwrap()),
+                ])
+                .unwrap(),
+            ),
+        );
+        data.insert_curve(
+            CurveId::new("curve.health"),
+            Confidence::Unverified(
+                Curve::linear(vec![
+                    (fx(0), fx(70)),
+                    (fx(15), fx(100)),
+                    (fx(21), "110.5".parse().unwrap()),
+                    (fx(44), fx(145)),
+                    (fx(48), fx(150)),
+                    (fx(64), fx(166)),
+                    (fx(100), fx(184)),
+                ])
+                .unwrap(),
+            ),
+        );
+        // Placeholder: the exact AR→PDR table is not extracted yet.
+        data.insert_curve(
+            CurveId::new("curve.pdr"),
             Confidence::Unverified(
                 Curve::linear(vec![(fx(0), fx(-22)), (fx(100), fx(20)), (fx(400), fx(83))])
                     .unwrap(),
@@ -552,7 +631,10 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.fighter.defense_mastery"),
             name: "Defense Mastery".to_string(),
-            effects: vec![Confidence::Unverified(Effect::RaisePdrCap(fx(75)))],
+            effects: vec![Confidence::Verified(Effect::RaiseCap(
+                DerivedStatId::new(well_known::PDR),
+                fx(75),
+            ))],
         });
         data.insert_skill(SkillDef {
             id: SkillId::new("skill.fighter.fortified_ground"),
@@ -575,30 +657,61 @@ mod tests {
     }
 
     #[test]
-    fn naked_baseline_is_pure_curve_output() {
+    fn naked_baseline_matches_the_games_character_sheet() {
+        // The wiki publishes these four for the Rogue at Patch 6.12 / HF123.
+        // Reproducing them from the wiki's own curves is what ADR-012 is for.
         let resolved = resolve(&naked_rogue(), &test_dataset()).unwrap();
-        // STR 9 on the 0→−32, 50→68 line: −32 + 100·9/50 = −14.
-        assert_eq!(*resolved.physical_power_bonus.value(), fx(-14));
-        // AGI 25 hits the curve point exactly: 306.
-        assert_eq!(*resolved.move_speed.value(), fx(306));
-        // VIG 6 hits the 108.5 point exactly.
-        assert_eq!(*resolved.health.value(), "108.5".parse().unwrap());
-        // No armor: AR 0 → −22, below the cap.
-        assert_eq!(*resolved.pdr.value(), fx(-22));
-        // Wiki-graded inputs make every output Unverified.
         assert_eq!(
-            resolved.physical_power_bonus.level(),
-            ConfidenceLevel::Unverified
+            *resolved
+                .stat(well_known::PHYSICAL_POWER_BONUS)
+                .unwrap()
+                .value(),
+            fx(-14)
         );
-        assert_eq!(resolved.pdr.level(), ConfidenceLevel::Unverified);
+        assert_eq!(
+            *resolved.stat(well_known::ACTION_SPEED).unwrap().value(),
+            "7.8125".parse().unwrap(),
+            "the hybrid rating 0.25 AGI + 0.75 DEX is what produces this"
+        );
+        assert_eq!(
+            *resolved.stat(well_known::HEALTH).unwrap().value(),
+            "108.5".parse().unwrap()
+        );
+        assert_eq!(
+            *resolved.stat(well_known::MOVE_SPEED).unwrap().value(),
+            fx(306)
+        );
     }
 
     #[test]
-    fn party_buffs_shift_curve_inputs() {
-        // THE stage-3-before-stage-4 test — the pipeline_order probe breaks
-        // exactly this. Jokester +2 and Fortified Ground +3 land on the
-        // attribute sum BEFORE the strength curve is read: STR 9 → 14,
-        // PPB −32 + 100·14/50 = −4, not −14.
+    fn action_speed_needs_dexterity_not_just_agility() {
+        // Raising Dexterity alone must move Action Speed — impossible under
+        // the old single-attribute model, and the reason ADR-012 exists.
+        let data = test_dataset();
+        let base = resolve(&naked_rogue(), &data).unwrap();
+        let mut dex_loadout = naked_rogue();
+        dex_loadout.armor = vec![ArmorPiece {
+            id: ItemId::new("item.dark_leather_leggings"),
+            rolls: vec![Roll::Attribute(AttributeKind::Dexterity, 4)],
+        }];
+        let with_dex = resolve(&dex_loadout, &data).unwrap();
+        assert!(
+            with_dex.stat(well_known::ACTION_SPEED).unwrap().value()
+                > base.stat(well_known::ACTION_SPEED).unwrap().value()
+        );
+        // 0.75 × 4 = +3 rating × 1.25%/pt = +3.75 points.
+        assert_eq!(
+            *with_dex.stat(well_known::ACTION_SPEED).unwrap().value(),
+            "11.5625".parse().unwrap()
+        );
+    }
+
+    #[test]
+    fn party_buffs_shift_rating_inputs() {
+        // The stage-3-before-4 lock, now over ratings. Jokester +2 and
+        // Fortified Ground +3 land before the ratings are formed: STR 9 → 14.
+        // On the real curve that interpolates between (11, −8) and (15, 0):
+        // −8 + 8 × 3/4 = −2, up from −14 naked.
         let mut loadout = naked_rogue();
         loadout.perks = vec![PerkId::new("perk.rogue.jokester")];
         loadout.party.skills = vec![SkillId::new("skill.fighter.fortified_ground")];
@@ -611,10 +724,23 @@ mod tests {
                 .points(),
             14
         );
-        assert_eq!(*resolved.physical_power_bonus.value(), fx(-4));
+        assert_eq!(
+            *resolved
+                .stat(well_known::PHYSICAL_POWER_BONUS)
+                .unwrap()
+                .value(),
+            fx(-2)
+        );
         let naked = resolve(&naked_rogue(), &test_dataset()).unwrap();
         assert!(
-            *resolved.physical_power_bonus.value() > *naked.physical_power_bonus.value(),
+            resolved
+                .stat(well_known::PHYSICAL_POWER_BONUS)
+                .unwrap()
+                .value()
+                > naked
+                    .stat(well_known::PHYSICAL_POWER_BONUS)
+                    .unwrap()
+                    .value(),
             "party attributes must raise derived output through a rising curve"
         );
     }
@@ -630,7 +756,6 @@ mod tests {
             ],
         }];
         let resolved = resolve(&loadout, &test_dataset()).unwrap();
-        // DEX roll lands in the attribute block (stage 2).
         assert_eq!(
             resolved
                 .attributes
@@ -639,16 +764,21 @@ mod tests {
                 .points(),
             24
         );
-        // Move speed: curve 306, item −4, roll +2 → 304 (stage 5).
-        assert_eq!(*resolved.move_speed.value(), fx(304));
-        // AR 36 → −22 + 42·36/100 = −6.88 (stage 7).
-        assert_eq!(*resolved.armor_rating.value(), fx(36));
-        assert_eq!(*resolved.pdr.value(), "-6.88".parse().unwrap());
+        // Curve 306, item −4, roll +2 → 304 (stage 5).
+        assert_eq!(
+            *resolved.stat(well_known::MOVE_SPEED).unwrap().value(),
+            fx(304)
+        );
+        assert_eq!(
+            *resolved.stat(well_known::ARMOR_RATING).unwrap().value(),
+            fx(36)
+        );
     }
 
     #[test]
-    fn pdr_is_capped_and_cap_raisers_lift_it() {
-        // Enough armor to exceed the base cap: AR 400 → curve 83.
+    fn pdr_is_capped_and_defense_mastery_raises_it_to_75() {
+        // Confirmed in game: base cap 60%, 75% with Defense Mastery, and the
+        // curve genuinely reaches it.
         let heavy = ItemDef {
             id: ItemId::new("item.test_plate"),
             name: "Test Plate".to_string(),
@@ -663,15 +793,11 @@ mod tests {
             rolls: vec![],
         }];
         let capped = resolve(&loadout, &data).unwrap();
-        assert_eq!(*capped.pdr.value(), fx(60), "base cap 60 must bite");
+        assert_eq!(*capped.stat(well_known::PDR).unwrap().value(), fx(60));
 
         loadout.perks = vec![PerkId::new("perk.fighter.defense_mastery")];
         let raised = resolve(&loadout, &data).unwrap();
-        assert_eq!(
-            *raised.pdr.value(),
-            fx(75),
-            "Defense Mastery raises the cap to 75"
-        );
+        assert_eq!(*raised.stat(well_known::PDR).unwrap().value(), fx(75));
     }
 
     #[test]
@@ -688,6 +814,21 @@ mod tests {
         assert_eq!(
             resolve(&loadout, &data),
             Err(ResolveError::UnknownPerk(PerkId::new("perk.rogue.creep")))
+        );
+    }
+
+    #[test]
+    fn confidence_survives_the_rating_model() {
+        let resolved = resolve(&naked_rogue(), &test_dataset()).unwrap();
+        // Wiki-graded base attributes and curves make every output unverified.
+        assert_eq!(
+            resolved.stat(well_known::ACTION_SPEED).unwrap().level(),
+            ConfidenceLevel::Unverified
+        );
+        // No armour at all is a certain fact, not a guess.
+        assert_eq!(
+            resolved.stat(well_known::ARMOR_RATING).unwrap().level(),
+            ConfidenceLevel::Verified
         );
     }
 

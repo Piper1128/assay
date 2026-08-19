@@ -129,20 +129,69 @@ def _effects(dataset: dict, loadout: dict) -> list[dict]:
     return out
 
 
-def _sample_attribute_curve(dataset: dict, curve_id: str, attributes: dict, kind: str) -> dict:
-    curve = dataset["curves"][curve_id]
-    return zip_with(
-        attributes,
-        curve,
-        lambda block, points: curve_sample(points, block[kind] * SCALE),
-    )
+def evaluate_derived(defs: list[dict], attributes: dict, seeded: dict, cap_overrides: dict) -> dict:
+    """Derived stats as weighted ratings (ADR-012), in dependency order.
+
+    rating   = sum(weight * input)   each product rounds half to even
+    derived  = curve(rating) + offset, then clamped by floor/cap.
+
+    A definition whose id is already seeded is skipped: a seeded value is
+    provided (gear-sourced armour rating), not computed. Cycles and dangling
+    references are dataset errors.
+    """
+    computed = dict(seeded)
+    defined = {d["id"] for d in defs}
+    pending = [d for d in defs if d["id"] not in computed]
+
+    while pending:
+        progressed = False
+        still = []
+        for d in pending:
+            ready = True
+            for w in d["weights"]:
+                if w["kind"] == "derived" and w["ref"] not in computed:
+                    if w["ref"] not in defined:
+                        raise ValueError(f"{d['id']} references undefined input {w['ref']}")
+                    ready = False
+            if not ready:
+                still.append(d)
+                continue
+
+            rating = conf("verified", 0)
+            for w in d["weights"]:
+                if w["kind"] == "attribute":
+                    term = map_conf(
+                        attributes, lambda block, k=w["ref"], wt=w["weight"]: fx_mul(block[k] * SCALE, wt)
+                    )
+                else:
+                    term = map_conf(computed[w["ref"]], lambda v, wt=w["weight"]: fx_mul(v, wt))
+                rating = zip_with(rating, term, lambda a, b: a + b)
+
+            cap = cap_overrides.get(d["id"], d.get("cap"))
+            floor = d.get("floor")
+            offset = d.get("offset", 0)
+
+            def apply(rating_value, points, off=offset, fl=floor, cp=cap):
+                value = curve_sample(points, rating_value) + off
+                if fl is not None:
+                    value = max(value, fl)
+                if cp is not None:
+                    value = min(value, cp)
+                return value
+
+            computed[d["id"]] = zip_with(rating, d["curve"], apply)
+            progressed = True
+        if not progressed:
+            raise ValueError(f"cyclic derived-stat dependency among {[d['id'] for d in still]}")
+        pending = still
+    return computed
 
 
 def resolve(dataset: dict, loadout: dict) -> dict:
-    """Resolves a loadout; returns the resolved stat block as graded values.
+    """Resolves a loadout; returns the derived stats plus the attribute block.
 
     Stage order is the ADR-005 lock: the attribute sum is final after stage 3,
-    strictly before any curve lookup in stage 4.
+    strictly before any rating is formed in stage 4a.
     """
     cls = dataset["classes"][loadout["class"]]
 
@@ -180,20 +229,25 @@ def resolve(dataset: dict, loadout: dict) -> dict:
                 },
             )
 
-    # Stage 4: attributes → derived stats via curves (reads the FINAL sum).
-    curves = cls["curves"]
-    physical_power_bonus = _sample_attribute_curve(
-        dataset, curves["strength_to_physical_power"], attributes, "strength"
-    )
-    action_speed = _sample_attribute_curve(
-        dataset, curves["agility_to_action_speed"], attributes, "agility"
-    )
-    move_speed = _sample_attribute_curve(
-        dataset, curves["agility_to_move_speed"], attributes, "agility"
-    )
-    health = _sample_attribute_curve(dataset, curves["vigor_to_health"], attributes, "vigor")
+    # Stage 7 (prepared): gear-sourced armour rating seeds the graph, and
+    # cap raises are collected before evaluation.
+    ar_parts = [
+        dataset["items"][piece["id"]]["armor_rating"]
+        for piece in loadout["armor"]
+        if dataset["items"][piece["id"]]["armor_rating"] is not None
+    ]
+    seeded = {"derived.armor_rating": fold_sum(ar_parts)}
+    cap_overrides: dict = {}
+    for effect in effects:
+        if effect["value"]["kind"] == "raise_cap":
+            target = effect["value"]["target"]
+            raised = effect["value"]["micro"]
+            cap_overrides[target] = max(cap_overrides.get(target, raised), raised)
 
-    # Stage 5: flat adds.
+    # Stage 4a/4b: attributes -> ratings -> derived stats.
+    derived = evaluate_derived(cls["derived"], attributes, seeded, cap_overrides)
+
+    # Stage 5: flat adds, on the move-speed entry.
     adds: list[dict] = []
     for piece in loadout["armor"]:
         item = dataset["items"][piece["id"]]
@@ -205,46 +259,27 @@ def resolve(dataset: dict, loadout: dict) -> dict:
     for effect in effects:
         if effect["value"]["kind"] == "move_speed_add":
             adds.append(map_conf(effect, lambda p: p["micro"]))
-    move_speed = zip_with(move_speed, fold_sum(adds), lambda ms, add: ms + add)
+    if "derived.move_speed" in derived:
+        derived["derived.move_speed"] = zip_with(
+            derived["derived.move_speed"], fold_sum(adds), lambda ms, add: ms + add
+        )
 
-    # Stage 6: percentage bonuses: ms × (100 + Σ) / 100, one rounding.
+    # Stage 6: percentage bonuses: ms * (100 + sum) / 100, one rounding.
     bonuses: list[dict] = []
     for effect in effects:
         if effect["value"]["kind"] == "move_speed_bonus":
             bonuses.append(map_conf(effect, lambda p: p["micro"]))
     hundred = 100 * SCALE
-    move_speed = zip_with(
-        move_speed,
-        fold_sum(bonuses),
-        lambda ms, bonus: mul_div(ms, hundred + bonus, hundred),
-    )
-
-    # Stage 7: defensive chain: armor rating → PDR curve → cap.
-    ar_parts = [
-        dataset["items"][piece["id"]]["armor_rating"]
-        for piece in loadout["armor"]
-        if dataset["items"][piece["id"]]["armor_rating"] is not None
-    ]
-    armor_rating = fold_sum(ar_parts)
-    pdr_curve = dataset["curves"][curves["armor_to_pdr"]]
-    pdr = zip_with(armor_rating, pdr_curve, lambda ar, points: curve_sample(points, ar))
-    cap = cls["pdr_cap"]
-    for effect in effects:
-        if effect["value"]["kind"] == "raise_pdr_cap":
-            cap = zip_with(cap, effect, lambda c, p: max(c, p["micro"]))
-    pdr = zip_with(pdr, cap, min)
+    if "derived.move_speed" in derived:
+        derived["derived.move_speed"] = zip_with(
+            derived["derived.move_speed"],
+            fold_sum(bonuses),
+            lambda ms, bonus: mul_div(ms, hundred + bonus, hundred),
+        )
 
     # Stage 8: situational mods stay separate (exchange layer, ADR-006).
 
-    return {
-        "attributes": attributes,
-        "physical_power_bonus": physical_power_bonus,
-        "action_speed": action_speed,
-        "move_speed": move_speed,
-        "health": health,
-        "armor_rating": armor_rating,
-        "pdr": pdr,
-    }
+    return {"attributes": attributes, "derived": derived}
 
 
 # ── exchange / damage model (ADR-006) ────────────────────────────────────────
@@ -275,7 +310,9 @@ def exchange_damage(attacker: dict, defender: dict, strike: dict, context: dict)
 
     # 3: + Physical Power Bonus, with the situational adjustment.
     power = zip_with(
-        attacker["physical_power_bonus"], context["power_bonus_adjust"], lambda p, a: p + a
+        attacker["derived"]["derived.physical_power_bonus"],
+        context["power_bonus_adjust"],
+        lambda p, a: p + a,
     )
     damage = zip_with(damage, power, apply_percent)
 
@@ -284,15 +321,17 @@ def exchange_damage(attacker: dict, defender: dict, strike: dict, context: dict)
 
     # 5: defender's armor rating, reduced by penetration (floored at zero).
     armor = zip_with(
-        defender["armor_rating"],
+        defender["derived"]["derived.armor_rating"],
         strike["armor_pen"],
         lambda ar, pen: max(mul_div(ar, PERCENT - pen, PERCENT), 0),
     )
 
     # 6: PDR from the curve, rescaled by how much rating survived penetration.
     pdr = zip_with(
-        defender["pdr"],
-        zip_with(defender["armor_rating"], armor, lambda full, pen: (full, pen)),
+        defender["derived"]["derived.pdr"],
+        zip_with(
+            defender["derived"]["derived.armor_rating"], armor, lambda full, pen: (full, pen)
+        ),
         lambda p, pair: p if pair[0] == 0 else mul_div(p, pair[1], pair[0]),
     )
 
@@ -359,22 +398,12 @@ def _graded_attributes(key: str, c: dict) -> str:
 
 def canonical_statblock(resolved: dict) -> str:
     """The canonical form: no whitespace, lexicographic keys, integers only,
-    absence distinct from null, note exactly for unknown."""
-    return (
-        "{"
-        + ",".join(
-            [
-                _graded_fixed("action_speed", resolved["action_speed"]),
-                _graded_fixed("armor_rating", resolved["armor_rating"]),
-                _graded_attributes("attributes", resolved["attributes"]),
-                _graded_fixed("health", resolved["health"]),
-                _graded_fixed("move_speed", resolved["move_speed"]),
-                _graded_fixed("pdr", resolved["pdr"]),
-                _graded_fixed("physical_power_bonus", resolved["physical_power_bonus"]),
-            ]
-        )
-        + "}"
-    )
+    absence distinct from null, note exactly for unknown. Derived stats are
+    emitted by id in sorted order (ADR-012); "attributes" sorts first."""
+    parts = [_graded_attributes("attributes", resolved["attributes"])]
+    for key in sorted(resolved["derived"]):
+        parts.append(_graded_fixed(key, resolved["derived"][key]))
+    return "{" + ",".join(parts) + "}"
 
 
 # ── vector-JSON adapters ─────────────────────────────────────────────────────
@@ -387,19 +416,32 @@ def graded_from_json(node: dict, value_key: str) -> dict:
 
 def dataset_from_json(node: dict) -> dict:
     """Indexes a vector-file dataset by id for resolution."""
-    classes = {}
-    for c in node["classes"]:
-        classes[c["id"]] = {
-            "name": c["name"],
-            "base_attributes": graded_from_json(c["base_attributes"], "points"),
-            "pdr_cap": graded_from_json(c["pdr_cap"], "micro"),
-            "curves": c["curves"],
-        }
     curves = {}
     for cu in node["curves"]:
         curves[cu["id"]] = conf(
             cu["confidence"], [tuple(p) for p in cu["points"]], cu.get("note")
         )
+
+    classes = {}
+    for c in node["classes"]:
+        derived = []
+        for d in c["derived"]:
+            derived.append(
+                {
+                    "id": d["id"],
+                    "weights": d["weights"],
+                    "curve": curves[d["curve"]],
+                    "offset": d.get("offset", 0),
+                    "floor": d.get("floor"),
+                    "cap": d.get("cap"),
+                }
+            )
+        classes[c["id"]] = {
+            "name": c["name"],
+            "base_attributes": graded_from_json(c["base_attributes"], "points"),
+            "derived": derived,
+        }
+
     items = {}
     for it in node["items"]:
         items[it["id"]] = {
@@ -422,7 +464,11 @@ def dataset_from_json(node: dict) -> dict:
             table[d["id"]] = {
                 "name": d["name"],
                 "effects": [
-                    conf(e["confidence"], {k: v for k, v in e.items() if k != "confidence"}, e.get("note"))
+                    conf(
+                        e["confidence"],
+                        {k: v for k, v in e.items() if k != "confidence"},
+                        e.get("note"),
+                    )
                     for e in d["effects"]
                 ],
             }

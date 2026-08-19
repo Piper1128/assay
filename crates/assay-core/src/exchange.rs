@@ -47,9 +47,12 @@
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::fmt;
 
 use crate::confidence::Confidence;
+use crate::derived::well_known;
 use crate::fixed::Fixed;
+use crate::ids::DerivedStatId;
 use crate::resolve::{Resolved, StageNote};
 use crate::stats::{
     ArmorPen, ArmorRating, Damage, EffectivePdr, PdrMod, PdrPercent, ScalingCoefficient,
@@ -106,6 +109,21 @@ pub struct Exchange<'a> {
     context: &'a ExchangeContext,
 }
 
+/// Why an exchange could not be computed. The stats it needs must be
+/// present: a missing stat is an explicit error, never a silent zero.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MissingStat(pub DerivedStatId);
+
+impl fmt::Display for MissingStat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "exchange needs derived stat {}, which the loadout does not define",
+            self.0
+        )
+    }
+}
+
 /// The outcome of an exchange, with the same inspectable trail the
 /// resolution pipeline produces.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -136,9 +154,19 @@ impl<'a> Exchange<'a> {
         }
     }
 
+    /// Reads one required stat from a resolved block.
+    fn require(resolved: &Resolved, id: &str) -> Result<Confidence<Fixed>, MissingStat> {
+        resolved
+            .stat(id)
+            .cloned()
+            .ok_or_else(|| MissingStat(DerivedStatId::new(id)))
+    }
+
     /// Runs the nine steps in the locked order.
-    #[must_use]
-    pub fn damage(&self) -> ExchangeOutcome {
+    pub fn damage(&self) -> Result<ExchangeOutcome, MissingStat> {
+        let attacker_power = Self::require(self.attacker, well_known::PHYSICAL_POWER_BONUS)?;
+        let defender_armor = Self::require(self.defender, well_known::ARMOR_RATING)?;
+        let defender_pdr = Self::require(self.defender, well_known::PDR)?;
         let mut trace: Vec<StageNote> = Vec::new();
 
         // ── 1: base damage ───────────────────────────────────────────────
@@ -166,9 +194,7 @@ impl<'a> Exchange<'a> {
         });
 
         // ── 3: + Physical Power Bonus (with situational adjustment) ──────
-        let power = self
-            .attacker
-            .physical_power_bonus
+        let power = attacker_power
             .clone()
             .zip_with(self.context.power_bonus_adjust.clone(), |ppb, adjust| {
                 ppb + adjust
@@ -197,9 +223,7 @@ impl<'a> Exchange<'a> {
         });
 
         // ── 5: defender's armor rating, reduced by penetration ───────────
-        let armor = self
-            .defender
-            .armor_rating
+        let armor = defender_armor
             .clone()
             .map(ArmorRating::new)
             .zip_with(self.strike.armor_pen.clone(), penetrate);
@@ -208,7 +232,7 @@ impl<'a> Exchange<'a> {
             label: "armor penetration",
             detail: format!(
                 "armor {} − pen {}% → {}",
-                self.defender.armor_rating.value(),
+                defender_armor.value(),
                 self.strike.armor_pen.value().value(),
                 armor.value().value()
             ),
@@ -220,10 +244,9 @@ impl<'a> Exchange<'a> {
         // reduction is rescaled by how much rating survived — a linear
         // approximation the dataset arc replaces with a re-sample of the
         // real curve at the penetrated rating.
-        let base_pdr = self.defender.pdr.clone().map(PdrPercent::new);
+        let base_pdr = defender_pdr.clone().map(PdrPercent::new);
         let pdr_after_pen = base_pdr.clone().zip_with(
-            self.defender
-                .armor_rating
+            defender_armor
                 .clone()
                 .zip_with(armor.clone(), |full, penetrated| (full, penetrated)),
             |pdr, (full, penetrated)| {
@@ -297,11 +320,11 @@ impl<'a> Exchange<'a> {
             ),
         });
 
-        ExchangeOutcome {
+        Ok(ExchangeOutcome {
             damage: final_damage,
             effective_pdr,
             trace,
-        }
+        })
     }
 }
 
@@ -322,7 +345,7 @@ pub fn explain(outcome: &ExchangeOutcome) -> String {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-    use alloc::vec::Vec;
+    use alloc::collections::BTreeMap;
 
     use super::*;
     use crate::confidence::ConfidenceLevel;
@@ -332,16 +355,24 @@ mod tests {
         Fixed::from_int(units)
     }
 
-    /// A resolved block with only the fields the exchange reads.
+    /// A resolved block carrying only the derived stats the exchange reads.
     fn combatant(power_bonus: i64, armor: i64, pdr: i64) -> Resolved {
+        let mut derived = BTreeMap::new();
+        derived.insert(
+            DerivedStatId::new(well_known::PHYSICAL_POWER_BONUS),
+            Confidence::Verified(fx(power_bonus)),
+        );
+        derived.insert(
+            DerivedStatId::new(well_known::ARMOR_RATING),
+            Confidence::Verified(fx(armor)),
+        );
+        derived.insert(
+            DerivedStatId::new(well_known::PDR),
+            Confidence::Verified(fx(pdr)),
+        );
         Resolved {
             attributes: Confidence::Verified(AttributeBlock::default()),
-            physical_power_bonus: Confidence::Verified(fx(power_bonus)),
-            action_speed: Confidence::Verified(Fixed::ZERO),
-            move_speed: Confidence::Verified(Fixed::ZERO),
-            health: Confidence::Verified(fx(100)),
-            armor_rating: Confidence::Verified(fx(armor)),
-            pdr: Confidence::Verified(fx(pdr)),
+            derived,
             trace: Vec::new(),
         }
     }
@@ -364,6 +395,7 @@ mod tests {
     ) -> Fixed {
         Exchange::new(attacker, defender, strike, context)
             .damage()
+            .expect("test combatants carry every required stat")
             .damage
             .value()
             .value()
@@ -441,7 +473,9 @@ mod tests {
             pdr_mod: Confidence::Verified(PdrMod::new(fx(-30))),
             ..ExchangeContext::default()
         };
-        let outcome = Exchange::new(&attacker, &defender, &s, &marked).damage();
+        let outcome = Exchange::new(&attacker, &defender, &s, &marked)
+            .damage()
+            .unwrap();
         assert_eq!(outcome.effective_pdr.value().value(), fx(42));
         assert_eq!(outcome.damage.value().value(), fx(58));
     }
@@ -453,7 +487,9 @@ mod tests {
         let attacker = combatant(0, 0, 0);
         let defender = combatant(0, 100, 40);
         let s = strike(100, 100, 0, 15, 0);
-        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default()).damage();
+        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default())
+            .damage()
+            .unwrap();
         assert_eq!(outcome.effective_pdr.value().value(), fx(34));
         assert_eq!(outcome.damage.value().value(), fx(66));
     }
@@ -493,7 +529,9 @@ mod tests {
         let defender = combatant(0, 0, 0);
         let mut s = strike(20, 100, 0, 0, 0);
         s.scaling = Confidence::Unverified(ScalingCoefficient::new(fx(100)));
-        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default()).damage();
+        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default())
+            .damage()
+            .unwrap();
         assert_eq!(outcome.damage.level(), ConfidenceLevel::Unverified);
     }
 
@@ -502,7 +540,9 @@ mod tests {
         let attacker = combatant(0, 0, 0);
         let defender = combatant(0, 0, 0);
         let s = strike(20, 100, 0, 0, 0);
-        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default()).damage();
+        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default())
+            .damage()
+            .unwrap();
         for step in 1..=9u8 {
             assert!(
                 outcome.trace.iter().any(|n| n.stage == step),

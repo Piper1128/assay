@@ -1,6 +1,6 @@
 # ADR-012 — Derived stats are ratings, not single-attribute curves
 
-**Status:** Proposed — awaiting lock
+**Status:** Accepted — locked 19 August 2026
 **Date:** 19 August 2026
 **Supersedes:** the `DerivedCurves` shape in ADR-004
 **Refines:** ADR-005 stage 4 (the locked pipeline; ADR-005 requires a new ADR to touch it — this is that ADR)
@@ -145,13 +145,15 @@ The structure this ADR defines already accommodates it: a cap belongs to the
 derived-stat definition, and perks raise it through ADR-005 stage 7. No code
 change followed — the implementation had the correct model from the start.
 
-**One open question, deliberately not answered here.** If the wiki's 65% is
-the AR→PDR *curve's* own ceiling rather than an applied cap, then the curve
-would bind before a 75% cap could ever be reached, and Defense Mastery's
-raise would do nothing above 65%. Curve ceiling and applied cap are different
-quantities and both figures can be true at once. This matters when the real
-AR→PDR curve is built, not before; until then the curve's shape stays
-`Unverified` and only the cap values are `Verified`.
+**The follow-up question is answered too.** It was worth asking whether the
+wiki's 65% might be the AR→PDR *curve's* own ceiling rather than an applied
+cap, since a curve that stops at 65% would bind before a 75% cap could ever
+be reached and would make Defense Mastery's raise inert. The same in-game
+test settles it: **PDR does reach 75% with Defense Mastery.** The curve
+therefore produces values above 65%, and the wiki's figure describes neither
+the applied cap nor a ceiling that binds. Treat that 65% as wrong for our
+purposes and do not reintroduce it from the wiki when the real curve is
+extracted.
 
 ## Consequences
 

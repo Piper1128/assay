@@ -62,6 +62,11 @@ id_newtype!(
     /// Identity of a curve definition (`curve.rogue.str_to_physical_power`).
     CurveId
 );
+id_newtype!(
+    /// Identity of a derived-stat definition (`derived.action_speed`),
+    /// ADR-012.
+    DerivedStatId
+);
 
 #[cfg(test)]
 mod tests {

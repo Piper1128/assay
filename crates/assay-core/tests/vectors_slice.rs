@@ -15,10 +15,12 @@ use assay_core::exchange::{Exchange, ExchangeContext, Strike};
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use assay_core::{
     ArmorPiece, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
-    DerivedCurves, Effect, Fixed, InMemoryDataset, ItemDef, ItemId, Loadout, PartyBuffs, PerkDef,
-    PerkId, Resolved, Roll, SkillDef, SkillId, canonical_exchange, canonical_statblock, resolve,
+    DerivedStatDef, DerivedStatId, Effect, Fixed, InMemoryDataset, ItemDef, ItemId, Loadout,
+    PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId,
+    canonical_exchange, canonical_statblock, resolve,
 };
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 fn vector() -> Value {
     let path =
@@ -87,9 +89,10 @@ fn effect(node: &Value) -> Confidence<Effect> {
             attribute_kind(node["attribute"].as_str().expect("attribute name")),
             i32::try_from(node["points"].as_i64().expect("points")).expect("points fit i32"),
         ),
-        "raise_pdr_cap" => {
-            Effect::RaisePdrCap(Fixed::from_micro(node["micro"].as_i64().expect("micro")))
-        }
+        "raise_cap" => Effect::RaiseCap(
+            DerivedStatId::new(node["target"].as_str().expect("raise_cap target")),
+            Fixed::from_micro(node["micro"].as_i64().expect("micro")),
+        ),
         "move_speed_add" => {
             Effect::MoveSpeedAdd(Fixed::from_micro(node["micro"].as_i64().expect("micro")))
         }
@@ -104,8 +107,43 @@ fn effect(node: &Value) -> Confidence<Effect> {
 fn dataset(node: &Value) -> InMemoryDataset {
     let mut data = InMemoryDataset::new();
     for class in node["classes"].as_array().expect("classes") {
-        let curves = &class["curves"];
-        let curve_id = |key: &str| CurveId::new(curves[key].as_str().expect("curve id"));
+        let derived = class["derived"]
+            .as_array()
+            .expect("derived defs")
+            .iter()
+            .map(|def| {
+                let weights: BTreeMap<RatingInput, Fixed> = def["weights"]
+                    .as_array()
+                    .expect("weights")
+                    .iter()
+                    .map(|w| {
+                        let reference = w["ref"].as_str().expect("weight ref");
+                        let input = match w["kind"].as_str().expect("weight kind") {
+                            "attribute" => RatingInput::Attribute(attribute_kind(reference)),
+                            "derived" => RatingInput::Derived(DerivedStatId::new(reference)),
+                            other => panic!("unknown weight kind: {other}"),
+                        };
+                        (
+                            input,
+                            Fixed::from_micro(w["weight"].as_i64().expect("weight")),
+                        )
+                    })
+                    .collect();
+                let optional_fixed = |key: &str| {
+                    def.get(key)
+                        .and_then(serde_json::Value::as_i64)
+                        .map(Fixed::from_micro)
+                };
+                DerivedStatDef {
+                    id: DerivedStatId::new(def["id"].as_str().expect("derived id")),
+                    weights,
+                    curve: CurveId::new(def["curve"].as_str().expect("curve id")),
+                    offset: optional_fixed("offset").unwrap_or(Fixed::ZERO),
+                    floor: optional_fixed("floor"),
+                    cap: optional_fixed("cap"),
+                }
+            })
+            .collect();
         data.insert_class(ClassDef {
             id: ClassId::new(class["id"].as_str().expect("class id")),
             name: class["name"].as_str().expect("class name").to_string(),
@@ -113,14 +151,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
                 &class["base_attributes"],
                 attribute_block(&class["base_attributes"]["points"]),
             ),
-            pdr_cap: graded_micro(&class["pdr_cap"]),
-            curves: DerivedCurves {
-                strength_to_physical_power: curve_id("strength_to_physical_power"),
-                agility_to_action_speed: curve_id("agility_to_action_speed"),
-                agility_to_move_speed: curve_id("agility_to_move_speed"),
-                vigor_to_health: curve_id("vigor_to_health"),
-                armor_to_pdr: curve_id("armor_to_pdr"),
-            },
+            derived,
         });
     }
     for curve in node["curves"].as_array().expect("curves") {
@@ -290,7 +321,8 @@ fn rust_agrees_with_the_mirror_on_every_exchange() {
             &s,
             &context,
         )
-        .damage();
+        .damage()
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
         let expected = case["expected_canonical"]
             .as_str()
             .expect("expected_canonical");
