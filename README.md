@@ -68,6 +68,9 @@ which the tool starts answering the question it exists for.
 | trust boundary | `assay-data` never depends on `assay-scrape` | `tools/gates/dep_direction.sh` |
 | negative probes | each gate above can still fail | `probes/run.sh` |
 
+Run the whole chain locally with `bash tools/check.sh` — same gates, same
+order, so a green run here is a green run in CI.
+
 ## Decision record
 
 The authoritative ADRs live in [docs/adr/](docs/adr/): `ADR-000-010.md` as
