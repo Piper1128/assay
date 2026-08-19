@@ -217,6 +217,11 @@ pub struct SkillDef {
 /// Everything the core needs from a dataset, as a trait the `std` crates
 /// implement (ADR-000 rev 2). The core does not know that files exist.
 pub trait DatasetSource {
+    /// Which game build this dataset describes. A dataset that cannot name
+    /// its version cannot be checked against a `Resolved` that was computed
+    /// from another one (ADR-006 amendment: penetration re-sampling).
+    fn build(&self) -> &str;
+
     /// Looks up a class definition.
     fn class(&self, id: &ClassId) -> Option<&ClassDef>;
     /// Looks up an item definition.
@@ -234,6 +239,7 @@ pub trait DatasetSource {
 /// these from a versioned dataset directory.
 #[derive(Default, Debug, Clone)]
 pub struct InMemoryDataset {
+    build: String,
     classes: alloc::collections::BTreeMap<ClassId, ClassDef>,
     items: alloc::collections::BTreeMap<ItemId, ItemDef>,
     perks: alloc::collections::BTreeMap<PerkId, PerkDef>,
@@ -242,10 +248,13 @@ pub struct InMemoryDataset {
 }
 
 impl InMemoryDataset {
-    /// An empty dataset.
+    /// An empty dataset for the named build.
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(build: impl Into<String>) -> Self {
+        InMemoryDataset {
+            build: build.into(),
+            ..Self::default()
+        }
     }
 
     /// Inserts a class definition, replacing any previous one with the id.
@@ -275,6 +284,10 @@ impl InMemoryDataset {
 }
 
 impl DatasetSource for InMemoryDataset {
+    fn build(&self) -> &str {
+        &self.build
+    }
+
     fn class(&self, id: &ClassId) -> Option<&ClassDef> {
         self.classes.get(id)
     }
@@ -320,7 +333,7 @@ mod tests {
 
     #[test]
     fn dataset_lookups_are_by_id() {
-        let mut data = InMemoryDataset::new();
+        let mut data = InMemoryDataset::new("test.build");
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.rogue.jokester"),
             name: "Jokester".to_string(),

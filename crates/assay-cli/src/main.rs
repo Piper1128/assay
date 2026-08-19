@@ -325,7 +325,7 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
 
     let strike = Strike::basic_swing(profile);
     let context = ExchangeContext::default();
-    let outcome = Exchange::new(&attacker, &defender, &strike, &context)
+    let outcome = Exchange::new(&attacker, &defender, &strike, &context, &dataset.entities)
         .damage()
         .map_err(|e| e.to_string())?;
 

@@ -197,6 +197,7 @@ def build_vector() -> str:
         strike = {k: graded_from(v) for k, v in case["strike"].items()}
         context = {k: graded_from(v) for k, v in case["context"].items()}
         outcome = exchange_damage(
+            indexed,
             resolved_by_name[case["attacker"]],
             resolved_by_name[case["defender"]],
             strike,

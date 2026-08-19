@@ -150,7 +150,7 @@ pub fn load(root: &Path, build: &str) -> Result<Dataset, LoadError> {
     let perks: PerkFile = read_json(&dir.join("perks.json"))?;
     let skills: SkillFile = read_json(&dir.join("skills.json"))?;
 
-    let mut entities = InMemoryDataset::new();
+    let mut entities = InMemoryDataset::new(build);
     let mut curve_ids: Vec<String> = Vec::new();
     let mut renames: BTreeMap<String, String> = BTreeMap::new();
     let mut ids: BTreeMap<String, EntityKind> = BTreeMap::new();

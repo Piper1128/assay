@@ -105,7 +105,11 @@ fn effect(node: &Value) -> Confidence<Effect> {
 }
 
 fn dataset(node: &Value) -> InMemoryDataset {
-    let mut data = InMemoryDataset::new();
+    let build = node
+        .get("build")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("vector");
+    let mut data = InMemoryDataset::new(build);
     for class in node["classes"].as_array().expect("classes") {
         let derived = class["derived"]
             .as_array()
@@ -328,6 +332,7 @@ fn rust_agrees_with_the_mirror_on_every_exchange() {
             by_name(case["defender"].as_str().expect("defender")),
             &s,
             &context,
+            &data,
         )
         .damage()
         .unwrap_or_else(|e| panic!("{name}: {e}"));

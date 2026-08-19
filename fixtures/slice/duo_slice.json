@@ -657,7 +657,7 @@
           "micro": 2000000
         }
       },
-      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":27606338},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-4093600}}"
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":28196330},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-6403600}}"
     }
   ]
 }

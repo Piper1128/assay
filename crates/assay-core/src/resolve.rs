@@ -32,7 +32,7 @@
 
 use alloc::collections::BTreeMap;
 use alloc::format;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -98,10 +98,21 @@ pub struct StageNote {
 /// the output without a code change.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Resolved {
+    /// The class this block resolved, so a later re-evaluation can find its
+    /// derived-stat definitions (ADR-006 amendment).
+    pub class: ClassId,
+    /// The dataset build this was resolved against. Computing an exchange
+    /// against a different build is a named error, not a wrong number.
+    pub build: String,
     /// Final attribute block after stage 3.
     pub attributes: Confidence<AttributeBlock>,
     /// Every derived stat the class defines, by id.
     pub derived: BTreeMap<DerivedStatId, Confidence<Fixed>>,
+    /// The cap actually in force per capped stat, after any perk raised it
+    /// (Defense Mastery, PDR 60% → 75%). A re-evaluation at another input
+    /// must clamp the same way, and the raise came from the loadout rather
+    /// than from the dataset.
+    pub caps: BTreeMap<DerivedStatId, Fixed>,
     /// The `--explain` trail, in stage order.
     pub trace: Vec<StageNote>,
 }
@@ -345,9 +356,20 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         ),
     });
 
+    // The cap in force is the definition's own, unless a perk raised it.
+    let mut caps: BTreeMap<DerivedStatId, Fixed> = BTreeMap::new();
+    for def in &class.derived {
+        if let Some(cap) = cap_overrides.get(&def.id).copied().or(def.cap) {
+            caps.insert(def.id.clone(), cap);
+        }
+    }
+
     Ok(Resolved {
+        class: loadout.class.clone(),
+        build: data.build().to_string(),
         attributes: attributes_final,
         derived,
+        caps,
         trace,
     })
 }
@@ -478,7 +500,7 @@ mod tests {
     /// The real Patch 6.12 / Hotfix 123 shapes from the wiki, so the tests
     /// assert against the game rather than against invented curves.
     fn test_dataset() -> InMemoryDataset {
-        let mut data = InMemoryDataset::new();
+        let mut data = InMemoryDataset::new("test.build");
 
         let rogue_base = AttributeBlock {
             strength: Attribute::new(9),

@@ -52,9 +52,9 @@ use core::fmt;
 use crate::confidence::Confidence;
 use crate::derived::well_known;
 use crate::fixed::Fixed;
-use crate::ids::DerivedStatId;
+use crate::ids::{ClassId, CurveId, DerivedStatId};
 use crate::resolve::{Resolved, StageNote};
-use crate::schema::WeaponProfile;
+use crate::schema::{DatasetSource, WeaponProfile};
 use crate::stats::{
     ArmorPen, ArmorRating, Damage, EffectivePdr, PdrMod, PdrPercent, ScalingCoefficient,
     TrueDamage, apply_pdr_mod, apply_percent, apply_scaling, penetrate, reduce_by_pdr,
@@ -124,26 +124,65 @@ impl Default for ExchangeContext {
     }
 }
 
-/// One damage exchange: attacker, defender, context. Fully pure.
-pub struct Exchange<'a> {
+/// One damage exchange: attacker, defender, context, dataset.
+///
+/// Four inputs rather than ADR-006's original three: step 6 must re-sample
+/// the defender's PDR curve at the penetrated armour rating, and that curve
+/// lives in the dataset. The value object still owns nothing and mutates
+/// nothing, which is what the purity clause was protecting
+/// (`docs/adr/ADR-006-amendment-penetration-resampling.md`).
+pub struct Exchange<'a, D: DatasetSource> {
     attacker: &'a Resolved,
     defender: &'a Resolved,
     strike: &'a Strike,
     context: &'a ExchangeContext,
+    data: &'a D,
 }
 
-/// Why an exchange could not be computed. The stats it needs must be
-/// present: a missing stat is an explicit error, never a silent zero.
+/// Why an exchange could not be computed. Everything it needs must be
+/// present and consistent: a missing stat is an explicit error, never a
+/// silent zero, and a dataset from another build is refused outright.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct MissingStat(pub DerivedStatId);
+pub enum ExchangeError {
+    /// A derived stat the exchange reads is not defined.
+    MissingStat(DerivedStatId),
+    /// The dataset is not the one a combatant was resolved against
+    /// (ADR-006 amendment: penetration re-sampling).
+    DatasetMismatch {
+        /// The build the combatant was resolved against.
+        resolved_against: String,
+        /// The build of the dataset handed to the exchange.
+        given: String,
+    },
+    /// The defender's class is not in the dataset.
+    UnknownClass(ClassId),
+    /// The defender's PDR definition names a curve the dataset lacks.
+    UnknownCurve(CurveId),
+    /// The defender's class defines no PDR stat, so armour cannot be
+    /// resolved at a penetrated rating.
+    NoPdrDefinition(ClassId),
+}
 
-impl fmt::Display for MissingStat {
+impl fmt::Display for ExchangeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "exchange needs derived stat {}, which the loadout does not define",
-            self.0
-        )
+        match self {
+            ExchangeError::MissingStat(id) => write!(
+                f,
+                "exchange needs derived stat {id}, which the loadout does not define"
+            ),
+            ExchangeError::DatasetMismatch {
+                resolved_against,
+                given,
+            } => write!(
+                f,
+                "combatant was resolved against build {resolved_against}, but the exchange                  was given build {given}; damage would silently use the wrong curves"
+            ),
+            ExchangeError::UnknownClass(id) => write!(f, "class not in dataset: {id}"),
+            ExchangeError::UnknownCurve(id) => write!(f, "curve not in dataset: {id}"),
+            ExchangeError::NoPdrDefinition(id) => {
+                write!(f, "{id} defines no {} stat", well_known::PDR)
+            }
+        }
     }
 }
 
@@ -159,34 +198,85 @@ pub struct ExchangeOutcome {
     pub trace: Vec<StageNote>,
 }
 
-impl<'a> Exchange<'a> {
-    /// Builds an exchange from two resolved stat blocks, a strike and a
-    /// context.
+impl<'a, D: DatasetSource> Exchange<'a, D> {
+    /// Builds an exchange from two resolved stat blocks, a strike, a context
+    /// and the dataset both combatants were resolved against.
     #[must_use]
     pub fn new(
         attacker: &'a Resolved,
         defender: &'a Resolved,
         strike: &'a Strike,
         context: &'a ExchangeContext,
+        data: &'a D,
     ) -> Self {
         Exchange {
             attacker,
             defender,
             strike,
             context,
+            data,
         }
     }
 
     /// Reads one required stat from a resolved block.
-    fn require(resolved: &Resolved, id: &str) -> Result<Confidence<Fixed>, MissingStat> {
+    fn require(resolved: &Resolved, id: &str) -> Result<Confidence<Fixed>, ExchangeError> {
         resolved
             .stat(id)
             .cloned()
-            .ok_or_else(|| MissingStat(DerivedStatId::new(id)))
+            .ok_or_else(|| ExchangeError::MissingStat(DerivedStatId::new(id)))
+    }
+
+    /// Refuses a dataset that is not the one a combatant was resolved
+    /// against: the curves would be from another patch.
+    fn require_same_build(&self, combatant: &Resolved) -> Result<(), ExchangeError> {
+        if combatant.build == self.data.build() {
+            Ok(())
+        } else {
+            Err(ExchangeError::DatasetMismatch {
+                resolved_against: combatant.build.clone(),
+                given: self.data.build().into(),
+            })
+        }
+    }
+
+    /// The defender's PDR at an arbitrary armour rating: the real curve,
+    /// re-sampled, offset and clamped exactly as resolution would have.
+    fn defender_pdr_at(&self, armor: Fixed) -> Result<Confidence<Fixed>, ExchangeError> {
+        let class = self
+            .data
+            .class(&self.defender.class)
+            .ok_or_else(|| ExchangeError::UnknownClass(self.defender.class.clone()))?;
+        let pdr_id = DerivedStatId::new(well_known::PDR);
+        let def = class
+            .derived
+            .iter()
+            .find(|d| d.id == pdr_id)
+            .ok_or_else(|| ExchangeError::NoPdrDefinition(self.defender.class.clone()))?;
+        let curve = self
+            .data
+            .curve(&def.curve)
+            .ok_or_else(|| ExchangeError::UnknownCurve(def.curve.clone()))?;
+
+        let offset = def.offset;
+        let floor = def.floor;
+        // The cap in force, which a perk may have raised at resolve time.
+        let cap = self.defender.caps.get(&pdr_id).copied().or(def.cap);
+        Ok(curve.clone().map(move |curve| {
+            let mut value = curve.sample(armor) + offset;
+            if let Some(floor) = floor {
+                value = value.max(floor);
+            }
+            if let Some(cap) = cap {
+                value = value.min(cap);
+            }
+            value
+        }))
     }
 
     /// Runs the nine steps in the locked order.
-    pub fn damage(&self) -> Result<ExchangeOutcome, MissingStat> {
+    pub fn damage(&self) -> Result<ExchangeOutcome, ExchangeError> {
+        self.require_same_build(self.attacker)?;
+        self.require_same_build(self.defender)?;
         let attacker_power = Self::require(self.attacker, well_known::PHYSICAL_POWER_BONUS)?;
         let defender_armor = Self::require(self.defender, well_known::ARMOR_RATING)?;
         let defender_pdr = Self::require(self.defender, well_known::PDR)?;
@@ -262,46 +352,22 @@ impl<'a> Exchange<'a> {
         });
 
         // ── 6: → PDR from the curve, capped ──────────────────────────────
-        // ⚠ KNOWN DEFECT — do not read this as merely approximate.
-        //
-        // The defender's resolved PDR already went through curve and cap
-        // (ADR-005 stage 7). Penetration lowers the armour rating, and the
-        // correct response is to re-sample the PDR curve at the lowered
-        // rating. This rescales the resolved PDR proportionally instead,
-        // which is **wrong in direction whenever PDR is negative**: light
-        // armour sits below zero, and scaling a negative number toward zero
-        // makes the defender take *less* damage from a penetrating hit.
-        // Penetration must never help the defender.
-        //
-        // Measured on the committed dataset: armour rating 36 resolves to
-        // −6.88% PDR. At 10% penetration the curve gives −8.392%, this gives
-        // −6.192%. The error grows with penetration, so a heavier
-        // penetration reads as a *smaller* hit.
-        //
-        // The fix is architectural, not a patch here: the exchange needs the
-        // defender's PDR curve to re-sample, and ADR-006 states damage is a
-        // pure function of attacker, defender and context. Either `Resolved`
-        // carries enough to recompute PDR at another rating, or ADR-006's
-        // purity clause changes. That is a decision, so it is flagged rather
-        // than worked around.
+        // The defender's resolved PDR came from this curve at their full
+        // armour rating (ADR-005 stage 7). Penetration lowered the rating,
+        // so the honest answer is the curve re-sampled there — not the
+        // resolved PDR scaled by how much armour survived, which was wrong
+        // in direction whenever PDR is negative
+        // (`docs/adr/ADR-006-amendment-penetration-resampling.md`).
         let base_pdr = defender_pdr.clone().map(PdrPercent::new);
-        let pdr_after_pen = base_pdr.clone().zip_with(
-            defender_armor
-                .clone()
-                .zip_with(armor.clone(), |full, penetrated| (full, penetrated)),
-            |pdr, (full, penetrated)| {
-                if full.is_zero() {
-                    pdr
-                } else {
-                    PdrPercent::new(pdr.value().mul_div_half_even(penetrated.value(), full))
-                }
-            },
-        );
+        let resampled = self.defender_pdr_at(armor.value().value())?;
+        let pdr_after_pen = armor
+            .clone()
+            .zip_with(resampled, |_, pdr| PdrPercent::new(pdr));
         trace.push(StageNote {
             stage: 6,
             label: "PDR from curve",
             detail: format!(
-                "{} → {} after penetration",
+                "{} → {} re-sampled at the penetrated rating",
                 base_pdr.value().value(),
                 pdr_after_pen.value().value()
             ),
@@ -385,36 +451,105 @@ pub fn explain(outcome: &ExchangeOutcome) -> String {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-    use alloc::collections::BTreeMap;
+    use alloc::string::ToString;
+    use alloc::vec;
+
+    use proptest::prelude::*;
 
     use super::*;
     use crate::confidence::ConfidenceLevel;
-    use crate::schema::AttributeBlock;
+    use crate::curve::Curve;
+    use crate::derived::{DerivedStatDef, RatingInput};
+    use crate::ids::{ClassId, CurveId, ItemId};
+    use crate::loadout::{ArmorPiece, Loadout, PartyBuffs, Weapons};
+    use crate::resolve::resolve;
+    use crate::schema::{ClassDef, InMemoryDataset, ItemDef};
+    use alloc::collections::BTreeMap;
+
+    const BUILD: &str = "test.build";
 
     fn fx(units: i64) -> Fixed {
         Fixed::from_int(units)
     }
 
-    /// A resolved block carrying only the derived stats the exchange reads.
-    fn combatant(power_bonus: i64, armor: i64, pdr: i64) -> Resolved {
-        let mut derived = BTreeMap::new();
-        derived.insert(
-            DerivedStatId::new(well_known::PHYSICAL_POWER_BONUS),
-            Confidence::Verified(fx(power_bonus)),
+    /// Armour rating to PDR: −20% at 0, 30% at 100, 90% at 400. Chosen so the
+    /// values the tests need are exact — 0 armour gives −20%, 40 gives 0%,
+    /// 150/200/250 give 40/50/60% — and so the curve has a negative region,
+    /// which is where the old rescaling went wrong.
+    fn pdr_curve() -> Curve {
+        Curve::linear(vec![(fx(0), fx(-20)), (fx(100), fx(30)), (fx(400), fx(90))]).unwrap()
+    }
+
+    /// A dataset with one class whose only derived stat is PDR, seeded from
+    /// gear-sourced armour rating, plus armour pieces at the ratings the
+    /// tests want.
+    fn dataset() -> InMemoryDataset {
+        let mut data = InMemoryDataset::new(BUILD);
+        let mut weights = BTreeMap::new();
+        weights.insert(
+            RatingInput::Derived(DerivedStatId::new(well_known::ARMOR_RATING)),
+            Fixed::ONE,
         );
-        derived.insert(
-            DerivedStatId::new(well_known::ARMOR_RATING),
-            Confidence::Verified(fx(armor)),
+        data.insert_class(ClassDef {
+            id: ClassId::new("class.test"),
+            name: "Test".to_string(),
+            base_attributes: Confidence::Verified(crate::schema::AttributeBlock::default()),
+            derived: vec![
+                DerivedStatDef {
+                    id: DerivedStatId::new(well_known::PDR),
+                    weights,
+                    curve: CurveId::new("curve.pdr"),
+                    offset: Fixed::ZERO,
+                    floor: None,
+                    cap: Some(fx(60)),
+                },
+                DerivedStatDef {
+                    id: DerivedStatId::new(well_known::PHYSICAL_POWER_BONUS),
+                    weights: BTreeMap::from([(
+                        RatingInput::Attribute(crate::schema::AttributeKind::Strength),
+                        Fixed::ONE,
+                    )]),
+                    curve: CurveId::new("curve.flat"),
+                    offset: Fixed::ZERO,
+                    floor: None,
+                    cap: None,
+                },
+            ],
+        });
+        data.insert_curve(CurveId::new("curve.pdr"), Confidence::Verified(pdr_curve()));
+        // Physical power bonus stays 0 for every attribute value, so the
+        // tests isolate the defensive chain.
+        data.insert_curve(
+            CurveId::new("curve.flat"),
+            Confidence::Verified(Curve::linear(vec![(fx(0), fx(0)), (fx(100), fx(0))]).unwrap()),
         );
-        derived.insert(
-            DerivedStatId::new(well_known::PDR),
-            Confidence::Verified(fx(pdr)),
-        );
-        Resolved {
-            attributes: Confidence::Verified(AttributeBlock::default()),
-            derived,
-            trace: Vec::new(),
+        for rating in [0i64, 40, 150, 200, 250] {
+            data.insert_item(ItemDef {
+                id: ItemId::new(alloc::format!("item.armor_{rating}")),
+                name: alloc::format!("Armor {rating}"),
+                armor_rating: Some(Confidence::Verified(fx(rating))),
+                move_speed_add: None,
+                weapon: None,
+            });
         }
+        data
+    }
+
+    /// A combatant wearing the piece with the given armour rating.
+    fn combatant(data: &InMemoryDataset, armor: i64) -> Resolved {
+        let loadout = Loadout {
+            name: alloc::format!("armor-{armor}"),
+            class: ClassId::new("class.test"),
+            perks: vec![],
+            skills: vec![],
+            armor: vec![ArmorPiece {
+                id: ItemId::new(alloc::format!("item.armor_{armor}")),
+                rolls: vec![],
+            }],
+            weapons: Weapons::default(),
+            party: PartyBuffs::default(),
+        };
+        resolve(&loadout, data).expect("test loadout resolves")
     }
 
     fn strike(base: i64, scaling: i64, flat: i64, pen: i64, true_dmg: i64) -> Strike {
@@ -428,12 +563,13 @@ mod tests {
     }
 
     fn damage_of(
+        data: &InMemoryDataset,
         attacker: &Resolved,
         defender: &Resolved,
         strike: &Strike,
         context: &ExchangeContext,
     ) -> Fixed {
-        Exchange::new(attacker, defender, strike, context)
+        Exchange::new(attacker, defender, strike, context, data)
             .damage()
             .expect("test combatants carry every required stat")
             .damage
@@ -443,12 +579,12 @@ mod tests {
 
     #[test]
     fn plain_swing_walks_the_whole_chain() {
-        // base 20 × 100% × (100+0)% + 0 flat, no armor, no mods → 20.
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 0, 0);
+        // Armour 40 sits exactly at 0% PDR, so nothing is reduced.
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let s = strike(20, 100, 0, 0, 0);
         assert_eq!(
-            damage_of(&attacker, &defender, &s, &ExchangeContext::default()),
+            damage_of(&data, &a, &d, &s, &ExchangeContext::default()),
             fx(20)
         );
     }
@@ -456,10 +592,10 @@ mod tests {
     #[test]
     fn sneak_attack_zero_scaling_ignores_the_hide_penalty() {
         // THE mechanic the scaling_ignored probe protects. Sneak Attack is
-        // modelled as flat damage (step 4) with 0% scaling (step 2), so the
-        // Hide-exit −30% Physical Power Bonus cannot touch it.
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 0, 0);
+        // flat damage (step 4) with 0% scaling (step 2), so the Hide-exit
+        // −30% Physical Power Bonus cannot touch it.
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let sneak = Strike {
             base: Confidence::Verified(Damage::new(fx(10))),
             scaling: Confidence::Verified(ScalingCoefficient::new(Fixed::ZERO)),
@@ -472,72 +608,96 @@ mod tests {
             power_bonus_adjust: Confidence::Verified(fx(-30)),
             ..ExchangeContext::default()
         };
-        let without = damage_of(&attacker, &defender, &sneak, &neutral);
-        let with_penalty = damage_of(&attacker, &defender, &sneak, &hide_exit);
+        let without = damage_of(&data, &a, &d, &sneak, &neutral);
+        let with_penalty = damage_of(&data, &a, &d, &sneak, &hide_exit);
         assert_eq!(without, fx(15), "0% scaling: only the flat 15 survives");
         assert_eq!(
             with_penalty, without,
             "0% scaling must be immune to the Hide-exit power penalty"
         );
 
-        // A scaling strike of the same nominal size IS penalised — that is
-        // the contrast the Season 10 opener rests on.
         let scaling_strike = strike(15, 100, 0, 0, 0);
         assert!(
-            damage_of(&attacker, &defender, &scaling_strike, &hide_exit)
-                < damage_of(&attacker, &defender, &scaling_strike, &neutral)
+            damage_of(&data, &a, &d, &scaling_strike, &hide_exit)
+                < damage_of(&data, &a, &d, &scaling_strike, &neutral)
         );
     }
 
     #[test]
     fn true_damage_lands_after_reduction() {
-        // Against 50% PDR: 20 base → 10 after reduction, +5 true → 15.
-        // Adding it before reduction would give (20+5)×0.5 = 12.5.
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 100, 50);
+        // Armour 200 is 50% PDR: 20 base → 10, +5 true → 15. Adding it
+        // before reduction would give (20+5) × 0.5 = 12.5.
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 200));
         let s = strike(20, 100, 0, 0, 5);
         assert_eq!(
-            damage_of(&attacker, &defender, &s, &ExchangeContext::default()),
-            "15".parse().unwrap()
+            damage_of(&data, &a, &d, &s, &ExchangeContext::default()),
+            fx(15)
         );
     }
 
     #[test]
     fn pdr_mod_is_multiplicative_not_additive() {
-        // Lethal Mark −30 against 60% PDR: effective 42%, damage × 0.58.
-        // The additive reading would give 30% and damage × 0.70.
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 100, 60);
+        // Armour 250 is 60% PDR. Lethal Mark −30 gives effective 42%, so
+        // damage × 0.58. The additive reading would give 30% and × 0.70.
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 250));
         let s = strike(100, 100, 0, 0, 0);
         let marked = ExchangeContext {
             pdr_mod: Confidence::Verified(PdrMod::new(fx(-30))),
             ..ExchangeContext::default()
         };
-        let outcome = Exchange::new(&attacker, &defender, &s, &marked)
-            .damage()
-            .unwrap();
+        let outcome = Exchange::new(&a, &d, &s, &marked, &data).damage().unwrap();
         assert_eq!(outcome.effective_pdr.value().value(), fx(42));
         assert_eq!(outcome.damage.value().value(), fx(58));
     }
 
     #[test]
-    fn armor_penetration_scales_the_rating_not_the_damage() {
-        // 15% pen against 100 armor → 85 rating; the resolved 40% PDR
-        // rescales to 34%, so damage × 0.66.
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 100, 40);
+    fn penetration_re_samples_the_curve() {
+        // Armour 200 is 50% PDR. 15% penetration leaves rating 170, and the
+        // curve at 170 gives 44% — NOT 50% × 0.85 = 42.5%, which is what
+        // rescaling the resolved PDR would have produced.
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 200));
         let s = strike(100, 100, 0, 15, 0);
-        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default())
+        let outcome = Exchange::new(&a, &d, &s, &ExchangeContext::default(), &data)
             .damage()
             .unwrap();
-        assert_eq!(outcome.effective_pdr.value().value(), fx(34));
-        assert_eq!(outcome.damage.value().value(), fx(66));
+        assert_eq!(outcome.effective_pdr.value().value(), fx(44));
+        assert_eq!(outcome.damage.value().value(), fx(56));
+    }
+
+    #[test]
+    fn penetration_never_helps_a_defender_with_negative_pdr() {
+        // The defect this amendment fixed. Armour 0 resolves to −20% PDR;
+        // penetrating it must make the hit LARGER, never smaller.
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 0));
+        let none = damage_of(
+            &data,
+            &a,
+            &d,
+            &strike(100, 100, 0, 0, 0),
+            &ExchangeContext::default(),
+        );
+        let some = damage_of(
+            &data,
+            &a,
+            &d,
+            &strike(100, 100, 0, 50, 0),
+            &ExchangeContext::default(),
+        );
+        assert_eq!(none, fx(120), "−20% PDR amplifies the hit");
+        assert!(
+            some >= none,
+            "penetration made a hit smaller: {some} < {none}"
+        );
     }
 
     #[test]
     fn back_attack_and_headshot_apply_at_their_steps() {
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 0, 0);
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let s = strike(100, 100, 0, 0, 0);
         let context = ExchangeContext {
             power_bonus_adjust: Confidence::Verified(fx(30)),
@@ -546,30 +706,46 @@ mod tests {
         };
         // 100 × 1.30 = 130, then × 1.02 = 132.6.
         assert_eq!(
-            damage_of(&attacker, &defender, &s, &context),
+            damage_of(&data, &a, &d, &s, &context),
             "132.6".parse().unwrap()
         );
     }
 
     #[test]
     fn negative_pdr_increases_damage() {
-        // A naked Rogue sits at −22% PDR; light armor genuinely takes more.
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 0, -22);
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 0));
         let s = strike(100, 100, 0, 0, 0);
         assert_eq!(
-            damage_of(&attacker, &defender, &s, &ExchangeContext::default()),
-            fx(122)
+            damage_of(&data, &a, &d, &s, &ExchangeContext::default()),
+            fx(120)
+        );
+    }
+
+    #[test]
+    fn a_dataset_from_another_build_is_refused() {
+        // The failure the three-input form could not have. Silently using
+        // another patch's curves is exactly what this guard exists to stop.
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 40));
+        let other = InMemoryDataset::new("other.build");
+        let s = strike(20, 100, 0, 0, 0);
+        let err = Exchange::new(&a, &d, &s, &ExchangeContext::default(), &other)
+            .damage()
+            .unwrap_err();
+        assert!(
+            matches!(err, ExchangeError::DatasetMismatch { .. }),
+            "{err}"
         );
     }
 
     #[test]
     fn confidence_degrades_through_the_exchange() {
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 0, 0);
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let mut s = strike(20, 100, 0, 0, 0);
         s.scaling = Confidence::Unverified(ScalingCoefficient::new(fx(100)));
-        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default())
+        let outcome = Exchange::new(&a, &d, &s, &ExchangeContext::default(), &data)
             .damage()
             .unwrap();
         assert_eq!(outcome.damage.level(), ConfidenceLevel::Unverified);
@@ -577,10 +753,10 @@ mod tests {
 
     #[test]
     fn every_step_leaves_a_trace() {
-        let attacker = combatant(0, 0, 0);
-        let defender = combatant(0, 0, 0);
+        let data = dataset();
+        let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let s = strike(20, 100, 0, 0, 0);
-        let outcome = Exchange::new(&attacker, &defender, &s, &ExchangeContext::default())
+        let outcome = Exchange::new(&a, &d, &s, &ExchangeContext::default(), &data)
             .damage()
             .unwrap();
         for step in 1..=9u8 {
@@ -590,5 +766,29 @@ mod tests {
             );
         }
         assert!(explain(&outcome).contains("scaling coefficient"));
+    }
+
+    proptest! {
+        /// The invariant the defect violated, stated directly: more armour
+        /// penetration never yields less damage. A golden fixture at one
+        /// penetration value could not have caught a direction error.
+        #[test]
+        fn more_penetration_never_deals_less_damage(
+            armor in prop::sample::select(vec![0i64, 40, 150, 200, 250]),
+            pen_a in 0i64..=100,
+            pen_b in 0i64..=100,
+        ) {
+            let data = dataset();
+            let attacker = combatant(&data, 0);
+            let defender = combatant(&data, armor);
+            let (low, high) = if pen_a <= pen_b { (pen_a, pen_b) } else { (pen_b, pen_a) };
+            let context = ExchangeContext::default();
+            let less = damage_of(&data, &attacker, &defender, &strike(100, 100, 0, low, 0), &context);
+            let more = damage_of(&data, &attacker, &defender, &strike(100, 100, 0, high, 0), &context);
+            prop_assert!(
+                more >= less,
+                "armor {armor}: pen {high} dealt {more}, less than pen {low} at {less}"
+            );
+        }
     }
 }

@@ -279,7 +279,21 @@ def resolve(dataset: dict, loadout: dict) -> dict:
 
     # Stage 8: situational mods stay separate (exchange layer, ADR-006).
 
-    return {"attributes": attributes, "derived": derived}
+    # The cap in force per capped stat, after any perk raised it. An exchange
+    # re-evaluating a stat at another input must clamp the same way, and the
+    # raise came from the loadout rather than the dataset (ADR-006 amendment).
+    caps = {}
+    for d in cls["derived"]:
+        cap = cap_overrides.get(d["id"], d.get("cap"))
+        if cap is not None:
+            caps[d["id"]] = cap
+
+    return {
+        "class": loadout["class"],
+        "attributes": attributes,
+        "derived": derived,
+        "caps": caps,
+    }
 
 
 # ── exchange / damage model (ADR-006) ────────────────────────────────────────
@@ -292,15 +306,41 @@ def apply_percent(damage: int, percent: int) -> int:
     return mul_div(damage, PERCENT + percent, PERCENT)
 
 
-def exchange_damage(attacker: dict, defender: dict, strike: dict, context: dict) -> dict:
+def _pdr_at(dataset: dict, defender: dict, armor: int) -> dict:
+    """The defender's PDR at an arbitrary armour rating: the real curve,
+    re-sampled, offset and clamped exactly as resolution would have
+    (ADR-006 amendment: penetration re-sampling)."""
+    cls = dataset["classes"][defender["class"]]
+    d = next(x for x in cls["derived"] if x["id"] == "derived.pdr")
+    cap = defender["caps"].get("derived.pdr", d.get("cap"))
+    floor = d.get("floor")
+    offset = d.get("offset", 0)
+
+    def apply(points):
+        value = curve_sample(points, armor) + offset
+        if floor is not None:
+            value = max(value, floor)
+        if cap is not None:
+            value = min(value, cap)
+        return value
+
+    return map_conf(d["curve"], apply)
+
+
+def exchange_damage(
+    dataset: dict, attacker: dict, defender: dict, strike: dict, context: dict
+) -> dict:
     """The nine locked steps. Returns {'damage': graded, 'effective_pdr': graded}.
 
-    Ambiguity note (mirrors the Rust module doc): ADR-006 lists steps 6-7 as
-    two operations on the damage, but ADR-002 locks
-    apply_pdr_mod(PdrPercent, PdrMod) -> EffectivePdr — the mod modifies the
-    PDR, which then reduces damage once. The typed signature wins; ADR-006
-    needs an amendment. Rust and mirror agree on the SAME reading, so this
-    vector does not settle the ambiguity — the ADR must.
+    Takes the dataset because step 6 re-samples the defender's PDR curve at
+    the penetrated armour rating. ADR-006's original three-input purity was
+    relaxed for exactly that reason; see
+    docs/adr/ADR-006-amendment-penetration-resampling.md.
+
+    Steps 6-7 follow ADR-002's locked apply_pdr_mod(PdrPercent, PdrMod) ->
+    EffectivePdr: the mod modifies the PDR, which then reduces damage once.
+    Rust and mirror share that reading, so the vector does not settle it -
+    the ADR does.
     """
     # 1: base damage.
     damage = strike["base"]
@@ -326,14 +366,10 @@ def exchange_damage(attacker: dict, defender: dict, strike: dict, context: dict)
         lambda ar, pen: max(mul_div(ar, PERCENT - pen, PERCENT), 0),
     )
 
-    # 6: PDR from the curve, rescaled by how much rating survived penetration.
-    pdr = zip_with(
-        defender["derived"]["derived.pdr"],
-        zip_with(
-            defender["derived"]["derived.armor_rating"], armor, lambda full, pen: (full, pen)
-        ),
-        lambda p, pair: p if pair[0] == 0 else mul_div(p, pair[1], pair[0]),
-    )
+    # 6: PDR re-sampled from the curve at the penetrated rating. Rescaling
+    # the resolved PDR instead is wrong in direction whenever PDR is
+    # negative, which is the defect the amendment fixed.
+    pdr = zip_with(armor, _pdr_at(dataset, defender, armor["value"]), lambda _a, p: p)
 
     # 7: × PDR Mod, multiplicative on the PDR; then reduce the damage once.
     effective_pdr = zip_with(pdr, context["pdr_mod"], lambda p, m: mul_div(p, PERCENT + m, PERCENT))

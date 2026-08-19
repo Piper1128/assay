@@ -75,7 +75,9 @@ amended by `ADR-rev2-amendments.md` (rev 2 replaces ADR-000, 001 and 010; the
 index document is kept for decision history) and by
 `ADR-006-amendment-pdr-mod-layer.md` (step 7: the PDR Mod applies to the PDR,
 not to the damage). `ADR-012-derived-stat-ratings.md` (derived stats are weighted
-ratings over several attributes, not single-attribute curves). Imported source documents are preserved verbatim (in Danish);
+ratings over several attributes, not single-attribute curves) and
+`ADR-006-amendment-penetration-resampling.md` (the exchange re-samples the
+PDR curve, so it takes the dataset as a fourth input). Imported source documents are preserved verbatim (in Danish);
 amendments authored here are in English. [docs/rogue-fighter-duo-hotfix123.md](docs/rogue-fighter-duo-hotfix123.md)
 is the source of v1's golden fixtures.
 

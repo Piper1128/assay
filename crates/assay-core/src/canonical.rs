@@ -207,8 +207,11 @@ mod tests {
             graded(-14_000_000),
         );
         Resolved {
+            class: crate::ids::ClassId::new("class.test"),
+            build: "test.build".to_string(),
             attributes: Confidence::Unverified(block),
             derived,
+            caps: BTreeMap::new(),
             trace: Vec::new(),
         }
     }
