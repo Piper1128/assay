@@ -4,6 +4,94 @@
   "dataset": {
     "classes": [
       {
+        "id": "class.fighter",
+        "name": "Fighter",
+        "base_attributes": {
+          "confidence": "unverified",
+          "points": {
+            "strength": 15,
+            "vigor": 15,
+            "agility": 15,
+            "dexterity": 15,
+            "will": 15,
+            "knowledge": 15,
+            "resourcefulness": 15
+          }
+        },
+        "derived": [
+          {
+            "id": "derived.physical_power_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.physical_power_bonus",
+            "floor": -100000000
+          },
+          {
+            "id": "derived.action_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 250000
+              },
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 750000
+              }
+            ],
+            "curve": "curve.action_speed"
+          },
+          {
+            "id": "derived.move_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.move_speed",
+            "offset": 300000000,
+            "cap": 330000000
+          },
+          {
+            "id": "derived.health",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 250000
+              },
+              {
+                "kind": "attribute",
+                "ref": "vigor",
+                "weight": 750000
+              }
+            ],
+            "curve": "curve.health",
+            "offset": 25000000
+          },
+          {
+            "id": "derived.pdr",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.armor_rating",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.pdr",
+            "cap": 60000000
+          }
+        ]
+      },
+      {
         "id": "class.rogue",
         "name": "Rogue",
         "base_attributes": {
@@ -296,6 +384,18 @@
             "confidence": "unverified",
             "kind": "all_attributes",
             "points": 3
+          }
+        ]
+      },
+      {
+        "id": "skill.fighter.sprint",
+        "name": "Sprint",
+        "effects": [
+          {
+            "confidence": "unknown",
+            "kind": "move_speed_add",
+            "micro": 13000000,
+            "note": "one stack of three: Sprint grants this much per stack and the schema does not model stacks, so a full-stack Fighter has up to three times this"
           }
         ]
       }

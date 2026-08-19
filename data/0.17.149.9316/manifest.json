@@ -1,8 +1,8 @@
 {
-  "build": "0.17.150.9384",
-  "label": "hotfix-123",
-  "released": "2026-08-13",
-  "previous": "0.17.149.9316",
+  "build": "0.17.149.9316",
+  "label": "hotfix-122",
+  "released": "2026-08-06",
+  "previous": null,
   "sources": [
     {
       "file": "classes.json",

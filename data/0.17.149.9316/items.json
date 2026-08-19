@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "id": "item.dark_leather_leggings",
+      "name": "Dark Leather Leggings",
+      "armor_rating": {
+        "confidence": "unverified",
+        "micro": 36000000
+      },
+      "move_speed_add": {
+        "confidence": "unverified",
+        "micro": -4000000
+      }
+    }
+  ]
+}

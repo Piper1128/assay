@@ -1,0 +1,87 @@
+//! Diffs the two committed dataset versions.
+//!
+//! Unlike `two_versions.rs`, which manufactures a change to exercise the
+//! engine, this asserts a change that Ironmace actually shipped: the
+//! Patch 6.12 notes for Hotfix 123 read *"Reduced the Additional Move Speed
+//! per stack of Sprint from 15 to 13"*.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+use std::path::PathBuf;
+
+use assay_core::{ClassId, Loadout, PartyBuffs, SkillId};
+use assay_diff::{Change, dataset_diff, impact_diff};
+
+const HF122: &str = "0.17.149.9316";
+const HF123: &str = "0.17.150.9384";
+
+fn data_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
+}
+
+fn fighter_with_sprint() -> Loadout {
+    Loadout {
+        name: "fighter-sprint".to_string(),
+        class: ClassId::new("class.fighter"),
+        perks: vec![],
+        skills: vec![SkillId::new("skill.fighter.sprint")],
+        armor: vec![],
+        party: PartyBuffs::default(),
+    }
+}
+
+#[test]
+fn the_hotfix_123_sprint_nerf_shows_up_as_a_data_change() {
+    let before = assay_data::load(&data_root(), HF122).expect("hotfix-122 loads");
+    let after = assay_data::load(&data_root(), HF123).expect("hotfix-123 loads");
+    let changes = dataset_diff(&before, &after);
+
+    assert!(
+        changes.iter().any(|c| matches!(
+            c,
+            Change::Modified { id, from, to, .. }
+                if id == "skill.fighter.sprint"
+                    && from.contains("15")
+                    && to.contains("13")
+        )),
+        "{changes:#?}"
+    );
+}
+
+#[test]
+fn the_nerf_reaches_a_build_that_runs_sprint() {
+    // The question the tool exists to answer: did this patch move my numbers?
+    let before = assay_data::load(&data_root(), HF122).expect("hotfix-122 loads");
+    let after = assay_data::load(&data_root(), HF123).expect("hotfix-123 loads");
+    let impacts = impact_diff(&before, &after, &[fighter_with_sprint()]);
+
+    let moved: Vec<_> = impacts[0].stats.iter().filter(|s| s.changed()).collect();
+    assert_eq!(moved.len(), 1, "{:#?}", impacts[0].stats);
+    assert_eq!(moved[0].id, "derived.move_speed");
+    assert_eq!(moved[0].from.to_string(), "315");
+    assert_eq!(moved[0].to.to_string(), "313");
+    assert!(impacts[0].error.is_none());
+}
+
+#[test]
+fn a_build_the_patch_did_not_touch_reports_unchanged() {
+    // Just as important: the diff must stay quiet about what did not move,
+    // or a reader learns to ignore it.
+    let before = assay_data::load(&data_root(), HF122).expect("hotfix-122 loads");
+    let after = assay_data::load(&data_root(), HF123).expect("hotfix-123 loads");
+    let naked_rogue = Loadout {
+        name: "naked-rogue".to_string(),
+        class: ClassId::new("class.rogue"),
+        perks: vec![],
+        skills: vec![],
+        armor: vec![],
+        party: PartyBuffs::default(),
+    };
+    let impacts = impact_diff(&before, &after, &[naked_rogue]);
+    assert!(impacts[0].stats.iter().all(|s| !s.changed()));
+}
+
+#[test]
+fn the_versions_are_chained_through_their_manifests() {
+    let after = assay_data::load(&data_root(), HF123).expect("hotfix-123 loads");
+    assert_eq!(after.manifest.previous.as_deref(), Some(HF122));
+}

@@ -1,0 +1,7 @@
+# A Fighter running Sprint — the one build the Hotfix 123 notes actually
+# touch in a way this schema can express (Additional Move Speed per stack,
+# 15 -> 13).
+name  = "fighter-sprint"
+class = "class.fighter"
+
+skills = ["skill.fighter.sprint"]
