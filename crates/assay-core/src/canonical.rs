@@ -55,6 +55,28 @@ pub fn canonical_statblock(resolved: &Resolved) -> String {
     out
 }
 
+/// Renders the canonical form of an exchange outcome (ADR-006), in the same
+/// grammar as [`canonical_statblock`]. The trace is presentation and is not
+/// part of it.
+#[must_use]
+pub fn canonical_exchange(outcome: &crate::exchange::ExchangeOutcome) -> String {
+    let mut out = String::new();
+    out.push('{');
+    write_graded_fixed(
+        &mut out,
+        "damage",
+        &outcome.damage.clone().map(|d| d.value()),
+    );
+    out.push(',');
+    write_graded_fixed(
+        &mut out,
+        "effective_pdr",
+        &outcome.effective_pdr.clone().map(|p| p.value()),
+    );
+    out.push('}');
+    out
+}
+
 fn level_str(level: ConfidenceLevel) -> &'static str {
     match level {
         ConfidenceLevel::Verified => "verified",

@@ -20,7 +20,7 @@ pub mod resolve;
 pub mod schema;
 pub mod stats;
 
-pub use canonical::canonical_statblock;
+pub use canonical::{canonical_exchange, canonical_statblock};
 pub use confidence::{Confidence, ConfidenceLevel};
 pub use curve::{Curve, CurveError, Interpolation};
 pub use exchange::{Exchange, ExchangeContext, ExchangeOutcome, Strike};

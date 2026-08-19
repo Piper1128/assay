@@ -10,6 +10,7 @@ Mirrors:
 - linear curve sampling, one rounding per sample        (ADR-004)
 - confidence with minimum-rule propagation              (ADR-007)
 - the locked resolution stage order 1-8                 (ADR-005)
+- the locked exchange step order 1-9                    (ADR-006)
 - the canonical statblock grammar                       (ADR-001 rev 2 §3)
 
 Only pure ints — a float anywhere in this file is a bug.
@@ -244,6 +245,80 @@ def resolve(dataset: dict, loadout: dict) -> dict:
         "armor_rating": armor_rating,
         "pdr": pdr,
     }
+
+
+# ── exchange / damage model (ADR-006) ────────────────────────────────────────
+
+PERCENT = 100 * SCALE
+
+
+def apply_percent(damage: int, percent: int) -> int:
+    """damage * (100 + percent) / 100, one rounding."""
+    return mul_div(damage, PERCENT + percent, PERCENT)
+
+
+def exchange_damage(attacker: dict, defender: dict, strike: dict, context: dict) -> dict:
+    """The nine locked steps. Returns {'damage': graded, 'effective_pdr': graded}.
+
+    Ambiguity note (mirrors the Rust module doc): ADR-006 lists steps 6-7 as
+    two operations on the damage, but ADR-002 locks
+    apply_pdr_mod(PdrPercent, PdrMod) -> EffectivePdr — the mod modifies the
+    PDR, which then reduces damage once. The typed signature wins; ADR-006
+    needs an amendment. Rust and mirror agree on the SAME reading, so this
+    vector does not settle the ambiguity — the ADR must.
+    """
+    # 1: base damage.
+    damage = strike["base"]
+
+    # 2: × scaling coefficient. 0% is load-bearing (Sneak Attack).
+    damage = zip_with(damage, strike["scaling"], lambda d, c: mul_div(d, c, PERCENT))
+
+    # 3: + Physical Power Bonus, with the situational adjustment.
+    power = zip_with(
+        attacker["physical_power_bonus"], context["power_bonus_adjust"], lambda p, a: p + a
+    )
+    damage = zip_with(damage, power, apply_percent)
+
+    # 4: + flat Buff Weapon Damage.
+    damage = zip_with(damage, strike["flat_bonus"], lambda d, f: d + f)
+
+    # 5: defender's armor rating, reduced by penetration (floored at zero).
+    armor = zip_with(
+        defender["armor_rating"],
+        strike["armor_pen"],
+        lambda ar, pen: max(mul_div(ar, PERCENT - pen, PERCENT), 0),
+    )
+
+    # 6: PDR from the curve, rescaled by how much rating survived penetration.
+    pdr = zip_with(
+        defender["pdr"],
+        zip_with(defender["armor_rating"], armor, lambda full, pen: (full, pen)),
+        lambda p, pair: p if pair[0] == 0 else mul_div(p, pair[1], pair[0]),
+    )
+
+    # 7: × PDR Mod, multiplicative on the PDR; then reduce the damage once.
+    effective_pdr = zip_with(pdr, context["pdr_mod"], lambda p, m: mul_div(p, PERCENT + m, PERCENT))
+    damage = zip_with(damage, effective_pdr, lambda d, p: mul_div(d, PERCENT - p, PERCENT))
+
+    # 8: + True Damage, AFTER reduction — it bypasses armor by definition.
+    damage = zip_with(damage, strike["true_damage"], lambda d, t: d + t)
+
+    # 9: × hit location multiplier.
+    damage = zip_with(damage, context["hit_location_bonus"], apply_percent)
+
+    return {"damage": damage, "effective_pdr": effective_pdr}
+
+
+def canonical_exchange(outcome: dict) -> str:
+    """Canonical form of an exchange outcome — same grammar as the statblock:
+    no whitespace, lexicographic keys, integers only."""
+    return (
+        "{"
+        + _graded_fixed("damage", outcome["damage"])
+        + ","
+        + _graded_fixed("effective_pdr", outcome["effective_pdr"])
+        + "}"
+    )
 
 
 # ── canonical encoding (ADR-001 rev 2 §3) ────────────────────────────────────

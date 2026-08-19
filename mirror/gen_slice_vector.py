@@ -25,7 +25,14 @@ import json
 import pathlib
 import sys
 
-from assay_mirror import canonical_statblock, dataset_from_json, resolve
+from assay_mirror import (
+    canonical_exchange,
+    canonical_statblock,
+    conf,
+    dataset_from_json,
+    exchange_damage,
+    resolve,
+)
 
 SCALE = 1_000_000
 
@@ -173,20 +180,104 @@ LOADOUTS = [
 ]
 
 
+def graded_micro(value_str: str, confidence: str = "verified") -> dict:
+    return {"confidence": confidence, "micro": m(value_str)}
+
+
+# Exchange cases (ADR-006). Attacker and defender are named by loadout, so
+# the exchange rides on the SAME resolution the statblock cases lock.
+EXCHANGES = [
+    {
+        "name": "plain-swing",
+        "attacker": "naked-rogue",
+        "defender": "naked-rogue",
+        "strike": {
+            "base": graded_micro("20"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("0"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("0"),
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("0"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+        },
+    },
+    {
+        # THE case: Sneak Attack from Hide. 0% scaling means the -30%
+        # Hide-exit power penalty cannot touch it (duo analysis §5).
+        "name": "sneak-attack-from-hide",
+        "attacker": "naked-rogue",
+        "defender": "rogue-geared",
+        "strike": {
+            "base": graded_micro("10"),
+            "scaling": graded_micro("0"),
+            "flat_bonus": graded_micro("15"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("1"),
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("-30"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+        },
+    },
+    {
+        # Lethal Mark: -30 PDR Mod, multiplicative on the defender's PDR,
+        # plus Thrust penetration and a back attack.
+        "name": "lethal-mark-back-attack",
+        "attacker": "rogue-duo-buffed",
+        "defender": "rogue-geared",
+        "strike": {
+            "base": graded_micro("18"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("2"),
+            "armor_pen": graded_micro("15"),
+            "true_damage": graded_micro("1"),
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("30"),
+            "pdr_mod": graded_micro("-30"),
+            "hit_location_bonus": graded_micro("2"),
+        },
+    },
+]
+
+
 def build_vector() -> str:
     indexed = dataset_from_json(DATASET)
     loadouts = []
+    resolved_by_name = {}
     for loadout in LOADOUTS:
         resolved = resolve(indexed, loadout)
+        resolved_by_name[loadout["name"]] = resolved
         loadouts.append({**loadout, "expected_canonical": canonical_statblock(resolved)})
+
+    def graded_from(node: dict) -> dict:
+        return conf(node["confidence"], node["micro"], node.get("note"))
+
+    exchanges = []
+    for case in EXCHANGES:
+        strike = {k: graded_from(v) for k, v in case["strike"].items()}
+        context = {k: graded_from(v) for k, v in case["context"].items()}
+        outcome = exchange_damage(
+            resolved_by_name[case["attacker"]],
+            resolved_by_name[case["defender"]],
+            strike,
+            context,
+        )
+        exchanges.append({**case, "expected_canonical": canonical_exchange(outcome)})
+
     vector = {
         "description": (
-            "Slice vector: pipeline mechanics over a placeholder dataset "
-            "(unverified test curves). Expected values computed by the "
+            "Slice vector: pipeline and exchange mechanics over a placeholder "
+            "dataset (unverified test curves). Expected values computed by the "
             "independent Python mirror; replayed by the Rust vector test."
         ),
         "dataset": DATASET,
         "loadouts": loadouts,
+        "exchanges": exchanges,
     }
     return json.dumps(vector, indent=2, ensure_ascii=False) + "\n"
 

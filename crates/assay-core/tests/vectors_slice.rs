@@ -11,10 +11,12 @@
 use std::fs;
 use std::path::PathBuf;
 
+use assay_core::exchange::{Exchange, ExchangeContext, Strike};
+use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use assay_core::{
     ArmorPiece, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
     DerivedCurves, Effect, Fixed, InMemoryDataset, ItemDef, ItemId, Loadout, PartyBuffs, PerkDef,
-    PerkId, Roll, SkillDef, SkillId, canonical_statblock, resolve,
+    PerkId, Resolved, Roll, SkillDef, SkillId, canonical_exchange, canonical_statblock, resolve,
 };
 use serde_json::Value;
 
@@ -235,6 +237,68 @@ fn loadout(node: &Value) -> Loadout {
                 .map(|v| SkillId::new(v.as_str().expect("id")))
                 .collect(),
         },
+    }
+}
+
+fn strike(node: &Value) -> Strike {
+    Strike {
+        base: graded_micro(&node["base"]).map(Damage::new),
+        scaling: graded_micro(&node["scaling"]).map(ScalingCoefficient::new),
+        flat_bonus: graded_micro(&node["flat_bonus"]).map(Damage::new),
+        armor_pen: graded_micro(&node["armor_pen"]).map(ArmorPen::new),
+        true_damage: graded_micro(&node["true_damage"]).map(TrueDamage::new),
+    }
+}
+
+fn exchange_context(node: &Value) -> ExchangeContext {
+    ExchangeContext {
+        power_bonus_adjust: graded_micro(&node["power_bonus_adjust"]),
+        pdr_mod: graded_micro(&node["pdr_mod"]).map(PdrMod::new),
+        hit_location_bonus: graded_micro(&node["hit_location_bonus"]),
+    }
+}
+
+#[test]
+fn rust_agrees_with_the_mirror_on_every_exchange() {
+    let vector = vector();
+    let data = dataset(&vector["dataset"]);
+    // Resolve every loadout once; exchanges reference them by name, so the
+    // exchange cases ride on exactly the resolutions the statblock cases lock.
+    let mut resolved_by_name: Vec<(String, Resolved)> = Vec::new();
+    for entry in vector["loadouts"].as_array().expect("loadouts") {
+        let name = entry["name"].as_str().expect("name").to_string();
+        let resolved = resolve(&loadout(entry), &data).expect("loadout resolves");
+        resolved_by_name.push((name, resolved));
+    }
+    let by_name = |wanted: &str| -> &Resolved {
+        &resolved_by_name
+            .iter()
+            .find(|(name, _)| name == wanted)
+            .unwrap_or_else(|| panic!("exchange references unknown loadout: {wanted}"))
+            .1
+    };
+
+    let exchanges = vector["exchanges"].as_array().expect("exchanges");
+    assert!(!exchanges.is_empty(), "vector has no exchanges");
+    for case in exchanges {
+        let name = case["name"].as_str().expect("name");
+        let s = strike(&case["strike"]);
+        let context = exchange_context(&case["context"]);
+        let outcome = Exchange::new(
+            by_name(case["attacker"].as_str().expect("attacker")),
+            by_name(case["defender"].as_str().expect("defender")),
+            &s,
+            &context,
+        )
+        .damage();
+        let expected = case["expected_canonical"]
+            .as_str()
+            .expect("expected_canonical");
+        assert_eq!(
+            canonical_exchange(&outcome),
+            expected,
+            "{name}: Rust and mirror disagree on the exchange"
+        );
     }
 }
 
