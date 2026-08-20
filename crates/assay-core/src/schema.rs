@@ -21,6 +21,7 @@ use crate::fixed::Fixed;
 use crate::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use alloc::collections::BTreeMap;
 
+use crate::loadout::Slot;
 use crate::stats::Attribute;
 
 /// A sparse set of attribute contributions: what a piece of gear adds,
@@ -168,6 +169,14 @@ pub struct ItemDef {
     pub id: ItemId,
     /// Display name.
     pub name: String,
+    /// Where the item is worn. Every card prints one — `Slot Type: Legs`
+    /// — and without it a loadout can put trousers on a head and resolve
+    /// as though that were a build.
+    ///
+    /// Optional because a weapon card does not print one, and because an
+    /// item whose slot has not been transcribed should say so rather than
+    /// be assigned a plausible default.
+    pub slot: Option<Slot>,
     /// Attributes printed on the item, on every copy of it. Sparse: an
     /// attribute the item does not grant is absent rather than zero, the
     /// same rule the canonical encoding applies everywhere else.

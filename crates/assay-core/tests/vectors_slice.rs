@@ -191,6 +191,10 @@ fn dataset(node: &Value) -> InMemoryDataset {
         data.insert_item(ItemDef {
             id: ItemId::new(item["id"].as_str().expect("item id")),
             name: item["name"].as_str().expect("item name").to_string(),
+            slot: item
+                .get("slot")
+                .and_then(serde_json::Value::as_str)
+                .map(slot_of),
             attributes: item.get("attributes").map(|node| {
                 let points = node["points"].as_object().expect("attribute points");
                 let delta: BTreeMap<AttributeKind, i32> = points

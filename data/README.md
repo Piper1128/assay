@@ -148,3 +148,16 @@ rating, which is the row above.
 - Leviathan (+1 damage) and Longbow (action speed) changed in Hotfix 123 but
   are absent: the Leviathan page was not located, and the Longbow note gives
   no number — weapons carry no action speed field either.
+
+## `item.blank`
+
+An item that grants nothing, in no slot. It exists so a piece can be described
+entirely by its rolls — which is what the browser UI does with a card it read
+off a screenshot, and what anyone does with gear the dataset has never heard
+of.
+
+Grading it that way is not a shortcut. The static/rolled split matters for the
+*dataset*, where a printed value is a claim about every copy of an item. On a
+loadout it is a fact about the copy in your hands, and every line on a card you
+are looking at is equally that. So the whole card arrives as rolls, `Verified`,
+and nothing is promoted or demoted on the way in.

@@ -1,0 +1,654 @@
+<meta charset="utf-8">
+<title>Assay</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    /* Candlelit, not black-and-neon. The ground is warm because the subject
+       is a dungeon lit by torches, and a neutral grey would read as a
+       spreadsheet about a dungeon rather than a thing from one. */
+    --ground: #14110d;
+    --surface: #1c1813;
+    --raised: #24201a;
+    --line: #3a332a;
+    --ink: #e9e1d0;
+    --ink-dim: #9c9382;
+    --gold: #c9a227;
+    /* Grades are their own scale and never borrow the accent: a colour that
+       also means "this is the accent" cannot also mean "this is measured". */
+    --verified: #86a95c;
+    --unverified: #8f8578;
+    --unknown: #cf7f3c;
+    --bad: #b4553f;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Cascadia Mono", "SF Mono", ui-monospace, "Consolas", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.5 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+  header h1 {
+    margin: 0;
+    font: 400 25px/1 var(--serif);
+    letter-spacing: 0.02em;
+  }
+  header h1 span { color: var(--gold); }
+  .build { color: var(--ink-dim); font-size: 13px; }
+  .build code { font-family: var(--mono); }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(320px, 380px) 1fr;
+    gap: 0;
+    align-items: start;
+    min-height: calc(100vh - 63px);
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+  .panel { padding: 20px 24px; }
+  .panel + .panel { border-left: 1px solid var(--line); }
+  @media (max-width: 900px) { .panel + .panel { border-left: 0; border-top: 1px solid var(--line); } }
+
+  h2 {
+    margin: 0 0 4px;
+    font: 400 13px/1 var(--sans);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .hint { margin: 0 0 16px; color: var(--ink-dim); font-size: 13px; }
+
+  label { display: block; font-size: 13px; color: var(--ink-dim); margin-bottom: 4px; }
+
+  select, input, button, textarea {
+    font: inherit;
+    color: var(--ink);
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 6px 8px;
+    width: 100%;
+  }
+  input[type="number"] { font-family: var(--mono); }
+  select:focus-visible, input:focus-visible, button:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 1px;
+  }
+  button {
+    width: auto;
+    cursor: pointer;
+    background: var(--raised);
+  }
+  button:hover { border-color: var(--gold); }
+  button.primary { border-color: var(--gold); color: var(--gold); }
+
+  .field { margin-bottom: 14px; }
+
+  /* ── slots ─────────────────────────────────────────────────────────── */
+  .slot {
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin-bottom: 8px;
+    background: var(--surface);
+  }
+  .slot > summary {
+    cursor: pointer;
+    padding: 7px 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: baseline;
+    list-style: none;
+  }
+  .slot > summary::-webkit-details-marker { display: none; }
+  .slot-name {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .slot-item { font-family: var(--serif); font-size: 15px; }
+  .slot-item.empty { color: var(--ink-dim); font-style: italic; }
+  .slot-body { padding: 0 10px 10px; border-top: 1px solid var(--line); }
+  .rolls { margin-top: 10px; }
+  .roll-row {
+    display: grid;
+    grid-template-columns: 1fr 82px 26px;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .roll-row button { padding: 4px; width: 100%; }
+
+  /* ── the sheet ─────────────────────────────────────────────────────── */
+  .sheet { max-width: 620px; }
+  .stat {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 12px;
+    padding: 7px 0 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .stat-name { font-family: var(--serif); font-size: 16px; }
+  .stat-value {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 16px;
+  }
+  .parts {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 4px 14px;
+    margin: 4px 0 2px 14px;
+    font-size: 13px;
+    color: var(--ink-dim);
+  }
+  .parts span:nth-child(3n+2), .parts span:nth-child(3n+3) {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .grade { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .grade.verified { color: var(--verified); }
+  .grade.unverified { color: var(--unverified); }
+  .grade.unknown { color: var(--unknown); }
+
+  .error {
+    border: 1px solid var(--bad);
+    border-left-width: 3px;
+    background: #2a1a15;
+    padding: 10px 12px;
+    border-radius: 3px;
+    color: #eecfc4;
+  }
+
+  .legend {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+  }
+  .legend b { font-weight: 600; }
+
+  /* ── OCR ───────────────────────────────────────────────────────────── */
+  .drop {
+    border: 1px dashed var(--line);
+    border-radius: 3px;
+    padding: 14px;
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+  .drop.armed { border-color: var(--gold); color: var(--ink); }
+  .read-line { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+  .read-line.dropped { color: var(--unknown); }
+  .read-line code { font-family: var(--mono); }
+
+  details.trace { margin-top: 18px; }
+  details.trace summary { cursor: pointer; color: var(--ink-dim); font-size: 13px; }
+  details.trace pre {
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 10px;
+    white-space: pre;
+  }
+</style>
+
+<header>
+  <h1>As<span>s</span>ay</h1>
+  <div class="build" id="build">loading the resolver…</div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Build</h2>
+    <p class="hint">Everything here is a question about one character. Nothing is saved anywhere.</p>
+
+    <div class="field">
+      <label for="class">Class</label>
+      <select id="class"></select>
+    </div>
+
+    <div id="slots"></div>
+
+    <h2 style="margin-top:22px">Read a card</h2>
+    <p class="hint">
+      Screenshot an item tooltip and paste it here. Text recognition needs the
+      network once, then works offline; everything else already does.
+    </p>
+    <div class="drop" id="drop" tabindex="0">Paste an image, or click to choose one</div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div id="read"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Character sheet</h2>
+    <p class="hint">
+      Laid out the way the game lays it out, so a number here can be checked
+      against a number there — and against the same two rows underneath it.
+    </p>
+    <div class="sheet" id="sheet"></div>
+    <div class="legend">
+      <b style="color:var(--verified)">verified</b> measured in game &nbsp;·&nbsp;
+      <b style="color:var(--unverified)">unverified</b> wiki-sourced, not confirmed &nbsp;·&nbsp;
+      <b style="color:var(--unknown)">unknown</b> an assumption, with its reason
+      <p style="margin:8px 0 0">
+        A grade travels with its number: any value computed from an unverified
+        input is unverified, however many verified inputs it also had.
+      </p>
+    </div>
+    <details class="trace">
+      <summary>every stage, in order</summary>
+      <pre id="trace"></pre>
+    </details>
+  </section>
+</main>
+
+<script>__GLUE__</script>
+<script>
+(() => {
+  "use strict";
+
+  // The module is compiled into this file as base64 rather than fetched.
+  // A page that fetched anything would not run from file://, and running
+  // from file:// with no server is the whole point.
+  const b64 = "__WASM_B64__";
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+  const $ = id => document.getElementById(id);
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+
+  let CATALOG = null;
+  const state = { class: null, gear: {} };   // gear: slotKey -> piece
+
+  // ── stat vocabulary ────────────────────────────────────────────────
+  // What an item card can say, and where each line goes. A line the tool
+  // does not know is shown as unrecognised rather than dropped: silence is
+  // the failure mode this project exists against.
+  const CARD_STATS = [
+    ["armor rating",             "derived.armor_rating"],
+    ["magic resistance",         "derived.magic_resistance"],
+    ["magical power",            "derived.magical_power"],
+    ["magic power",              "derived.magical_power"],
+    ["magic penetration",        "derived.magic_penetration"],
+    ["armor penetration",        "derived.armor_penetration"],
+    ["headshot damage reduction","derived.headshot_damage_reduction"],
+    ["projectile damage reduction","derived.projectile_damage_reduction"],
+    ["physical damage reduction","derived.pdr"],
+    ["magical damage reduction", "derived.magical_damage_reduction"],
+  ];
+  let ATTRS = [];
+
+  const norm = s => s.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+
+  function classify(name) {
+    const n = norm(name);
+    if (ATTRS.includes(n)) return { kind: "attribute", key: n };
+    if (n === "move speed") return { kind: "moveSpeed" };
+    for (const [label, id] of CARD_STATS) if (n === label) return { kind: "derived", id };
+    return null;
+  }
+
+  // ── building the UI ────────────────────────────────────────────────
+  function slotKey(slot, n) { return n > 1 ? `${slot}#${n}` : slot; }
+
+  function buildSlots() {
+    const host = $("slots");
+    host.replaceChildren();
+    for (const slot of CATALOG.slots) {
+      for (let n = 1; n <= slot.capacity; n++) {
+        host.append(slotCard(slot.id, slotKey(slot.id, n)));
+      }
+    }
+  }
+
+  function slotCard(slotId, key) {
+    const piece = state.gear[key];
+    const box = el("details", "slot");
+    if (piece) box.open = false;
+
+    const head = el("summary");
+    head.append(el("span", "slot-name", slotId.toUpperCase()));
+    const label = piece
+      ? (piece.custom ? piece.label : CATALOG.items.find(i => i.id === piece.id)?.name ?? piece.id)
+      : "empty";
+    head.append(el("span", "slot-item" + (piece ? "" : " empty"), label));
+    box.append(head);
+
+    const body = el("div", "slot-body");
+
+    const pick = el("select");
+    pick.append(new Option("— empty —", ""));
+    for (const item of CATALOG.items) {
+      if (item.id === "item.blank") continue;
+      if (item.slot && item.slot !== slotId) continue;
+      pick.append(new Option(item.name, item.id));
+    }
+    if (piece && !piece.custom) pick.value = piece.id;
+    pick.onchange = () => {
+      if (!pick.value) delete state.gear[key];
+      else state.gear[key] = { id: pick.value, slot: slotId, rolls: [] };
+      redraw();
+    };
+    const f = el("div", "field");
+    f.append(el("label", null, "Item"), pick);
+    body.append(f);
+
+    if (piece) {
+      body.append(rollEditor(key, piece));
+    }
+    box.append(body);
+    return box;
+  }
+
+  function rollEditor(key, piece) {
+    const wrap = el("div", "rolls");
+    wrap.append(el("label", null, "Rolled on this copy"));
+    piece.rolls.forEach((roll, i) => {
+      const row = el("div", "roll-row");
+      const what = el("select");
+      for (const a of ATTRS) what.append(new Option(a, "attr:" + a));
+      for (const [label, id] of CARD_STATS) what.append(new Option(label, "stat:" + id));
+      what.append(new Option("move speed", "move:"));
+      what.value = roll.what;
+      what.onchange = () => { roll.what = what.value; resolveNow(); };
+
+      const amount = el("input");
+      amount.type = "text";
+      amount.inputMode = "decimal";
+      amount.value = roll.amount;
+      amount.oninput = () => { roll.amount = amount.value; resolveNow(); };
+
+      const drop = el("button", null, "×");
+      drop.title = "remove";
+      drop.onclick = () => { piece.rolls.splice(i, 1); redraw(); };
+
+      row.append(what, amount, drop);
+      wrap.append(row);
+    });
+    const add = el("button", null, "+ roll");
+    add.onclick = () => {
+      piece.rolls.push({ what: "attr:" + ATTRS[0], amount: "0" });
+      redraw();
+    };
+    wrap.append(add);
+    return wrap;
+  }
+
+  // ── talking to the resolver ────────────────────────────────────────
+  function loadoutJson() {
+    const gear = [];
+    for (const [key, piece] of Object.entries(state.gear)) {
+      const attributes = {};
+      const additional = {};
+      let moveSpeedAdd = null;
+      for (const roll of piece.rolls) {
+        const [kind, rest] = [roll.what.split(":")[0], roll.what.slice(roll.what.indexOf(":") + 1)];
+        const amount = (roll.amount || "0").replace(/−/g, "-").trim();
+        if (!amount || amount === "-") continue;
+        if (kind === "attr") {
+          const n = parseInt(amount, 10);
+          if (Number.isFinite(n)) attributes[rest] = (attributes[rest] || 0) + n;
+        } else if (kind === "stat") {
+          additional[rest] = amount;
+        } else {
+          moveSpeedAdd = amount;
+        }
+      }
+      const out = { slot: piece.slot, id: piece.custom ? "item.blank" : piece.id };
+      if (Object.keys(attributes).length) out.attributes = attributes;
+      if (Object.keys(additional).length) out.additional = additional;
+      if (moveSpeedAdd !== null) out.moveSpeedAdd = moveSpeedAdd;
+      gear.push(out);
+      void key;
+    }
+    return JSON.stringify({ name: "build", class: state.class, gear });
+  }
+
+  function resolveNow() {
+    const out = JSON.parse(wasm_bindgen.resolve_loadout(loadoutJson()));
+    renderSheet(out);
+  }
+
+  function renderSheet(out) {
+    const host = $("sheet");
+    host.replaceChildren();
+    if (!out.ok) {
+      host.append(el("div", "error", out.error));
+      $("trace").textContent = "";
+      return;
+    }
+
+    host.append(statRow("attributes",
+      CATALOG.attributes.map(a => `${a.slice(0, 3)} ${out.attributes.points[a]}`).join("  "),
+      out.attributes.confidence, null));
+
+    for (const stat of out.derived) {
+      host.append(statRow(stat.label, stat.value, stat.confidence, stat.breakdown, stat.note));
+    }
+
+    $("trace").textContent = out.trace
+      .map(n => `${n.stage}. ${n.label.padEnd(28)} ${n.detail}`).join("\n");
+  }
+
+  function statRow(name, value, grade, parts, note) {
+    const row = el("div", "stat");
+    const left = el("span", "stat-name", name.replace(/_/g, " "));
+    row.append(left);
+    const right = el("span", "stat-value", value);
+    // The same three markers the CLI prints, for the same reason: a
+    // reader should not have to learn a second vocabulary to read the
+    // same grades in a second place.
+    const mark = { verified: "ok", unverified: "~", unknown: "?" }[grade];
+    right.append(" ", el("span", "grade " + grade, mark));
+    row.append(right);
+    if (parts) {
+      const p = el("div", "parts");
+      p.append(el("span", null, "from rating"), el("span", null, parts.rating.value),
+               el("span", null, parts.fromRating.value));
+      p.append(el("span", null, "from bonuses"), el("span", null, ""),
+               el("span", null, parts.fromBonuses.value));
+      if (parts.movedLater) {
+        p.append(el("span", null, "a later stage moved it, from"),
+                 el("span", null, ""), el("span", null, parts.beforeMove));
+      }
+      row.append(p);
+    }
+    if (note) {
+      const n = el("div", "parts");
+      n.append(el("span", null, note));
+      row.append(n);
+    }
+    return row;
+  }
+
+  function redraw() { buildSlots(); resolveNow(); }
+
+  // ── reading a card ─────────────────────────────────────────────────
+  const drop = $("drop");
+  drop.onclick = () => $("file").click();
+  $("file").onchange = e => { if (e.target.files[0]) readCard(e.target.files[0]); };
+  document.addEventListener("paste", e => {
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith("image/")) { readCard(item.getAsFile()); e.preventDefault(); }
+    }
+  });
+  ["dragenter", "dragover"].forEach(t =>
+    drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("armed"); }));
+  ["dragleave", "drop"].forEach(t =>
+    drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("armed"); }));
+  drop.addEventListener("drop", e => {
+    const f = e.dataTransfer.files[0];
+    if (f) readCard(f);
+  });
+
+  let tesseract = null;
+  function loadTesseract() {
+    if (tesseract) return tesseract;
+    tesseract = new Promise((ok, no) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+      s.onload = ok;
+      s.onerror = () => no(new Error(
+        "could not load the text recogniser. It comes from the network the " +
+        "first time; the rest of this page never does."));
+      document.head.append(s);
+    });
+    return tesseract;
+  }
+
+  async function readCard(file) {
+    const host = $("read");
+    host.replaceChildren(el("p", "hint", "reading…"));
+    try {
+      await loadTesseract();
+      const { data } = await Tesseract.recognize(file, "eng");
+      showCard(parseCard(data.text));
+    } catch (e) {
+      host.replaceChildren(el("div", "error", e.message || String(e)));
+    }
+  }
+
+  /// Turns recognised text into lines this tool can act on, and lines it
+  /// cannot. Both are shown: a card half-understood in silence is worse
+  /// than one that says which half.
+  function parseCard(text) {
+    const card = { name: null, slot: null, taken: [], missed: [] };
+    for (let raw of text.split("\n")) {
+      const line = raw.replace(/−/g, "-").replace(/[|_]/g, "").trim();
+      if (!line) continue;
+
+      let m = line.match(/^Slot Type:\s*([A-Za-z]+)/i);
+      if (m) { card.slot = m[1].toLowerCase(); continue; }
+      if (/^(Rarity|Loot State|Armor Type):/i.test(line)) continue;
+
+      // "+11 Additional Armor Rating" and "+2 Strength" — a rolled line.
+      m = line.match(/^\+\s*(-?[\d.]+)\s*%?\s+(?:Additional\s+)?(.+)$/i);
+      if (m) { record(card, m[2], m[1]); continue; }
+
+      // "Armor Rating 33", "Move Speed -3" — printed on the item.
+      m = line.match(/^([A-Za-z][A-Za-z ]*?)\s+(-?[\d.]+)\s*%?$/);
+      if (m) { record(card, m[1], m[2]); continue; }
+
+      if (!card.name && /^[A-Za-z][A-Za-z' ]+$/.test(line) && line.length < 40) {
+        card.name = line.trim();
+        continue;
+      }
+      card.missed.push(line);
+    }
+    return card;
+  }
+
+  function record(card, name, amount) {
+    const hit = classify(name);
+    if (!hit) { card.missed.push(`${name} ${amount}`); return; }
+    const what = hit.kind === "attribute" ? "attr:" + hit.key
+               : hit.kind === "moveSpeed" ? "move:"
+               : "stat:" + hit.id;
+    card.taken.push({ what, amount, label: name.trim() });
+  }
+
+  function showCard(card) {
+    const host = $("read");
+    host.replaceChildren();
+    if (!card.taken.length && !card.missed.length) {
+      host.append(el("div", "error", "nothing legible in that image"));
+      return;
+    }
+    host.append(el("h2", null, card.name || "card"));
+    for (const t of card.taken) {
+      const row = el("div", "read-line");
+      row.append(el("span", null, t.label), el("code", null, t.amount));
+      host.append(row);
+    }
+    for (const miss of card.missed) {
+      const row = el("div", "read-line dropped");
+      row.append(el("span", null, miss), el("span", null, "not modelled"));
+      host.append(row);
+    }
+
+    const where = el("select");
+    for (const slot of CATALOG.slots) {
+      for (let n = 1; n <= slot.capacity; n++) {
+        const key = slotKey(slot.id, n);
+        where.append(new Option(key, key));
+      }
+    }
+    if (card.slot) {
+      const match = [...where.options].find(o => o.value.startsWith(card.slot));
+      if (match) where.value = match.value;
+    }
+    const f = el("div", "field");
+    f.style.marginTop = "12px";
+    f.append(el("label", null, "Equip it as"), where);
+    host.append(f);
+
+    const use = el("button", "primary", "Add to the build");
+    use.onclick = () => {
+      const key = where.value;
+      state.gear[key] = {
+        id: "item.blank",
+        custom: true,
+        label: card.name || "described by hand",
+        slot: key.split("#")[0],
+        rolls: card.taken.map(t => ({ what: t.what, amount: t.amount })),
+      };
+      host.replaceChildren();
+      redraw();
+    };
+    host.append(use);
+
+    host.append(el("p", "hint",
+      "Everything a card shows is a fact about the copy in your hands, so it " +
+      "all arrives as verified. What is printed versus what is rolled matters " +
+      "for the dataset, where a printed value claims something about every copy."));
+  }
+
+  // ── start ──────────────────────────────────────────────────────────
+  wasm_bindgen.initSync({ module: bytes });
+  CATALOG = JSON.parse(wasm_bindgen.catalog());
+  if (!CATALOG.ok) {
+    document.body.replaceChildren(el("div", "error", CATALOG.error));
+  } else {
+    ATTRS = CATALOG.attributes.slice();
+    $("build").innerHTML = "";
+    $("build").append(`${CATALOG.label} · `, el("code", null, CATALOG.build));
+    const pick = $("class");
+    for (const c of CATALOG.classes) pick.append(new Option(c.name, c.id));
+    state.class = CATALOG.classes[0]?.id ?? null;
+    pick.value = state.class;
+    pick.onchange = () => { state.class = pick.value; resolveNow(); };
+    redraw();
+  }
+})();
+</script>

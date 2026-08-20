@@ -55,6 +55,18 @@ step "build (host)"    cargo build --workspace
 step "build (no_std)"  cargo build --target thumbv7em-none-eabi -p assay-core
 step "tests"           cargo test --workspace
 step "trust boundary"  bash tools/gates/dep_direction.sh
+# The browser page embeds the resolver, so it is built from the same source
+# rather than kept beside it. Skipped where the wasm toolchain is absent --
+# announced, never silently.
+if rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown    && command -v wasm-bindgen >/dev/null 2>&1; then
+    step "ui"     bash tools/build-ui.sh
+else
+    printf '
+[1m-- ui[0m
+   skipped: needs the wasm32 target and wasm-bindgen
+'
+fi
+
 step "mirror"          python3 mirror/gen_slice_vector.py --check
 step "determinism"     determinism
 

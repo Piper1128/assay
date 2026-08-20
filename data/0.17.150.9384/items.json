@@ -1,8 +1,14 @@
 {
   "items": [
     {
+      "id": "item.blank",
+      "name": "Described by hand",
+      "grants": {}
+    },
+    {
       "id": "item.club",
       "name": "Club",
+      "slot": "weapon",
       "move_speed_add": {
         "confidence": "unverified",
         "micro": -22000000
@@ -21,6 +27,7 @@
     {
       "id": "item.dark_leather_leggings",
       "name": "Dark Leather Leggings",
+      "slot": "legs",
       "move_speed_add": {
         "confidence": "unverified",
         "micro": -4000000
@@ -35,6 +42,7 @@
     {
       "id": "item.flanged_mace",
       "name": "Flanged Mace",
+      "slot": "weapon",
       "move_speed_add": {
         "confidence": "unverified",
         "micro": -20000000
@@ -53,6 +61,7 @@
     {
       "id": "item.leather_cap",
       "name": "Leather Cap (Uncommon)",
+      "slot": "head",
       "attributes": {
         "confidence": "verified",
         "points": {
@@ -77,6 +86,7 @@
     {
       "id": "item.loose_trousers",
       "name": "Loose Trousers (Epic)",
+      "slot": "legs",
       "attributes": {
         "confidence": "verified",
         "points": {
@@ -97,6 +107,7 @@
     {
       "id": "item.morning_star",
       "name": "Morning Star",
+      "slot": "weapon",
       "move_speed_add": {
         "confidence": "unverified",
         "micro": -25000000
@@ -115,6 +126,7 @@
     {
       "id": "item.phoenix_choker",
       "name": "Phoenix Choker (Uncommon)",
+      "slot": "necklace",
       "grants": {
         "derived.magical_power": {
           "confidence": "verified",
@@ -129,6 +141,7 @@
     {
       "id": "item.war_hammer",
       "name": "War Hammer",
+      "slot": "weapon",
       "move_speed_add": {
         "confidence": "unverified",
         "micro": -25000000

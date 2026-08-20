@@ -34,6 +34,7 @@ use assay_core::curve::Curve;
 use assay_core::derived::{DerivedStatDef, RatingInput};
 use assay_core::fixed::Fixed;
 use assay_core::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
+use assay_core::loadout::Slot;
 use assay_core::schema::{
     AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, Effect, InMemoryDataset, ItemDef,
     PerkDef, SkillDef, StackedEffect, WeaponProfile,
@@ -272,6 +273,16 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         entities.insert_item(ItemDef {
             id: ItemId::new(&dto.id),
             name: dto.name,
+            slot: dto
+                .slot
+                .as_deref()
+                .map(|name| {
+                    Slot::ALL
+                        .into_iter()
+                        .find(|s| s.as_str() == name)
+                        .ok_or_else(|| LoadError::Invalid(format!("unknown slot: {name}")))
+                })
+                .transpose()?,
             attributes: dto
                 .attributes
                 .map(ItemAttributesDto::into_delta)
@@ -591,6 +602,9 @@ struct ItemDto {
     #[serde(default)]
     renamed_from: Option<String>,
     name: String,
+    /// Where the item is worn, as the card's `Slot Type` names it.
+    #[serde(default)]
+    slot: Option<String>,
     /// Attributes printed on the item, sparse and graded as a block.
     #[serde(default)]
     attributes: Option<ItemAttributesDto>,

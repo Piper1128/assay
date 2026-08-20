@@ -40,7 +40,7 @@ use crate::confidence::Confidence;
 use crate::derived::{DerivedError, Evaluated, StatBreakdown, evaluate_all, well_known};
 use crate::fixed::Fixed;
 use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
-use crate::loadout::{Loadout, Roll};
+use crate::loadout::{Loadout, Roll, Slot};
 use crate::schema::{AttributeBlock, AttributeKind, DatasetSource, Effect, StackedEffect};
 use crate::stats::apply_item_armor_bonus;
 
@@ -59,6 +59,16 @@ pub enum ResolveError {
     UnknownSkill(SkillId),
     /// The derived-stat graph could not be evaluated (ADR-012).
     Derived(DerivedError),
+    /// A piece is worn in a slot its own card does not name: the item,
+    /// where the loadout put it, and where it belongs.
+    WrongSlot {
+        /// The item in question.
+        item: ItemId,
+        /// Where the loadout put it.
+        worn: Slot,
+        /// Where its card says it goes.
+        belongs: Slot,
+    },
     /// The loadout claims more stacks than the effect can carry.
     TooManyStacks {
         /// The perk or skill the stacks belong to.
@@ -78,6 +88,16 @@ impl fmt::Display for ResolveError {
             ResolveError::UnknownPerk(id) => write!(f, "perk not in dataset: {id}"),
             ResolveError::UnknownSkill(id) => write!(f, "skill not in dataset: {id}"),
             ResolveError::Derived(e) => write!(f, "derived stats: {e}"),
+            ResolveError::WrongSlot {
+                item,
+                worn,
+                belongs,
+            } => write!(
+                f,
+                "{item} goes in the {} slot, not {}",
+                belongs.as_str(),
+                worn.as_str()
+            ),
             ResolveError::TooManyStacks {
                 source,
                 requested,
@@ -199,6 +219,15 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         let item = data
             .item(&piece.id)
             .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
+        if let Some(belongs) = item.slot
+            && belongs != piece.slot
+        {
+            return Err(ResolveError::WrongSlot {
+                item: piece.id.clone(),
+                worn: piece.slot,
+                belongs,
+            });
+        }
         if let Some(printed) = &item.attributes {
             let delta = printed.value().clone();
             attributes_after_gear =
@@ -895,6 +924,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.dark_leather_leggings"),
             name: "Dark Leather Leggings".to_string(),
+            slot: None,
             attributes: None,
             grants: BTreeMap::from([(
                 DerivedStatId::new(well_known::ARMOR_RATING),
@@ -1074,6 +1104,7 @@ mod tests {
         let heavy = ItemDef {
             id: ItemId::new("item.test_plate"),
             name: "Test Plate".to_string(),
+            slot: None,
             attributes: None,
             grants: BTreeMap::from([(
                 DerivedStatId::new(well_known::ARMOR_RATING),
@@ -1109,6 +1140,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
+            slot: None,
             attributes: None,
             grants: BTreeMap::from([(
                 DerivedStatId::new(well_known::ARMOR_RATING),
@@ -1149,6 +1181,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
+            slot: None,
             attributes: None,
             grants: BTreeMap::from([(
                 DerivedStatId::new(well_known::ARMOR_RATING),
@@ -1201,6 +1234,7 @@ mod tests {
             data.insert_item(ItemDef {
                 id: ItemId::new("item.prop_plate"),
                 name: "Prop Plate".to_string(),
+                slot: None,
                 attributes: None,
                 grants: BTreeMap::from([(DerivedStatId::new(well_known::ARMOR_RATING), Confidence::Verified(fx(item_ar)))]),
                 move_speed_add: None,

@@ -15,3 +15,10 @@ __pycache__/
 /fuzz/artifacts/
 /fuzz/coverage/
 /fuzz/Cargo.lock
+
+# The browser page is built, not written: `ui/template.html` and the wasm
+# crate are the sources. Committing the 800 KiB result would let it drift
+# behind the resolver it embeds, and a stat tool whose numbers are one commit
+# stale is worse than one that has to be built.
+/ui/assay.html
+/ui/pkg/

@@ -1,0 +1,25 @@
+[package]
+name = "assay-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+# A browser binding, not a library anyone links: the whole reason it exists is
+# that `assay-core` is `no_std + alloc` and compiles to wasm32 unchanged, so
+# the page runs the same resolver the CLI does rather than a second one.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+assay-core = { path = "../assay-core" }
+assay-data = { path = "../assay-data" }
+serde_json.workspace = true
+# Pinned exactly: the crate and the `wasm-bindgen` CLI that
+# post-processes the module must be the same version, and a caret
+# range silently drifts past whatever is installed.
+wasm-bindgen = "=0.2.100"
+
+[lints]
+workspace = true

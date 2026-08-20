@@ -587,6 +587,7 @@ mod tests {
             data.insert_item(ItemDef {
                 id: ItemId::new(alloc::format!("item.armor_{rating}")),
                 name: alloc::format!("Armor {rating}"),
+                slot: None,
                 attributes: None,
                 grants: BTreeMap::from([(
                     DerivedStatId::new(well_known::ARMOR_RATING),
