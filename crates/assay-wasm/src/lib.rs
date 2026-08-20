@@ -17,8 +17,9 @@
 
 use assay_core::confidence::{Confidence, ConfidenceLevel};
 use assay_core::derived::StatBreakdown;
+use assay_core::exchange::{Exchange, ExchangeContext, Strike};
 use assay_core::fixed::Fixed;
-use assay_core::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
+use assay_core::ids::{AbilityId, ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
 use assay_core::resolve::{Resolved, resolve};
 use assay_core::schema::{AttributeKind, DatasetSource};
@@ -553,4 +554,156 @@ pub fn submission_json(card_json: &str, observer: &str, observed_at: &str, metho
         Ok(text) => json!({ "ok": true, "text": text }).to_string(),
         Err(e) => json!({ "ok": false, "error": e.to_string() }).to_string(),
     }
+}
+
+/// One attack, with all nine steps.
+///
+/// The situation arrives as its own object for the same reason the CLI takes
+/// its own file: it is a fact about the attack, not about either character.
+/// Omitted fields fall back to the weapon swinging, which is not the same as
+/// zero and is usually what was meant.
+#[wasm_bindgen]
+#[must_use]
+pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) -> String {
+    let data = match dataset() {
+        Ok(data) => data,
+        Err(e) => return json!({ "ok": false, "error": e }).to_string(),
+    };
+    let read = |text: &str, side: &str| -> Result<Loadout, String> {
+        let node: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        parse_loadout(&node).map_err(|e| format!("{side}: {e}"))
+    };
+    let (attacker_loadout, defender_loadout) = match (
+        read(attacker_json, "attacker"),
+        read(defender_json, "defender"),
+    ) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(e), _) | (_, Err(e)) => return json!({ "ok": false, "error": e }).to_string(),
+    };
+
+    let resolved = |loadout: &Loadout, side: &str| -> Result<Resolved, String> {
+        resolve(loadout, &data.entities).map_err(|e| format!("{side}: {e}"))
+    };
+    let (attacker, defender) = match (
+        resolved(&attacker_loadout, "attacker"),
+        resolved(&defender_loadout, "defender"),
+    ) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(e), _) | (_, Err(e)) => return json!({ "ok": false, "error": e }).to_string(),
+    };
+
+    // A weapon is required. A "basic attack" with nothing in hand has no
+    // base damage, and inventing one would be the tool guessing.
+    let Some(weapon_id) = &attacker_loadout.weapons.main_hand else {
+        return json!({
+            "ok": false,
+            "error": "the attacker has no weapon, so there is nothing to swing",
+        })
+        .to_string();
+    };
+    let Some(profile) = data
+        .entities
+        .item(weapon_id)
+        .and_then(|i| i.weapon.as_ref())
+    else {
+        return json!({
+            "ok": false,
+            "error": format!("{} is not a weapon in this dataset", weapon_id.as_str()),
+        })
+        .to_string();
+    };
+
+    let situation: Value = match serde_json::from_str(situation_json) {
+        Ok(v) => v,
+        Err(e) => return json!({ "ok": false, "error": e.to_string() }).to_string(),
+    };
+    let (strike, context) = match build_situation(&situation, profile) {
+        Ok(pair) => pair,
+        Err(e) => return json!({ "ok": false, "error": e }).to_string(),
+    };
+
+    match Exchange::new(&attacker, &defender, &strike, &context, &data.entities).damage() {
+        Ok(out) => json!({
+            "ok": true,
+            "damage": graded(&out.damage.clone().map(|d| d.value())),
+            "effectivePdr": graded(&out.effective_pdr.clone().map(|p| p.value())),
+            "weapon": data.entities.item(weapon_id).map(|i| i.name.clone()),
+            "steps": out
+                .trace
+                .iter()
+                .map(|n| json!({ "step": n.stage, "label": n.label, "detail": n.detail }))
+                .collect::<Vec<_>>(),
+        })
+        .to_string(),
+        Err(e) => json!({ "ok": false, "error": e.to_string() }).to_string(),
+    }
+}
+
+fn build_situation(
+    node: &Value,
+    weapon: &assay_core::schema::WeaponProfile,
+) -> Result<(Strike, ExchangeContext), String> {
+    let basic = Strike::basic_swing(weapon);
+    let neutral = ExchangeContext::default();
+    let fixed = |section: &str, key: &str| -> Result<Option<Fixed>, String> {
+        let Some(raw) = node.get(section).and_then(|s| s.get(key)) else {
+            return Ok(None);
+        };
+        let text = raw
+            .as_str()
+            .ok_or_else(|| format!("{key} must be a decimal string, not a number"))?;
+        if text.trim().is_empty() {
+            return Ok(None);
+        }
+        text.parse::<Fixed>()
+            .map(Some)
+            .map_err(|e| format!("{key} {text:?}: {e:?}"))
+    };
+
+    let strike = Strike {
+        base: fixed("strike", "base")?.map_or(basic.base, |v| {
+            Confidence::Verified(assay_core::stats::Damage::new(v))
+        }),
+        scaling: fixed("strike", "scaling")?.map_or(basic.scaling, |v| {
+            Confidence::Verified(assay_core::stats::ScalingCoefficient::new(v))
+        }),
+        flat_bonus: fixed("strike", "flatBonus")?.map_or(basic.flat_bonus, |v| {
+            Confidence::Verified(assay_core::stats::Damage::new(v))
+        }),
+        armor_pen: fixed("strike", "armorPen")?.map_or(basic.armor_pen, |v| {
+            Confidence::Verified(assay_core::stats::ArmorPen::new(v))
+        }),
+        true_damage: fixed("strike", "trueDamage")?.map_or(basic.true_damage, |v| {
+            Confidence::Verified(assay_core::stats::TrueDamage::new(v))
+        }),
+    };
+
+    let mut mods: BTreeMap<AbilityId, Confidence<Fixed>> = BTreeMap::new();
+    if let Some(map) = node
+        .get("context")
+        .and_then(|c| c.get("itemArmorBonusMods"))
+        .and_then(Value::as_object)
+    {
+        for (ability, raw) in map {
+            let text = raw
+                .as_str()
+                .ok_or_else(|| format!("{ability} must be a decimal string"))?;
+            let value = text
+                .parse::<Fixed>()
+                .map_err(|e| format!("{ability} {text:?}: {e:?}"))?;
+            mods.insert(AbilityId::new(ability), Confidence::Verified(value));
+        }
+    }
+
+    let context = ExchangeContext {
+        power_bonus_adjust: fixed("context", "powerBonusAdjust")?
+            .map_or(neutral.power_bonus_adjust, Confidence::Verified),
+        pdr_mod: fixed("context", "pdrMod")?.map_or(neutral.pdr_mod, |v| {
+            Confidence::Verified(assay_core::stats::PdrMod::new(v))
+        }),
+        hit_location_bonus: fixed("context", "hitLocationBonus")?
+            .map_or(neutral.hit_location_bonus, Confidence::Verified),
+        item_armor_bonus_mods: mods,
+    };
+    Ok((strike, context))
 }

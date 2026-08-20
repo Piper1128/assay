@@ -256,6 +256,47 @@
   .cmp .num.down { color: var(--bad); }
   .cmp .num.flat { color: var(--ink-dim); }
 
+  /* The nine steps read as a sequence, so they are numbered and the
+     arithmetic is monospaced. This is the view where someone checks our
+     answer against the game's, one line at a time. */
+  .steps { max-width: 720px; }
+  .step {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .step .n {
+    font-family: var(--mono);
+    color: var(--gold);
+    text-align: right;
+  }
+  .step .what { font-size: 14px; }
+  .step .how {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink-dim);
+    overflow-x: auto;
+  }
+  .headline {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .headline .big {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 30px;
+    color: var(--ink);
+  }
+  .situations { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .situations button[aria-pressed="true"] {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
   details.trace { margin-top: 18px; }
   details.trace summary { cursor: pointer; color: var(--ink-dim); font-size: 13px; }
   details.trace pre {
@@ -352,8 +393,33 @@
   const state = {
     builds: { A: { class: null, gear: {} }, B: { class: null, gear: {} } },
     view: "A",
+    // Which named circumstances are in force. A situation is a fact about
+    // the attack, so it belongs to neither build and lives here.
+    situation: new Set(),
+    hitLocation: "",
   };
-  const editing = () => state.builds[state.view === "cmp" ? "A" : state.view];
+
+  /// The circumstances with numbers this project already has. Each one is a
+  /// name a player would use, so nobody has to remember that leaving Hide is
+  /// -30 percentage points of Physical Power Bonus.
+  ///
+  /// Nothing is invented here: every value comes from an ADR or the source
+  /// analysis. A circumstance whose number we do not know is not on this
+  /// list — it would have to be typed, and typing it is honest.
+  const SITUATIONS = [
+    ["back", "Behind them", { context: { powerBonusAdjust: "30" } }],
+    ["hide", "Leaving Hide", { context: { powerBonusAdjust: "-30" } }],
+    ["sneak", "Sneak Attack",
+      { strike: { scaling: "0", flatBonus: "15", trueDamage: "1" } }],
+    ["lethal", "Lethal Mark on them", { context: { pdrMod: "-30" } }],
+    ["weakpoint", "Weakpoint Attack landed",
+      { context: { itemArmorBonusMods: { "skill.rogue.weakpoint_attack": "-30" } } }],
+  ];
+  // Any view that is not a build still has to edit something, and it edits
+  // A. Naming the two builds explicitly rather than trusting the view to be
+  // one of them is what stops a new view from silently editing nothing.
+  const editing = () =>
+    state.view === "B" ? state.builds.B : state.builds.A;
 
   // ── stat vocabulary ────────────────────────────────────────────────
   // What an item card can say, and where each line goes. A line the tool
@@ -515,11 +581,99 @@
       gear.push(out);
       void key;
     }
-    return JSON.stringify({ name: "build", class: build.class, gear });
+    // A weapon has two roles: it contributes stats like any other piece, and
+    // it is the thing being swung. The core keeps those apart — `gear` for
+    // the first, `weapons.mainHand` for the second — so both have to be
+    // filled, or an exchange finds nothing in hand.
+    const held = gear.find(g => g.slot === "weapon");
+    const weapons = held ? { mainHand: held.id } : {};
+    return JSON.stringify({ name: "build", class: build.class, gear, weapons });
+  }
+
+  function situationJson() {
+    const out = { strike: {}, context: {} };
+    for (const [id, , patch] of SITUATIONS) {
+      if (!state.situation.has(id)) continue;
+      for (const [section, fields] of Object.entries(patch)) {
+        for (const [key, value] of Object.entries(fields)) {
+          if (key === "itemArmorBonusMods") {
+            out.context.itemArmorBonusMods =
+              { ...(out.context.itemArmorBonusMods ?? {}), ...value };
+          } else {
+            out[section][key] = value;
+          }
+        }
+      }
+    }
+    const hit = state.hitLocation.replace(/−/g, "-").trim();
+    if (hit) out.context.hitLocationBonus = hit;
+    return JSON.stringify(out);
+  }
+
+  function renderHit() {
+    const host = $("sheet");
+    host.replaceChildren();
+
+    const picks = el("div", "situations");
+    for (const [id, label] of SITUATIONS) {
+      const b = el("button", null, label);
+      b.setAttribute("aria-pressed", String(state.situation.has(id)));
+      b.onclick = () => {
+        if (state.situation.has(id)) state.situation.delete(id);
+        else state.situation.add(id);
+        renderHit();
+      };
+      picks.append(b);
+    }
+    host.append(picks);
+
+    const loc = el("div", "field");
+    const input = el("input");
+    input.placeholder = "150 for a headshot";
+    input.value = state.hitLocation;
+    input.oninput = () => { state.hitLocation = input.value; renderHit(); };
+    loc.append(el("label", null, "Hit location bonus, in percentage points"), input);
+    host.append(loc);
+
+    const out = JSON.parse(wasm_bindgen.exchange(
+      loadoutJson(state.builds.A), loadoutJson(state.builds.B), situationJson()));
+    if (!out.ok) {
+      host.append(el("div", "error", out.error));
+      $("trace").textContent = "";
+      return;
+    }
+
+    const head = el("div", "headline");
+    head.append(el("span", "big", out.damage.value));
+    head.append(el("span", "grade " + out.damage.confidence,
+      { verified: "ok", unverified: "~", unknown: "?" }[out.damage.confidence]));
+    head.append(el("span", "hint",
+      `damage with ${out.weapon}, against ${out.effectivePdr.value}% effective PDR`));
+    host.append(head);
+
+    const steps = el("div", "steps");
+    for (const step of out.steps) {
+      const row = el("div", "step");
+      row.append(el("div", "n", String(step.step)));
+      const body = el("div");
+      body.append(el("div", "what", step.label));
+      body.append(el("div", "how", step.detail));
+      row.append(body);
+      steps.append(row);
+    }
+    host.append(steps);
+    host.append(el("p", "hint",
+      "Nine steps in a locked order (ADR-006). Sneak Attack scales at 0%, so " +
+      "step 2 wipes the base and step 3's penalty multiplies nothing — that " +
+      "is the immunity, rather than a claim about it."));
+    $("trace").textContent = out.steps
+      .map(n => `${n.step}. ${n.label.padEnd(26)} ${n.detail}`).join("\n");
   }
 
   function resolveNow() {
-    if (state.view === "cmp") {
+    if (state.view === "hit") {
+      renderHit();
+    } else if (state.view === "cmp") {
       const out = JSON.parse(wasm_bindgen.compare_loadouts(
         loadoutJson(state.builds.A), loadoutJson(state.builds.B)));
       renderCompare(out);
@@ -632,7 +786,8 @@
   function buildTabs() {
     const host = $("tabs");
     host.replaceChildren();
-    for (const [view, label] of [["A", "Build A"], ["B", "Build B"], ["cmp", "A vs B"]]) {
+    for (const [view, label] of [["A", "Build A"], ["B", "Build B"], ["cmp", "A vs B"],
+                                ["hit", "A hits B"]]) {
       const tab = el("button", null, label);
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", String(state.view === view));
@@ -678,7 +833,9 @@
     // The left panel edits A while the comparison is in view: there is only
     // one editor, and it stays pointed at something.
     document.querySelectorAll(".panel")[0].querySelectorAll("h2")[0].textContent =
-      state.view === "cmp" ? "Build A" : "Build " + state.view;
+      state.view === "A" ? "Build A" : state.view === "B" ? "Build B" : "Build A";
+    document.querySelectorAll(".panel")[1].querySelectorAll("h2")[0].textContent =
+      state.view === "hit" ? "A hits B" : "Character sheet";
     buildSlots();
     resolveNow();
   }
