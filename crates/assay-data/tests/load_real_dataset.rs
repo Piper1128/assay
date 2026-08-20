@@ -363,3 +363,51 @@ fn three_item_cards_reach_the_block_through_every_route_they_have() {
         Fixed::from_micro(5_400_000)
     );
 }
+
+#[test]
+fn the_move_speed_cap_binds_before_armour_takes_its_cut() {
+    // Confirmed in game: Agility gives base move speed, and armour reduces
+    // it flat afterwards. So the 330 cap applies to the base, not to the
+    // result, and the order is worth a test because the two readings differ
+    // only for a build fast enough to reach the cap — which is exactly the
+    // build that would notice.
+    //
+    // Agility 75 puts the curve at 336, over the cap. A cap and a pair of
+    // trousers cost 3 and 2. Capping first gives 330 - 5 = 325; folding the
+    // penalty into the rating first would give min(331, 330) = 330, and the
+    // difference is a whole point of move speed on every fast build.
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+    let mut loadout = naked_rogue();
+    loadout.gear = vec![
+        GearPiece {
+            slot: Slot::Head,
+            id: ItemId::new("item.leather_cap"),
+            rolls: vec![],
+        },
+        GearPiece {
+            slot: Slot::Legs,
+            id: ItemId::new("item.loose_trousers"),
+            rolls: vec![Roll::Attribute(AttributeKind::Agility, 47)],
+        },
+    ];
+    let resolved = resolve(&loadout, &dataset.entities).expect("resolves");
+    assert_eq!(
+        resolved
+            .attributes
+            .value()
+            .get(AttributeKind::Agility)
+            .points(),
+        75
+    );
+    // Stage 4 caps at 330; the breakdown still shows what the curve wanted.
+    let parts = resolved
+        .breakdown
+        .get(&DerivedStatId::new(well_known::MOVE_SPEED))
+        .expect("move speed breakdown");
+    assert_eq!(*parts.from_rating.value(), Fixed::from_int(336));
+    // Stage 5 then takes the armour's cut off the capped value.
+    assert_eq!(
+        *resolved.stat(well_known::MOVE_SPEED).unwrap().value(),
+        Fixed::from_int(325)
+    );
+}

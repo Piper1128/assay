@@ -121,13 +121,20 @@ What is missing is data: no item card read so far grants flat Physical or
 Magical Damage Reduction, and no perk is known to. The row is there, and the
 sources that fill it are still unidentified.
 
-Two caveats worth stating. The decomposition covers stage 4; **move speed is
-still adjusted afterwards by stages 5 and 6**, so its parts do not add to its
-total and the readout says so rather than guessing which. And those flat move
-speed adds are the same kind of term under a different mechanism — folding
-them in would change when the 330 cap binds, which needs a measurement in
-game (heavy armour on a high-Agility build: does move speed clamp before or
-after the armour penalty?) rather than a decision here. This vindicates the
+One caveat, and one question that turned out to have an answer.
+
+The decomposition covers stage 4. **Move speed is still adjusted afterwards
+by stages 5 and 6**, so its parts do not add to its total, and the readout
+says a later stage moved it rather than guessing which.
+
+*Resolved: those flat move speed adds look like the same term under a
+different mechanism, and folding them in was tempting. It would have been
+wrong. Confirmed in game: Agility gives base move speed and armour reduces
+it flat afterwards, so the 330 cap binds on the base. Stage 5 was already
+right. The two readings differ only for a build fast enough to reach the cap
+— Agility 75 with 5 points of armour penalty is 325 one way and 330 the
+other — so the order is pinned by a test rather than left to look
+interchangeable.* This vindicates the
 first guess made when the armour curve fell short of its cap — that something
 *adds* to the reduction — which was then withdrawn because the wiki lists no
 source of flat damage reduction. The wiki was incomplete; the sheet has a
