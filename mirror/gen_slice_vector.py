@@ -92,7 +92,13 @@ LOADOUTS = [
         "perks": ["perk.rogue.jokester"],
         "skills": [],
         "armor": [],
-        "party": {"perks": [], "skills": ["skill.fighter.fortified_ground"]},
+        # The party also holds Jokester. It must change nothing: an ability
+        # applies once however many people bring it, so this loadout's
+        # expected values are identical to the same one without it.
+        "party": {
+            "perks": ["perk.rogue.jokester"],
+            "skills": ["skill.fighter.fortified_ground"],
+        },
     },
     {
         # Gear stages: attribute roll (2), flat move speed (5), armor→PDR (7),

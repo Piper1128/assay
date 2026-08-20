@@ -30,7 +30,7 @@
 //! like that" is unanswerable and the tool cannot be debugged against the
 //! in-game character sheet.
 
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -190,7 +190,19 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     });
 
     // ── Stage 3: attributes from perks/skills/party ──────────────────────
-    let effects = collect_effects(loadout, data)?;
+    let CollectedEffects { effects, ignored } = collect_effects(loadout, data)?;
+    trace.push(StageNote {
+        stage: 3,
+        label: "duplicate abilities",
+        detail: if ignored.is_empty() {
+            String::from("none: every ability in the loadout is distinct")
+        } else {
+            format!(
+                "already in force, so contributed nothing: {}",
+                ignored.join(", ")
+            )
+        },
+    });
     let mut attributes_final = attributes_after_gear.clone();
     for sourced in &effects {
         match sourced.effect.value() {
@@ -472,15 +484,41 @@ fn apply_stacks(
     }
 }
 
+/// Everything the loadout's abilities contribute, and what was left out.
+struct CollectedEffects {
+    effects: Vec<SourcedEffect>,
+    /// Abilities skipped because the same one was already in force, by
+    /// display name. Kept so the trace can say so: a perk that silently
+    /// does nothing is exactly the kind of thing a player would go on
+    /// believing.
+    ignored: Vec<String>,
+}
+
 /// Gathers every effect from own perks, own skills, party perks and party
 /// skills — in that order, each list in loadout declaration order. The order
 /// is deterministic by construction and part of the pipeline's contract.
+///
+/// **An ability applies once, however many people bring it.** Two Jokesters
+/// in a party are +2 All Attributes, not +4, and the same holds for a perk
+/// you have that a teammate also took. Order gives precedence: your own copy
+/// is the one that counts, so the trace names it without the party suffix.
+///
+/// This is not the same question as stacking. `max_stacks` is one ability
+/// applied repeatedly by its owner — Sprint at three stacks — and is a fact
+/// about the moment. Duplicate *sources* of one ability are not stacks of
+/// it; both mechanisms are keyed on the ability id and they do not interact.
 fn collect_effects(
     loadout: &Loadout,
     data: &impl DatasetSource,
-) -> Result<Vec<SourcedEffect>, ResolveError> {
+) -> Result<CollectedEffects, ResolveError> {
     let mut out: Vec<SourcedEffect> = Vec::new();
-    let push_perk = |out: &mut Vec<SourcedEffect>, id: &PerkId, party: bool| {
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut ignored: Vec<String> = Vec::new();
+    let push_perk = |out: &mut Vec<SourcedEffect>,
+                     seen: &mut BTreeSet<String>,
+                     ignored: &mut Vec<String>,
+                     id: &PerkId,
+                     party: bool| {
         let perk = data
             .perk(id)
             .ok_or_else(|| ResolveError::UnknownPerk(id.clone()))?;
@@ -489,6 +527,11 @@ fn collect_effects(
         } else {
             perk.name.clone()
         };
+        let first_holder = seen.insert(id.as_str().to_string()); // probe: ability-dedupe
+        if !first_holder {
+            ignored.push(name);
+            return Ok(());
+        }
         for entry in &perk.effects {
             let (effect, _) = apply_stacks(entry, id.as_str(), &name, &loadout.stacks)?;
             out.push(SourcedEffect {
@@ -499,9 +542,13 @@ fn collect_effects(
         Ok::<(), ResolveError>(())
     };
     for id in &loadout.perks {
-        push_perk(&mut out, id, false)?;
+        push_perk(&mut out, &mut seen, &mut ignored, id, false)?;
     }
-    let push_skill = |out: &mut Vec<SourcedEffect>, id: &SkillId, party: bool| {
+    let push_skill = |out: &mut Vec<SourcedEffect>,
+                      seen: &mut BTreeSet<String>,
+                      ignored: &mut Vec<String>,
+                      id: &SkillId,
+                      party: bool| {
         let skill = data
             .skill(id)
             .ok_or_else(|| ResolveError::UnknownSkill(id.clone()))?;
@@ -510,6 +557,11 @@ fn collect_effects(
         } else {
             skill.name.clone()
         };
+        let first_holder = seen.insert(id.as_str().to_string()); // probe: ability-dedupe
+        if !first_holder {
+            ignored.push(name);
+            return Ok(());
+        }
         for entry in &skill.effects {
             let (effect, _) = apply_stacks(entry, id.as_str(), &name, &loadout.stacks)?;
             out.push(SourcedEffect {
@@ -520,15 +572,18 @@ fn collect_effects(
         Ok::<(), ResolveError>(())
     };
     for id in &loadout.skills {
-        push_skill(&mut out, id, false)?;
+        push_skill(&mut out, &mut seen, &mut ignored, id, false)?;
     }
     for id in &loadout.party.perks {
-        push_perk(&mut out, id, true)?;
+        push_perk(&mut out, &mut seen, &mut ignored, id, true)?;
     }
     for id in &loadout.party.skills {
-        push_skill(&mut out, id, true)?;
+        push_skill(&mut out, &mut seen, &mut ignored, id, true)?;
     }
-    Ok(out)
+    Ok(CollectedEffects {
+        effects: out,
+        ignored,
+    })
 }
 
 /// Sums graded values; the sum's grade is the minimum over the inputs.
@@ -1044,6 +1099,54 @@ mod tests {
             };
             prop_assert!(build(low + extra) >= build(low));
         }
+    }
+
+    #[test]
+    fn one_ability_applies_once_however_many_people_bring_it() {
+        // Two Jokesters in a party are +2 All Attributes, not +4. The perk
+        // is the same perk; a second holder of it is not a second copy.
+        let data = test_dataset();
+        let mut solo = naked_rogue();
+        solo.perks = vec![PerkId::new("perk.rogue.jokester")];
+        let mut shared = solo.clone();
+        shared.party.perks = vec![PerkId::new("perk.rogue.jokester")];
+        assert_eq!(
+            resolve(&shared, &data).unwrap().attributes.value().strength,
+            resolve(&solo, &data).unwrap().attributes.value().strength,
+            "a teammate holding your own perk must change nothing"
+        );
+
+        // And the trace has to say the party copy did nothing, or the player
+        // goes on believing it helped.
+        let resolved = resolve(&shared, &data).unwrap();
+        let note = resolved
+            .trace
+            .iter()
+            .find(|n| n.label == "duplicate abilities")
+            .expect("stage 3 reports duplicates");
+        assert!(
+            note.detail.contains("Jokester (party)"),
+            "the ignored ability must be named: {}",
+            note.detail
+        );
+    }
+
+    #[test]
+    fn distinct_abilities_still_both_apply() {
+        // The guard against over-correcting: de-duplication keys on the
+        // ability, so two different ones must survive it untouched.
+        let data = test_dataset();
+        let mut loadout = naked_rogue();
+        loadout.perks = vec![PerkId::new("perk.rogue.jokester")];
+        loadout.party.skills = vec![SkillId::new("skill.fighter.fortified_ground")];
+        let both = resolve(&loadout, &data).unwrap();
+        let mut alone = naked_rogue();
+        alone.perks = vec![PerkId::new("perk.rogue.jokester")];
+        let one = resolve(&alone, &data).unwrap();
+        assert!(
+            both.attributes.value().strength.points() > one.attributes.value().strength.points(),
+            "Fortified Ground is a different ability and must still land"
+        );
     }
 
     #[test]

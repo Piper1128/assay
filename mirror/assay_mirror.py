@@ -154,12 +154,22 @@ def _apply_stacks(entry: dict, source_id: str, source_name: str, stacks: dict) -
 
 def _effects(dataset: dict, loadout: dict) -> list[dict]:
     """Own perks, own skills, party perks, party skills — in that order, each
-    list in loadout declaration order, each already scaled to its stacks."""
+    list in loadout declaration order, each already scaled to its stacks.
+
+    An ability applies once however many people bring it: two Jokesters in a
+    party are +2 All Attributes, not +4. Order gives precedence, so a copy you
+    hold yourself beats a teammate's. This is a different question from
+    `max_stacks`, which is one ability applied repeatedly by its owner.
+    """
     out: list[dict] = []
     stacks = loadout.get("stacks", {})
+    seen: set[str] = set()
 
     def add(table: str, ids: list[str], party: bool) -> None:
         for entity_id in ids:
+            if entity_id in seen:
+                continue
+            seen.add(entity_id)
             entity = dataset[table][entity_id]
             name = f"{entity['name']} (party)" if party else entity["name"]
             for entry in entity["effects"]:

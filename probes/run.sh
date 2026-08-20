@@ -94,6 +94,18 @@ fi
 git checkout --quiet -- crates/assay-core/src/resolve.rs
 verdict pipeline_order "$gate_rejected"
 
+# ── ability_dedupe ───────────────────────────────────────────────────────────
+# An ability applies once however many people bring it. Letting a duplicate
+# through must fail: two Jokesters would be +4 All Attributes instead of +2.
+sed -i '/probe: ability-dedupe/ s/seen\.insert(id\.as_str()\.to_string())/true/' crates/assay-core/src/resolve.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/resolve.rs
+verdict ability_dedupe "$gate_rejected"
+
 # ── item_armor_bonus_base ────────────────────────────────────────────────────
 # Widening the Item Armor Rating Bonus base past the item bucket (ADR-005
 # amendment) must fail: enchantments are outside the multiplier, and a test
