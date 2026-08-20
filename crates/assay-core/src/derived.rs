@@ -110,6 +110,30 @@ impl fmt::Display for DerivedError {
     }
 }
 
+/// What a derived stat was made of, in the shape the game's own character
+/// sheet uses:
+///
+/// ```text
+/// Magical Damage Reduction   1.5%
+///   From Magic Resistance    15 (1.5%)
+///   From Bonuses             0
+/// ```
+///
+/// A total nobody can take apart cannot be checked against that screen, and
+/// checking against that screen is the entire point of the tool. The clamp
+/// applies to the sum, so `from_rating + from_bonuses` may exceed the value
+/// actually returned — which is itself worth seeing, because it is how a cap
+/// makes itself felt.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StatBreakdown {
+    /// The weighted sum handed to the curve.
+    pub rating: Confidence<Fixed>,
+    /// What the curve made of it, offset included.
+    pub from_rating: Confidence<Fixed>,
+    /// Flat contributions to the result: gear grants and ability bonuses.
+    pub from_bonuses: Confidence<Fixed>,
+}
+
 /// Evaluates one definition against the final attribute block and the
 /// derived values computed so far.
 fn evaluate(
@@ -119,7 +143,7 @@ fn evaluate(
     curve: &Confidence<Curve>,
     cap_override: Option<Fixed>,
     gear: Option<&Confidence<Fixed>>,
-) -> Confidence<Fixed> {
+) -> (Confidence<Fixed>, StatBreakdown) {
     // Rating: the weighted sum. Each product is one Fixed multiplication and
     // rounds half to even; the terms then sum exactly. For the weights the
     // game ships - quarters - the products are exact and nothing rounds.
@@ -154,18 +178,38 @@ fn evaluate(
     // twice is not the same as clamping once whenever the gear term is
     // negative.
     let gear = gear.cloned().unwrap_or(Confidence::Verified(Fixed::ZERO)); // probe: seed-adds
-    rating
-        .zip_with(gear, |rating, gear| (rating, gear))
-        .zip_with(curve.clone(), move |(rating, gear), curve| {
-            let mut value = curve.sample(rating) + offset + gear;
-            if let Some(floor) = floor {
-                value = value.max(floor);
-            }
-            if let Some(cap) = cap {
-                value = value.min(cap);
-            }
-            value
-        })
+    let from_rating = rating
+        .clone()
+        .zip_with(curve.clone(), move |rating, curve| {
+            curve.sample(rating) + offset
+        });
+    let breakdown = StatBreakdown {
+        rating,
+        from_rating: from_rating.clone(),
+        from_bonuses: gear.clone(),
+    };
+    let value = from_rating.zip_with(gear, move |from_rating, bonuses| {
+        let mut value = from_rating + bonuses;
+        if let Some(floor) = floor {
+            value = value.max(floor);
+        }
+        if let Some(cap) = cap {
+            value = value.min(cap);
+        }
+        value
+    });
+    (value, breakdown)
+}
+
+/// Every derived stat, with what each one was made of.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Evaluated {
+    /// The resolved value per stat, clamped.
+    pub values: BTreeMap<DerivedStatId, Confidence<Fixed>>,
+    /// How each computed stat reached its value. A stat that is only seeded
+    /// — armour rating, which no class computes — has no breakdown, because
+    /// there is nothing to break down: it is its bonuses.
+    pub breakdown: BTreeMap<DerivedStatId, StatBreakdown>,
 }
 
 /// Evaluates every definition in dependency order, starting from `seeded`
@@ -185,7 +229,7 @@ pub fn evaluate_all(
     seeded: BTreeMap<DerivedStatId, Confidence<Fixed>>,
     cap_overrides: &BTreeMap<DerivedStatId, Fixed>,
     mut curves: impl FnMut(&CurveId) -> Option<Confidence<Curve>>,
-) -> Result<BTreeMap<DerivedStatId, Confidence<Fixed>>, DerivedError> {
+) -> Result<Evaluated, DerivedError> {
     for def in defs {
         if def.weights.is_empty() && !seeded.contains_key(&def.id) {
             return Err(DerivedError::NoWeights(def.id.clone()));
@@ -200,6 +244,7 @@ pub fn evaluate_all(
         .filter(|(id, _)| !defined.contains(*id))
         .map(|(id, v)| (id.clone(), v.clone()))
         .collect();
+    let mut breakdown: BTreeMap<DerivedStatId, StatBreakdown> = BTreeMap::new();
     let mut pending: Vec<&DerivedStatDef> = defs.iter().collect();
 
     // A dataset defines a handful of derived stats, so a repeated ready-scan
@@ -223,7 +268,7 @@ pub fn evaluate_all(
             if ready {
                 let curve = curves(&def.curve)
                     .ok_or_else(|| DerivedError::UnknownCurve(def.curve.clone()))?;
-                let value = evaluate(
+                let (value, parts) = evaluate(
                     def,
                     attributes,
                     &computed,
@@ -232,6 +277,7 @@ pub fn evaluate_all(
                     seeded.get(&def.id),
                 );
                 computed.insert(def.id.clone(), value);
+                breakdown.insert(def.id.clone(), parts);
                 progressed = true;
             } else {
                 still_pending.push(def);
@@ -244,7 +290,10 @@ pub fn evaluate_all(
         }
         pending = still_pending;
     }
-    Ok(computed)
+    Ok(Evaluated {
+        values: computed,
+        breakdown,
+    })
 }
 
 #[cfg(test)]
@@ -321,7 +370,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            *out[&DerivedStatId::new(well_known::ACTION_SPEED)].value(),
+            *out.values[&DerivedStatId::new(well_known::ACTION_SPEED)].value(),
             "7.8125".parse().unwrap()
         );
     }
@@ -351,7 +400,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            *out[&DerivedStatId::new(well_known::MOVE_SPEED)].value(),
+            *out.values[&DerivedStatId::new(well_known::MOVE_SPEED)].value(),
             fx(306)
         );
 
@@ -367,7 +416,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            *capped[&DerivedStatId::new(well_known::MOVE_SPEED)].value(),
+            *capped.values[&DerivedStatId::new(well_known::MOVE_SPEED)].value(),
             fx(330),
             "336 must clamp to the 330 hard cap"
         );
@@ -401,7 +450,10 @@ mod tests {
             Some(curve.clone())
         })
         .unwrap();
-        assert_eq!(*out[&DerivedStatId::new(well_known::PDR)].value(), fx(20));
+        assert_eq!(
+            *out.values[&DerivedStatId::new(well_known::PDR)].value(),
+            fx(20)
+        );
     }
 
     #[test]
@@ -435,7 +487,10 @@ mod tests {
             |_| Some(curve.clone()),
         )
         .unwrap();
-        assert_eq!(*base[&DerivedStatId::new(well_known::PDR)].value(), fx(60));
+        assert_eq!(
+            *base.values[&DerivedStatId::new(well_known::PDR)].value(),
+            fx(60)
+        );
 
         let mut overrides = BTreeMap::new();
         overrides.insert(DerivedStatId::new(well_known::PDR), fx(75));
@@ -444,7 +499,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(
-            *raised[&DerivedStatId::new(well_known::PDR)].value(),
+            *raised.values[&DerivedStatId::new(well_known::PDR)].value(),
             fx(75),
             "the curve must be able to exceed 65% - confirmed in game"
         );

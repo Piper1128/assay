@@ -99,8 +99,8 @@ it. An Epic pair of Loose Trousers rolls **+9 Magic Resistance**. So the cap
 is reachable in play, and it holds here only because gear-sourced Magic
 Resistance is not modelled yet.*
 
-**The game's own sheet shows a term neither chain has.** Read straight off
-the character screen:
+**The `From Bonuses` term is modelled now, and nothing fills it yet.** Read
+straight off the character screen:
 
     Physical Damage Reduction   -22%
       From Armor Rating         0 (-22%)
@@ -110,7 +110,24 @@ the character screen:
       From Bonuses              0
 
 Both reductions are `curve(rating) + Bonuses`, and the two chains are the
-same shape. We model the curve and not the second term. This vindicates the
+same shape. The second term exists in the model now: gear grants it through
+`grants`, abilities through `Effect::DerivedBonus`, and `assay resolve
+--explain` prints the decomposition in the same layout so one of our numbers
+can be checked against one of the game's *for the same reason* rather than
+merely compared. It lands after the curve and before the clamp, so a bonus
+cannot push a stat past a cap.
+
+What is missing is data: no item card read so far grants flat Physical or
+Magical Damage Reduction, and no perk is known to. The row is there, and the
+sources that fill it are still unidentified.
+
+Two caveats worth stating. The decomposition covers stage 4; **move speed is
+still adjusted afterwards by stages 5 and 6**, so its parts do not add to its
+total and the readout says so rather than guessing which. And those flat move
+speed adds are the same kind of term under a different mechanism — folding
+them in would change when the 330 cap binds, which needs a measurement in
+game (heavy armour on a high-Agility build: does move speed clamp before or
+after the armour penalty?) rather than a decision here. This vindicates the
 first guess made when the armour curve fell short of its cap — that something
 *adds* to the reduction — which was then withdrawn because the wiki lists no
 source of flat damage reduction. The wiki was incomplete; the sheet has a

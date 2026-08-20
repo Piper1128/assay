@@ -94,6 +94,18 @@ fi
 git checkout --quiet -- crates/assay-core/src/resolve.rs
 verdict pipeline_order "$gate_rejected"
 
+# ── ability_bonus ────────────────────────────────────────────────────────────
+# An ability's flat contribution reaches the `From Bonuses` row the game
+# prints under every stat that has one. Dropping it must fail.
+sed -i '/probe: ability-bonus/ s/map(|_| value)/map(|_| crate::fixed::Fixed::ZERO)/' crates/assay-core/src/resolve.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/resolve.rs
+verdict ability_bonus "$gate_rejected"
+
 # ── seed_adds ────────────────────────────────────────────────────────────────
 # A gear-granted stat ADDS to what its definition computes. Dropping the seed
 # must fail: Magic Resistance would read 15 from Will alone, ignoring the +9

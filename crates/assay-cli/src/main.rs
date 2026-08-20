@@ -464,4 +464,45 @@ fn print_explain(resolved: &Resolved) {
     for note in &resolved.trace {
         println!("    {}. {:<28} {}", note.stage, note.label, note.detail);
     }
+    print_breakdown(resolved);
+}
+
+/// Prints each derived stat the way the game's own Details view does:
+/// the total, then what the rating contributed and what was added flat.
+///
+/// This is the section that makes a number checkable rather than merely
+/// comparable. Reading `1.5` next to the game's `1.5` says the totals agree;
+/// reading `from magic_resistance 15 (1.5)` next to the game's
+/// `From Magic Resistance 15 (1.5%)` says they agree *for the same reason*,
+/// which is the only kind of agreement worth having when both halves came
+/// from a wiki.
+fn print_breakdown(resolved: &Resolved) {
+    if resolved.breakdown.is_empty() {
+        return;
+    }
+    println!("\n  where each number came from:");
+    for (id, parts) in &resolved.breakdown {
+        let label = id.as_str().strip_prefix("derived.").unwrap_or(id.as_str());
+        let total = resolved
+            .derived
+            .get(id)
+            .map_or_else(|| "—".to_string(), |v| v.value().to_string());
+        println!("    {label:<26} {total:>12}");
+        println!(
+            "      from rating {:<12} {:>12}",
+            parts.rating.value(),
+            parts.from_rating.value()
+        );
+        println!("      from bonuses {:>24}", parts.from_bonuses.value());
+        // The parts are stage 4's. Stages 5 and 6 still adjust move speed
+        // afterwards, and a clamp may have bound, so a difference here is
+        // not necessarily either one — saying which would be guessing, and
+        // the stage trace above already says what happened.
+        let sum = *parts.from_rating.value() + *parts.from_bonuses.value();
+        if let Some(value) = resolved.derived.get(id)
+            && sum != *value.value()
+        {
+            println!("      later stages moved it from {sum:>11}");
+        }
+    }
 }

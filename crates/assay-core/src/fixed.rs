@@ -162,7 +162,13 @@ impl fmt::Display for Fixed {
         let whole = abs / SCALE.unsigned_abs();
         let frac = abs % SCALE.unsigned_abs();
         if frac == 0 {
-            return write!(f, "{sign}{whole}");
+            // `f.pad` rather than `write!`: a formatter's width and
+            // alignment are as much a part of the request as its sign, and
+            // writing straight to `f` drops them. A column that silently
+            // refuses to line up is the same defect as `{:+}` printing
+            // nothing — the caller asked for something and got no sign that
+            // it was ignored.
+            return f.pad(&alloc::format!("{sign}{whole}"));
         }
         let mut frac_digits = [0u8; 6];
         let mut rem = frac;
@@ -175,7 +181,7 @@ impl fmt::Display for Fixed {
             len -= 1;
         }
         let frac_str = core::str::from_utf8(&frac_digits[..len]).map_err(|_| fmt::Error)?;
-        write!(f, "{sign}{whole}.{frac_str}")
+        f.pad(&alloc::format!("{sign}{whole}.{frac_str}"))
     }
 }
 

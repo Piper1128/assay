@@ -212,6 +212,7 @@ mod tests {
             attributes: Confidence::Unverified(block),
             derived,
             caps: BTreeMap::new(),
+            breakdown: BTreeMap::new(),
             armor: crate::resolve::ArmorComposition {
                 item: Confidence::Verified(Fixed::ZERO),
                 bonus: Confidence::Verified(Fixed::ZERO),

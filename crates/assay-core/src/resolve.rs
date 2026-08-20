@@ -37,7 +37,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use crate::confidence::Confidence;
-use crate::derived::{DerivedError, evaluate_all, well_known};
+use crate::derived::{DerivedError, Evaluated, StatBreakdown, evaluate_all, well_known};
 use crate::fixed::Fixed;
 use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::loadout::{Loadout, Roll};
@@ -149,6 +149,12 @@ pub struct Resolved {
     pub caps: BTreeMap<DerivedStatId, Fixed>,
     /// What stage 7 combined to reach `derived.armor_rating`.
     pub armor: ArmorComposition,
+    /// How each computed stat reached its value: the rating, what the curve
+    /// made of it, and the flat bonuses added on top. The game's character
+    /// sheet prints exactly this decomposition, and it is what makes one of
+    /// our numbers checkable against one of its numbers rather than merely
+    /// comparable (ADR-012).
+    pub breakdown: BTreeMap<DerivedStatId, StatBreakdown>,
     /// The `--explain` trail, in stage order.
     pub trace: Vec<StageNote>,
 }
@@ -316,6 +322,17 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
             }
         }
     }
+    // Abilities contribute to the same `From Bonuses` row gear does, so
+    // they join the other bucket rather than getting a path of their own.
+    for sourced in &effects {
+        if let Effect::DerivedBonus(id, value) = sourced.effect.value() {
+            let value = *value;
+            other_parts
+                .entry(id.clone())
+                .or_default()
+                .push(sourced.effect.clone().map(|_| value)); // probe: ability-bonus
+        }
+    }
     let armor_id = DerivedStatId::new(well_known::ARMOR_RATING);
     let item_ar = fold_sum(item_parts.get(&armor_id).cloned().unwrap_or_default());
     let other_ar = fold_sum(other_parts.get(&armor_id).cloned().unwrap_or_default());
@@ -363,7 +380,10 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     // The single most consequential line in the file: ratings read the
     // attribute sum AFTER stage 3.
     let rating_input = &attributes_final; // probe: pipeline-order
-    let mut derived = evaluate_all(&class.derived, rating_input, seeded, &cap_overrides, |id| {
+    let Evaluated {
+        values: mut derived,
+        breakdown,
+    } = evaluate_all(&class.derived, rating_input, seeded, &cap_overrides, |id| {
         data.curve(id).cloned()
     })?;
     trace.push(StageNote {
@@ -489,6 +509,7 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         attributes: attributes_final,
         derived,
         caps,
+        breakdown,
         armor: ArmorComposition {
             item: item_ar,
             bonus: item_bonus,
@@ -1257,6 +1278,74 @@ mod tests {
             both.attributes.value().strength.points() > one.attributes.value().strength.points(),
             "Fortified Ground is a different ability and must still land"
         );
+    }
+
+    #[test]
+    fn every_computed_stat_can_say_what_it_was_made_of() {
+        // The game prints each stat as a total over two rows, and a total
+        // that cannot be taken apart cannot be checked against those rows.
+        let data = test_dataset();
+        let resolved = resolve(&naked_rogue(), &data).unwrap();
+        for (id, parts) in &resolved.breakdown {
+            let value = resolved.stat(id.as_str()).expect("stat exists");
+            // Nothing here is bonused, so the curve's answer is the answer.
+            assert_eq!(
+                *parts.from_bonuses.value(),
+                Fixed::ZERO,
+                "{id} has bonuses from nowhere"
+            );
+            assert_eq!(*parts.from_rating.value(), *value.value(), "{id}");
+        }
+        assert!(
+            !resolved.breakdown.is_empty(),
+            "a class with derived stats must produce a breakdown"
+        );
+    }
+
+    #[test]
+    fn an_ability_grants_the_from_bonuses_row() {
+        // The row exists on the character sheet under every stat that has
+        // one; until now nothing in the model could put anything in it.
+        let mut data = test_dataset();
+        data.insert_perk(PerkDef {
+            id: PerkId::new("perk.test.tough"),
+            name: "Tough".to_string(),
+            effects: vec![StackedEffect::once(Confidence::Verified(
+                Effect::DerivedBonus(DerivedStatId::new(well_known::PDR), fx(7)),
+            ))],
+        });
+        let mut loadout = naked_rogue();
+        loadout.perks = vec![PerkId::new("perk.test.tough")];
+        let resolved = resolve(&loadout, &data).unwrap();
+
+        let pdr = DerivedStatId::new(well_known::PDR);
+        let parts = resolved.breakdown.get(&pdr).expect("pdr breakdown");
+        assert_eq!(*parts.from_bonuses.value(), fx(7));
+        // And it lands where the sheet says: on the result, not the rating.
+        let bare = resolve(&naked_rogue(), &data).unwrap();
+        assert_eq!(
+            *resolved.stat(well_known::PDR).unwrap().value(),
+            *bare.stat(well_known::PDR).unwrap().value() + fx(7)
+        );
+    }
+
+    #[test]
+    fn a_bonus_cannot_push_a_stat_past_its_cap() {
+        // The clamp applies to the sum. Adding after it would let a perk
+        // hand out reduction the game does not allow, and clamping twice is
+        // not clamping once when the bonus is negative.
+        let mut data = test_dataset();
+        data.insert_perk(PerkDef {
+            id: PerkId::new("perk.test.enormous"),
+            name: "Enormous".to_string(),
+            effects: vec![StackedEffect::once(Confidence::Verified(
+                Effect::DerivedBonus(DerivedStatId::new(well_known::PDR), fx(500)),
+            ))],
+        });
+        let mut loadout = naked_rogue();
+        loadout.perks = vec![PerkId::new("perk.test.enormous")];
+        let resolved = resolve(&loadout, &data).unwrap();
+        assert_eq!(*resolved.stat(well_known::PDR).unwrap().value(), fx(60));
     }
 
     #[test]

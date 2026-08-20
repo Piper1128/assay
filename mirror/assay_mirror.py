@@ -318,6 +318,13 @@ def resolve(dataset: dict, loadout: dict) -> dict:
                 other_parts.setdefault(roll["stat"], []).append(
                     conf("verified", roll["micro"])
                 )
+    # Abilities contribute to the same "From Bonuses" row gear does, so they
+    # join the other bucket rather than getting a path of their own.
+    for effect in effects:
+        if effect["value"]["kind"] == "derived_bonus":
+            other_parts.setdefault(effect["value"]["target"], []).append(
+                {**effect, "value": effect["value"]["micro"]}
+            )
     item_ar_parts = item_parts.get("derived.armor_rating", [])
     other_ar_parts = other_parts.get("derived.armor_rating", [])
     item_bonus = fold_sum(

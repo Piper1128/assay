@@ -208,6 +208,12 @@ pub enum Effect {
     /// Generalised in ADR-012: the cap belongs to the derived-stat
     /// definition, so the effect names which one it lifts.
     RaiseCap(DerivedStatId, Fixed),
+    /// A flat contribution to a derived stat's result — the `From
+    /// Bonuses` row the game's character sheet prints under every stat
+    /// that has one. Lands after the curve and before the clamp, exactly
+    /// where a gear grant lands, because they are the same term seen from
+    /// two sources.
+    DerivedBonus(DerivedStatId, Fixed),
     /// Percentage bonus to armour rating from equipped armour pieces
     /// (Defense Mastery: +15%). Applied at ADR-005 stage 7, before the
     /// curve is sampled, and — per the amendment — to the item bucket
@@ -288,6 +294,9 @@ impl Effect {
                 Effect::Attribute(*kind, points.saturating_mul(stacks.cast_signed()))
             }
             Effect::RaiseCap(id, value) => Effect::RaiseCap(id.clone(), *value),
+            Effect::DerivedBonus(id, value) => {
+                Effect::DerivedBonus(id.clone(), *value * Fixed::from_int(count))
+            }
             Effect::ItemArmorBonus(value) => {
                 Effect::ItemArmorBonus(*value * Fixed::from_int(count))
             }

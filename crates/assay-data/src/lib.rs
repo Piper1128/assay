@@ -396,6 +396,12 @@ fn effects(dtos: &[EffectDto]) -> Result<Vec<StackedEffect>, LoadError> {
                     })?),
                     Fixed::from_micro(require_micro(dto)?),
                 ),
+                EffectKind::DerivedBonus => Effect::DerivedBonus(
+                    DerivedStatId::new(dto.target.as_deref().ok_or_else(|| {
+                        LoadError::Invalid("derived_bonus effect needs `target`".into())
+                    })?),
+                    Fixed::from_micro(require_micro(dto)?),
+                ),
                 EffectKind::ItemArmorBonus => {
                     Effect::ItemArmorBonus(Fixed::from_micro(require_micro(dto)?))
                 }
@@ -644,6 +650,7 @@ enum EffectKind {
     AllAttributes,
     Attribute,
     RaiseCap,
+    DerivedBonus,
     ItemArmorBonus,
     MoveSpeedAdd,
     MoveSpeedBonus,
