@@ -20,18 +20,6 @@
         },
         "derived": [
           {
-            "id": "derived.physical_power_bonus",
-            "weights": [
-              {
-                "kind": "attribute",
-                "ref": "strength",
-                "weight": 1000000
-              }
-            ],
-            "curve": "curve.physical_power_bonus",
-            "floor": -100000000
-          },
-          {
             "id": "derived.action_speed",
             "weights": [
               {
@@ -46,19 +34,6 @@
               }
             ],
             "curve": "curve.action_speed"
-          },
-          {
-            "id": "derived.move_speed",
-            "weights": [
-              {
-                "kind": "attribute",
-                "ref": "agility",
-                "weight": 1000000
-              }
-            ],
-            "curve": "curve.move_speed",
-            "offset": 300000000,
-            "cap": 330000000
           },
           {
             "id": "derived.health",
@@ -76,18 +51,6 @@
             ],
             "curve": "curve.health",
             "offset": 25000000
-          },
-          {
-            "id": "derived.pdr",
-            "weights": [
-              {
-                "kind": "derived",
-                "ref": "derived.armor_rating",
-                "weight": 1000000
-              }
-            ],
-            "curve": "curve.pdr",
-            "cap": 60000000
           },
           {
             "id": "derived.magic_resistance",
@@ -111,6 +74,54 @@
             ],
             "curve": "curve.magic_resistance_to_mdr",
             "cap": 65000000
+          },
+          {
+            "id": "derived.move_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.move_speed",
+            "offset": 300000000,
+            "cap": 330000000
+          },
+          {
+            "id": "derived.pdr",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.armor_rating",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.pdr",
+            "cap": 60000000
+          },
+          {
+            "id": "derived.physical_power",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.identity"
+          },
+          {
+            "id": "derived.physical_power_bonus",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.physical_power",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.physical_power_bonus",
+            "floor": -100000000
           }
         ]
       },
@@ -131,18 +142,6 @@
         },
         "derived": [
           {
-            "id": "derived.physical_power_bonus",
-            "weights": [
-              {
-                "kind": "attribute",
-                "ref": "strength",
-                "weight": 1000000
-              }
-            ],
-            "curve": "curve.physical_power_bonus",
-            "floor": -100000000
-          },
-          {
             "id": "derived.action_speed",
             "weights": [
               {
@@ -157,19 +156,6 @@
               }
             ],
             "curve": "curve.action_speed"
-          },
-          {
-            "id": "derived.move_speed",
-            "weights": [
-              {
-                "kind": "attribute",
-                "ref": "agility",
-                "weight": 1000000
-              }
-            ],
-            "curve": "curve.move_speed",
-            "offset": 300000000,
-            "cap": 330000000
           },
           {
             "id": "derived.health",
@@ -187,18 +173,6 @@
             ],
             "curve": "curve.health",
             "offset": 25000000
-          },
-          {
-            "id": "derived.pdr",
-            "weights": [
-              {
-                "kind": "derived",
-                "ref": "derived.armor_rating",
-                "weight": 1000000
-              }
-            ],
-            "curve": "curve.pdr",
-            "cap": 60000000
           },
           {
             "id": "derived.magic_resistance",
@@ -222,6 +196,54 @@
             ],
             "curve": "curve.magic_resistance_to_mdr",
             "cap": 65000000
+          },
+          {
+            "id": "derived.move_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.move_speed",
+            "offset": 300000000,
+            "cap": 330000000
+          },
+          {
+            "id": "derived.pdr",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.armor_rating",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.pdr",
+            "cap": 60000000
+          },
+          {
+            "id": "derived.physical_power",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.identity"
+          },
+          {
+            "id": "derived.physical_power_bonus",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.physical_power",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.physical_power_bonus",
+            "floor": -100000000
           }
         ]
       }
@@ -296,6 +318,20 @@
           [
             100000000,
             184000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.identity",
+        "confidence": "verified",
+        "points": [
+          [
+            -1000000000,
+            -1000000000
+          ],
+          [
+            1000000000,
+            1000000000
           ]
         ]
       },
@@ -572,6 +608,47 @@
     ],
     "items": [
       {
+        "id": "item.adventurer_boots",
+        "name": "Adventurer Boots (Epic)",
+        "slot": "feet",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "dexterity": 4
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 28000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": 6000000
+        }
+      },
+      {
+        "id": "item.arming_sword",
+        "name": "Arming Sword (Legendary)",
+        "required_classes": [
+          "class.fighter",
+          "class.ranger",
+          "class.bard"
+        ],
+        "slot": "weapon",
+        "grants": {
+          "derived.weapon_damage": {
+            "confidence": "verified",
+            "micro": 32000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": -20000000
+        }
+      },
+      {
         "id": "item.blank",
         "name": "Described by hand",
         "grants": {}
@@ -593,6 +670,40 @@
             "confidence": "unverified",
             "micro": 5000000
           }
+        }
+      },
+      {
+        "id": "item.dark_cuirass",
+        "name": "Dark Cuirass (Rare)",
+        "required_classes": [
+          "class.fighter"
+        ],
+        "slot": "chest",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "strength": 2,
+            "will": 1,
+            "resourcefulness": 1
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 130000000
+          },
+          "derived.projectile_damage_reduction": {
+            "confidence": "verified",
+            "micro": 3500000
+          },
+          "derived.magic_resistance": {
+            "confidence": "verified",
+            "micro": 30000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": -12000000
         }
       },
       {
@@ -630,6 +741,88 @@
         }
       },
       {
+        "id": "item.frost_amulet",
+        "name": "Frost Amulet (Uncommon)",
+        "slot": "necklace",
+        "grants": {
+          "derived.physical_power": {
+            "confidence": "verified",
+            "micro": 1000000
+          },
+          "derived.armor_penetration": {
+            "confidence": "verified",
+            "micro": 1000000
+          }
+        }
+      },
+      {
+        "id": "item.great_helm",
+        "name": "Great Helm (Epic)",
+        "required_classes": [
+          "class.fighter",
+          "class.cleric"
+        ],
+        "slot": "head",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "knowledge": 4
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 61000000
+          },
+          "derived.projectile_damage_reduction": {
+            "confidence": "verified",
+            "micro": 2100000
+          },
+          "derived.headshot_damage_reduction": {
+            "confidence": "verified",
+            "micro": 27000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": -7000000
+        }
+      },
+      {
+        "id": "item.heavy_gauntlets",
+        "name": "Heavy Gauntlets (Rare)",
+        "required_classes": [
+          "class.fighter",
+          "class.cleric"
+        ],
+        "slot": "hands",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "dexterity": 2,
+            "vigor": 1
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 40000000
+          },
+          "derived.projectile_damage_reduction": {
+            "confidence": "verified",
+            "micro": 2200000
+          },
+          "derived.magic_resistance": {
+            "confidence": "verified",
+            "micro": -5000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": -1000000
+        }
+      },
+      {
         "id": "item.leather_cap",
         "name": "Leather Cap (Uncommon)",
         "slot": "head",
@@ -652,6 +845,21 @@
         "move_speed_add": {
           "confidence": "verified",
           "micro": -3000000
+        }
+      },
+      {
+        "id": "item.lightfoot_boots",
+        "name": "Lightfoot Boots (Rare)",
+        "slot": "feet",
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 3000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": 9000000
         }
       },
       {
@@ -707,6 +915,123 @@
             "confidence": "verified",
             "micro": 1000000
           }
+        }
+      },
+      {
+        "id": "item.ring_of_courage",
+        "name": "Ring of Courage (Uncommon)",
+        "slot": "ring",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "strength": 1
+          }
+        },
+        "grants": {}
+      },
+      {
+        "id": "item.riveted_gloves",
+        "name": "Riveted Gloves (Rare)",
+        "slot": "hands",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "strength": 3
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 20000000
+          }
+        }
+      },
+      {
+        "id": "item.shadow_mask",
+        "name": "Shadow Mask (Rare)",
+        "required_classes": [
+          "class.rogue",
+          "class.warlock"
+        ],
+        "slot": "head",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "agility": 2,
+            "dexterity": 1,
+            "strength": 1
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 8000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": -1000000
+        }
+      },
+      {
+        "id": "item.tattered_cloak",
+        "name": "Tattered Cloak (Rare)",
+        "slot": "back",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "strength": 2
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 7000000
+          }
+        }
+      },
+      {
+        "id": "item.vigilant_cloak",
+        "name": "Vigilant Cloak (Epic)",
+        "slot": "back",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "vigor": 3
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 8000000
+          }
+        }
+      },
+      {
+        "id": "item.wanderer_attire",
+        "name": "Wanderer Attire (Rare)",
+        "required_classes": [
+          "class.bard",
+          "class.ranger",
+          "class.rogue"
+        ],
+        "slot": "chest",
+        "attributes": {
+          "confidence": "verified",
+          "points": {
+            "dexterity": 2,
+            "strength": 1
+          }
+        },
+        "grants": {
+          "derived.armor_rating": {
+            "confidence": "verified",
+            "micro": 41000000
+          }
+        },
+        "move_speed_add": {
+          "confidence": "verified",
+          "micro": -3000000
         }
       },
       {
@@ -796,7 +1121,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":305400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":305400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
     },
     {
       "name": "rogue-duo-buffed",
@@ -814,7 +1139,7 @@
           "skill.fighter.fortified_ground"
         ]
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":29,\"dexterity\":25,\"knowledge\":15,\"resourcefulness\":30,\"strength\":15,\"vigor\":11,\"will\":15}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":13750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":119000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":30000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":7800000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":308400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":0}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":29,\"dexterity\":25,\"knowledge\":15,\"resourcefulness\":30,\"strength\":15,\"vigor\":11,\"will\":15}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":13750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":119000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":30000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":7800000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":308400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":0}}"
     },
     {
       "name": "rogue-geared",
@@ -849,7 +1174,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11250000},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":51400000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":303400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":8910000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11250000},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":51400000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":303400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":8910000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
     },
     {
       "name": "rogue-kitted",
@@ -894,7 +1219,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":28,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":12,\"vigor\":8,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":8750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":69000000},\"derived.headshot_damage_reduction\":{\"confidence\":\"verified\",\"micro\":14000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":113000000},\"derived.magic_penetration\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":24000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":5400000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":302800000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":11550000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-6000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":28,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":12,\"vigor\":8,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":8750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":69000000},\"derived.headshot_damage_reduction\":{\"confidence\":\"verified\",\"micro\":14000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":113000000},\"derived.magic_penetration\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":24000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":5400000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":302800000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":11550000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":12000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-6000000}}"
     }
   ],
   "exchanges": [

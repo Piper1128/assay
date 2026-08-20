@@ -52,8 +52,8 @@ pub enum Slot {
     Hands,
     /// Boots.
     Feet,
-    /// Back slot.
-    Cape,
+    /// Back slot: cloaks.
+    Back,
     /// Neck slot.
     Necklace,
     /// Either ring slot.
@@ -72,7 +72,7 @@ impl Slot {
             Slot::Legs => "legs",
             Slot::Hands => "hands",
             Slot::Feet => "feet",
-            Slot::Cape => "cape",
+            Slot::Back => "back",
             Slot::Necklace => "necklace",
             Slot::Ring => "ring",
             Slot::Weapon => "weapon",
@@ -95,7 +95,7 @@ impl Slot {
         Slot::Legs,
         Slot::Hands,
         Slot::Feet,
-        Slot::Cape,
+        Slot::Back,
         Slot::Necklace,
         Slot::Ring,
         Slot::Weapon,

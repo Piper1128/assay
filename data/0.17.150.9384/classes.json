@@ -17,18 +17,6 @@
       },
       "derived": [
         {
-          "id": "derived.physical_power_bonus",
-          "weights": [
-            {
-              "kind": "attribute",
-              "ref": "strength",
-              "weight": 1000000
-            }
-          ],
-          "curve": "curve.physical_power_bonus",
-          "floor": -100000000
-        },
-        {
           "id": "derived.action_speed",
           "weights": [
             {
@@ -43,19 +31,6 @@
             }
           ],
           "curve": "curve.action_speed"
-        },
-        {
-          "id": "derived.move_speed",
-          "weights": [
-            {
-              "kind": "attribute",
-              "ref": "agility",
-              "weight": 1000000
-            }
-          ],
-          "curve": "curve.move_speed",
-          "offset": 300000000,
-          "cap": 330000000
         },
         {
           "id": "derived.health",
@@ -73,18 +48,6 @@
           ],
           "curve": "curve.health",
           "offset": 25000000
-        },
-        {
-          "id": "derived.pdr",
-          "weights": [
-            {
-              "kind": "derived",
-              "ref": "derived.armor_rating",
-              "weight": 1000000
-            }
-          ],
-          "curve": "curve.pdr",
-          "cap": 60000000
         },
         {
           "id": "derived.magic_resistance",
@@ -108,6 +71,54 @@
           ],
           "curve": "curve.magic_resistance_to_mdr",
           "cap": 65000000
+        },
+        {
+          "id": "derived.move_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "agility",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.move_speed",
+          "offset": 300000000,
+          "cap": 330000000
+        },
+        {
+          "id": "derived.pdr",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.armor_rating",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.pdr",
+          "cap": 60000000
+        },
+        {
+          "id": "derived.physical_power",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "strength",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.identity"
+        },
+        {
+          "id": "derived.physical_power_bonus",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.physical_power",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.physical_power_bonus",
+          "floor": -100000000
         }
       ]
     },
@@ -128,18 +139,6 @@
       },
       "derived": [
         {
-          "id": "derived.physical_power_bonus",
-          "weights": [
-            {
-              "kind": "attribute",
-              "ref": "strength",
-              "weight": 1000000
-            }
-          ],
-          "curve": "curve.physical_power_bonus",
-          "floor": -100000000
-        },
-        {
           "id": "derived.action_speed",
           "weights": [
             {
@@ -154,19 +153,6 @@
             }
           ],
           "curve": "curve.action_speed"
-        },
-        {
-          "id": "derived.move_speed",
-          "weights": [
-            {
-              "kind": "attribute",
-              "ref": "agility",
-              "weight": 1000000
-            }
-          ],
-          "curve": "curve.move_speed",
-          "offset": 300000000,
-          "cap": 330000000
         },
         {
           "id": "derived.health",
@@ -184,18 +170,6 @@
           ],
           "curve": "curve.health",
           "offset": 25000000
-        },
-        {
-          "id": "derived.pdr",
-          "weights": [
-            {
-              "kind": "derived",
-              "ref": "derived.armor_rating",
-              "weight": 1000000
-            }
-          ],
-          "curve": "curve.pdr",
-          "cap": 60000000
         },
         {
           "id": "derived.magic_resistance",
@@ -219,6 +193,54 @@
           ],
           "curve": "curve.magic_resistance_to_mdr",
           "cap": 65000000
+        },
+        {
+          "id": "derived.move_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "agility",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.move_speed",
+          "offset": 300000000,
+          "cap": 330000000
+        },
+        {
+          "id": "derived.pdr",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.armor_rating",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.pdr",
+          "cap": 60000000
+        },
+        {
+          "id": "derived.physical_power",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "strength",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.identity"
+        },
+        {
+          "id": "derived.physical_power_bonus",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.physical_power",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.physical_power_bonus",
+          "floor": -100000000
         }
       ]
     }

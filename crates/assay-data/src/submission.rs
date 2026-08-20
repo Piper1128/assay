@@ -69,6 +69,9 @@ pub struct ItemObservation {
     pub id: String,
     /// Name as the card prints it, rarity included.
     pub name: String,
+    /// Classes the card restricts it to, if any.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_classes: Vec<String>,
     /// Where it is worn, as the card's `Slot Type` names it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slot: Option<String>,
@@ -227,6 +230,11 @@ impl ItemObservation {
         Ok(ItemDef {
             id: ItemId::new(&self.id),
             name: self.name.clone(),
+            required_classes: self
+                .required_classes
+                .iter()
+                .map(assay_core::ids::ClassId::new)
+                .collect(),
             slot: self
                 .slot
                 .as_deref()

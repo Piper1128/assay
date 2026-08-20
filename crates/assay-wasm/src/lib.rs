@@ -99,6 +99,8 @@ pub fn catalog() -> String {
                         "id": id,
                         "name": def.name,
                         "slot": def.slot.map(Slot::as_str),
+                        "requiredClasses": def.required_classes.iter()
+                            .map(|c| c.as_str()).collect::<Vec<_>>(),
                         "grants": grants,
                         "attributes": printed,
                         "isWeapon": def.weapon.is_some(),
@@ -504,6 +506,16 @@ pub fn submission_json(card_json: &str, observer: &str, observed_at: &str, metho
 
     let observation = ItemObservation {
         id: text("id").to_string(),
+        required_classes: node
+            .get("requiredClasses")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
         name: text("name").to_string(),
         slot: node
             .get("slot")

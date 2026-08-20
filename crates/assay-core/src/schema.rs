@@ -169,6 +169,14 @@ pub struct ItemDef {
     pub id: ItemId,
     /// Display name.
     pub name: String,
+    /// Classes allowed to equip it, if the card restricts it. Empty means
+    /// anyone: most items say nothing, and an absent restriction is not the
+    /// same statement as a restriction to nobody.
+    ///
+    /// Here for the same reason `slot` is. A Great Helm is Fighter and
+    /// Cleric only, and a model that lets a Rogue wear one answers a
+    /// question about a character that cannot exist.
+    pub required_classes: Vec<ClassId>,
     /// Where the item is worn. Every card prints one — `Slot Type: Legs`
     /// — and without it a loadout can put trousers on a head and resolve
     /// as though that were a build.

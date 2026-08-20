@@ -73,6 +73,20 @@
       ]
     },
     {
+      "id": "curve.identity",
+      "confidence": "verified",
+      "points": [
+        [
+          -1000000000,
+          -1000000000
+        ],
+        [
+          1000000000,
+          1000000000
+        ]
+      ]
+    },
+    {
       "id": "curve.magic_resistance_to_mdr",
       "confidence": "unverified",
       "points": [

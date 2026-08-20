@@ -275,6 +275,7 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         entities.insert_item(ItemDef {
             id: ItemId::new(&dto.id),
             name: dto.name,
+            required_classes: dto.required_classes.iter().map(ClassId::new).collect(),
             slot: dto
                 .slot
                 .as_deref()
@@ -604,6 +605,9 @@ struct ItemDto {
     #[serde(default)]
     renamed_from: Option<String>,
     name: String,
+    /// Classes the card restricts it to, if any.
+    #[serde(default)]
+    required_classes: Vec<String>,
     /// Where the item is worn, as the card's `Slot Type` names it.
     #[serde(default)]
     slot: Option<String>,

@@ -59,6 +59,14 @@ pub enum ResolveError {
     UnknownSkill(SkillId),
     /// The derived-stat graph could not be evaluated (ADR-012).
     Derived(DerivedError),
+    /// A piece is restricted to classes this character is not: the item,
+    /// and who may carry it.
+    WrongClass {
+        /// The item in question.
+        item: ItemId,
+        /// The classes its card allows.
+        allowed: Vec<ClassId>,
+    },
     /// A piece is worn in a slot its own card does not name: the item,
     /// where the loadout put it, and where it belongs.
     WrongSlot {
@@ -88,6 +96,10 @@ impl fmt::Display for ResolveError {
             ResolveError::UnknownPerk(id) => write!(f, "perk not in dataset: {id}"),
             ResolveError::UnknownSkill(id) => write!(f, "skill not in dataset: {id}"),
             ResolveError::Derived(e) => write!(f, "derived stats: {e}"),
+            ResolveError::WrongClass { item, allowed } => {
+                let names: Vec<&str> = allowed.iter().map(ClassId::as_str).collect();
+                write!(f, "{item} may only be carried by {}", names.join(", "))
+            }
             ResolveError::WrongSlot {
                 item,
                 worn,
@@ -219,6 +231,12 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         let item = data
             .item(&piece.id)
             .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
+        if !item.required_classes.is_empty() && !item.required_classes.contains(&loadout.class) {
+            return Err(ResolveError::WrongClass {
+                item: piece.id.clone(),
+                allowed: item.required_classes.clone(),
+            });
+        }
         if let Some(belongs) = item.slot
             && belongs != piece.slot
         {
@@ -924,6 +942,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.dark_leather_leggings"),
             name: "Dark Leather Leggings".to_string(),
+            required_classes: Vec::new(),
             slot: None,
             attributes: None,
             grants: BTreeMap::from([(
@@ -1104,6 +1123,7 @@ mod tests {
         let heavy = ItemDef {
             id: ItemId::new("item.test_plate"),
             name: "Test Plate".to_string(),
+            required_classes: Vec::new(),
             slot: None,
             attributes: None,
             grants: BTreeMap::from([(
@@ -1140,6 +1160,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
+            required_classes: Vec::new(),
             slot: None,
             attributes: None,
             grants: BTreeMap::from([(
@@ -1181,6 +1202,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
+            required_classes: Vec::new(),
             slot: None,
             attributes: None,
             grants: BTreeMap::from([(
@@ -1234,6 +1256,7 @@ mod tests {
             data.insert_item(ItemDef {
                 id: ItemId::new("item.prop_plate"),
                 name: "Prop Plate".to_string(),
+                required_classes: Vec::new(),
                 slot: None,
                 attributes: None,
                 grants: BTreeMap::from([(DerivedStatId::new(well_known::ARMOR_RATING), Confidence::Verified(fx(item_ar)))]),

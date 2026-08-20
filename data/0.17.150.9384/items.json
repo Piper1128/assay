@@ -1,6 +1,47 @@
 {
   "items": [
     {
+      "id": "item.adventurer_boots",
+      "name": "Adventurer Boots (Epic)",
+      "slot": "feet",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "dexterity": 4
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 28000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": 6000000
+      }
+    },
+    {
+      "id": "item.arming_sword",
+      "name": "Arming Sword (Legendary)",
+      "required_classes": [
+        "class.fighter",
+        "class.ranger",
+        "class.bard"
+      ],
+      "slot": "weapon",
+      "grants": {
+        "derived.weapon_damage": {
+          "confidence": "verified",
+          "micro": 32000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -20000000
+      }
+    },
+    {
       "id": "item.blank",
       "name": "Described by hand",
       "grants": {}
@@ -22,6 +63,40 @@
           "confidence": "unverified",
           "micro": 5000000
         }
+      }
+    },
+    {
+      "id": "item.dark_cuirass",
+      "name": "Dark Cuirass (Rare)",
+      "required_classes": [
+        "class.fighter"
+      ],
+      "slot": "chest",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "strength": 2,
+          "will": 1,
+          "resourcefulness": 1
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 130000000
+        },
+        "derived.projectile_damage_reduction": {
+          "confidence": "verified",
+          "micro": 3500000
+        },
+        "derived.magic_resistance": {
+          "confidence": "verified",
+          "micro": 30000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -12000000
       }
     },
     {
@@ -59,6 +134,88 @@
       }
     },
     {
+      "id": "item.frost_amulet",
+      "name": "Frost Amulet (Uncommon)",
+      "slot": "necklace",
+      "grants": {
+        "derived.physical_power": {
+          "confidence": "verified",
+          "micro": 1000000
+        },
+        "derived.armor_penetration": {
+          "confidence": "verified",
+          "micro": 1000000
+        }
+      }
+    },
+    {
+      "id": "item.great_helm",
+      "name": "Great Helm (Epic)",
+      "required_classes": [
+        "class.fighter",
+        "class.cleric"
+      ],
+      "slot": "head",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "knowledge": 4
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 61000000
+        },
+        "derived.projectile_damage_reduction": {
+          "confidence": "verified",
+          "micro": 2100000
+        },
+        "derived.headshot_damage_reduction": {
+          "confidence": "verified",
+          "micro": 27000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -7000000
+      }
+    },
+    {
+      "id": "item.heavy_gauntlets",
+      "name": "Heavy Gauntlets (Rare)",
+      "required_classes": [
+        "class.fighter",
+        "class.cleric"
+      ],
+      "slot": "hands",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "dexterity": 2,
+          "vigor": 1
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 40000000
+        },
+        "derived.projectile_damage_reduction": {
+          "confidence": "verified",
+          "micro": 2200000
+        },
+        "derived.magic_resistance": {
+          "confidence": "verified",
+          "micro": -5000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -1000000
+      }
+    },
+    {
       "id": "item.leather_cap",
       "name": "Leather Cap (Uncommon)",
       "slot": "head",
@@ -81,6 +238,21 @@
       "move_speed_add": {
         "confidence": "verified",
         "micro": -3000000
+      }
+    },
+    {
+      "id": "item.lightfoot_boots",
+      "name": "Lightfoot Boots (Rare)",
+      "slot": "feet",
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 3000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": 9000000
       }
     },
     {
@@ -136,6 +308,123 @@
           "confidence": "verified",
           "micro": 1000000
         }
+      }
+    },
+    {
+      "id": "item.ring_of_courage",
+      "name": "Ring of Courage (Uncommon)",
+      "slot": "ring",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "strength": 1
+        }
+      },
+      "grants": {}
+    },
+    {
+      "id": "item.riveted_gloves",
+      "name": "Riveted Gloves (Rare)",
+      "slot": "hands",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "strength": 3
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 20000000
+        }
+      }
+    },
+    {
+      "id": "item.shadow_mask",
+      "name": "Shadow Mask (Rare)",
+      "required_classes": [
+        "class.rogue",
+        "class.warlock"
+      ],
+      "slot": "head",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "agility": 2,
+          "dexterity": 1,
+          "strength": 1
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 8000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -1000000
+      }
+    },
+    {
+      "id": "item.tattered_cloak",
+      "name": "Tattered Cloak (Rare)",
+      "slot": "back",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "strength": 2
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 7000000
+        }
+      }
+    },
+    {
+      "id": "item.vigilant_cloak",
+      "name": "Vigilant Cloak (Epic)",
+      "slot": "back",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "vigor": 3
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 8000000
+        }
+      }
+    },
+    {
+      "id": "item.wanderer_attire",
+      "name": "Wanderer Attire (Rare)",
+      "required_classes": [
+        "class.bard",
+        "class.ranger",
+        "class.rogue"
+      ],
+      "slot": "chest",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "dexterity": 2,
+          "strength": 1
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 41000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -3000000
       }
     },
     {

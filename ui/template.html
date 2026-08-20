@@ -361,6 +361,20 @@
   // the failure mode this project exists against.
   const CARD_STATS = [
     ["armor rating",             "derived.armor_rating"],
+    ["weapon damage",            "derived.weapon_damage"],
+    ["physical power",           "derived.physical_power"],
+    ["projectile damage reduction","derived.projectile_damage_reduction"],
+    ["demon damage reduction",   "derived.demon_damage_reduction"],
+    ["undead damage reduction",  "derived.undead_damage_reduction"],
+    ["headshot damage bonus",    "derived.headshot_damage_bonus"],
+    ["physical damage bonus",    "derived.physical_damage_bonus"],
+    ["magical damage bonus",     "derived.magical_damage_bonus"],
+    ["buff duration bonus",      "derived.buff_duration_bonus"],
+    ["memory capacity",          "derived.memory_capacity"],
+    ["memory capacity bonus",    "derived.memory_capacity_bonus"],
+    ["spell casting speed",      "derived.spell_casting_speed"],
+    ["cooldown reduction bonus", "derived.cooldown_reduction_bonus"],
+    ["action speed",             "derived.action_speed"],
     ["magic resistance",         "derived.magic_resistance"],
     ["magical power",            "derived.magical_power"],
     ["magic power",              "derived.magical_power"],
@@ -416,6 +430,11 @@
     for (const item of CATALOG.items) {
       if (item.id === "item.blank") continue;
       if (item.slot && item.slot !== slotId) continue;
+      // A card that names its classes names them for a reason. Offering a
+      // Fighter helm to a Rogue would only produce a build the resolver
+      // then refuses, which is a worse way to learn the same thing.
+      const only = item.requiredClasses ?? [];
+      if (only.length && !only.includes(editing().class)) continue;
       pick.append(new Option(item.name, item.id));
     }
     if (piece && !piece.custom) pick.value = piece.id;

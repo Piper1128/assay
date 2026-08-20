@@ -293,6 +293,16 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
             EntityKind::Item => {
                 if let Some(def) = entities.item(&ItemId::new(id)) {
                     map.insert("name".into(), def.name.clone());
+                    if !def.required_classes.is_empty() {
+                        map.insert(
+                            "required_classes".into(),
+                            def.required_classes
+                                .iter()
+                                .map(|c| c.as_str().to_string())
+                                .collect::<Vec<_>>()
+                                .join(","),
+                        );
+                    }
                     // Every granted stat, by id. A map field means the
                     // differ has to walk it: a new stat on an item is a
                     // patch change like any other, and `fields()` is
