@@ -73,10 +73,18 @@ rounding, still inside `stats::apply_item_armor_bonus`.
 Two rogues both landing Weakpoint on one target apply −30%, not −60%. The
 second application refreshes the debuff rather than adding to it.
 
-This is a rule about **abilities**, not about this ability: the same named
-debuff never stacks with itself regardless of who applied it. Two *different*
-abilities that both reduce Item Armor Rating Bonus would sum, because they
-are different debuffs.
+This is a rule about **abilities**, not about debuffs and not about this one:
+the same ability never stacks with itself regardless of who brought it. Two
+Jokesters in a party are +2 All Attributes, not +4, by the same rule that
+makes two Weakpoints −30 rather than −60.
+
+Resolution had that half wrong and now does not
+(`collect_effects` de-duplicates on ability id; probe `ability_dedupe`).
+This amendment is therefore the second consequence of one rule, and the
+context below only has to get the exchange-side half right.
+
+Two *different* abilities that both reduce Item Armor Rating Bonus would
+still sum, because they are different abilities.
 
 That is a statement about identity, so identity is what enforces it. The
 context holds the mods **keyed by the ability that applied them**:
