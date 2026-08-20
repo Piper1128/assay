@@ -352,7 +352,11 @@ pub fn compare_loadouts(a_json: &str, b_json: &str) -> String {
         return json!({ "ok": false, "error": b["error"], "side": "b" }).to_string();
     }
 
-    let read = |side: &Value| -> BTreeMap<String, (String, String)> {
+    // The grade travels with the comparison too. A difference column with no
+    // provenance is the one place this tool could quietly become the thing
+    // it exists against: two numbers, a delta, and no way to see that half
+    // of it came off a wiki.
+    let read = |side: &Value| -> BTreeMap<String, (String, String, String)> {
         side["derived"]
             .as_array()
             .map(|rows| {
@@ -363,6 +367,7 @@ pub fn compare_loadouts(a_json: &str, b_json: &str) -> String {
                             (
                                 row["label"].as_str()?.to_string(),
                                 row["value"].as_str()?.to_string(),
+                                row["confidence"].as_str()?.to_string(),
                             ),
                         ))
                     })
@@ -378,8 +383,22 @@ pub fn compare_loadouts(a_json: &str, b_json: &str) -> String {
 
     let mut deltas = Vec::new();
     for id in ids {
+        // The weaker of the two grades, by the same minimum rule the core
+        // propagates by: a comparison is only as trustworthy as its worse half.
+        let weaker = |a: &str, b: &str| -> String {
+            let rank = |g: &str| match g {
+                "verified" => 2,
+                "unverified" => 1,
+                _ => 0,
+            };
+            if rank(a) <= rank(b) {
+                a.to_string()
+            } else {
+                b.to_string()
+            }
+        };
         let entry = match (left.get(id), right.get(id)) {
-            (Some((label, from)), Some((_, to))) => {
+            (Some((label, from, ga)), Some((_, to, gb))) => {
                 let (from_v, to_v) = match (from.parse::<Fixed>(), to.parse::<Fixed>()) {
                     (Ok(f), Ok(t)) => (f, t),
                     _ => continue,
@@ -395,13 +414,16 @@ pub fn compare_loadouts(a_json: &str, b_json: &str) -> String {
                     // place ambiguity costs the most.
                     "delta": format!("{change:+}"),
                     "same": change == Fixed::ZERO,
+                    "confidence": weaker(ga, gb),
                 })
             }
-            (Some((label, from)), None) => json!({
-                "id": id, "label": label, "from": from, "to": Value::Null, "gone": true,
+            (Some((label, from, ga)), None) => json!({
+                "id": id, "label": label, "from": from, "to": Value::Null,
+                "gone": true, "confidence": ga,
             }),
-            (None, Some((label, to))) => json!({
-                "id": id, "label": label, "from": Value::Null, "to": to, "new": true,
+            (None, Some((label, to, gb))) => json!({
+                "id": id, "label": label, "from": Value::Null, "to": to,
+                "new": true, "confidence": gb,
             }),
             (None, None) => continue,
         };

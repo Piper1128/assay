@@ -529,7 +529,12 @@
       grid.append(el("div", "head" + (h ? " num" : ""), h));
     }
     for (const row of out.delta) {
-      grid.append(el("div", "name", row.label.replace(/_/g, " ")));
+      const name = el("div", "name", row.label.replace(/_/g, " "));
+      // The grade rides along here too. A difference column with no
+      // provenance would let two wiki numbers look like a measured answer.
+      const mark = { verified: "ok", unverified: "~", unknown: "?" }[row.confidence];
+      if (mark) name.append(" ", el("span", "grade " + row.confidence, mark));
+      grid.append(name);
       grid.append(el("div", "num quiet", row.from ?? "—"));
       grid.append(el("div", "num quiet", row.to ?? "—"));
       if (row.new) {
