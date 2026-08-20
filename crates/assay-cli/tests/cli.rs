@@ -241,3 +241,67 @@ fn a_submission_against_another_build_is_refused() {
     let text = String::from_utf8_lossy(&out.stderr).to_string() + &stdout(&out);
     assert!(text.contains("0.99.999.9999"), "{text}");
 }
+
+#[test]
+fn a_situation_makes_the_exchange_askable() {
+    // Nine steps, built and tested and mirrored, and until the situation
+    // file existed the only attack anyone could ask about was an unmodified
+    // swing with every circumstance at zero.
+    let plain = stdout(&assay(&[
+        "exchange",
+        "loadouts/rogue-armed.toml",
+        "loadouts/rogue-armored.toml",
+        "--explain",
+    ]));
+    assert!(plain.contains("an unmodified swing"), "{plain}");
+    assert!(plain.contains("× 100% → 31"), "{plain}");
+
+    // THE case: Sneak Attack scales at 0%, so the -30% Hide-exit power
+    // penalty multiplies nothing. The immunity is not an assertion in a
+    // document any more — it is step 3 reading zero.
+    let sneak = stdout(&assay(&[
+        "exchange",
+        "loadouts/rogue-armed.toml",
+        "loadouts/rogue-armored.toml",
+        "--situation",
+        "situations/sneak-attack-from-hide.toml",
+        "--explain",
+    ]));
+    assert!(sneak.contains("Sneak Attack, leaving Hide"), "{sneak}");
+    assert!(
+        sneak.contains("× 0% → 0"),
+        "scaling must wipe the base: {sneak}"
+    );
+    assert!(
+        sneak.contains("+15 → 15"),
+        "the flat bonus survives the penalty untouched: {sneak}"
+    );
+    assert!(
+        sneak.contains("+1 (bypasses armor)"),
+        "true damage lands after the whole chain: {sneak}"
+    );
+
+    // And the two are different numbers, which is the only reason to have
+    // built any of it.
+    assert_ne!(plain, sneak);
+}
+
+#[test]
+fn a_situation_with_a_float_is_refused() {
+    // TOML would hand us an f64 without complaint. The strings are the ban
+    // holding at the one place a person types a number by hand.
+    let path = submission("bad-situation", "[strike]\nbase = 2.5\n");
+    let out = assay(&[
+        "exchange",
+        "loadouts/rogue-armed.toml",
+        "loadouts/rogue-armored.toml",
+        "--situation",
+        path.to_str().unwrap(),
+    ]);
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("invalid type"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

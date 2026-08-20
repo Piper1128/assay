@@ -1,0 +1,7 @@
+# Behind them, and to the head. Both are circumstances of the attack rather
+# than properties of either character, which is why they live here.
+name = "back attack, to the head"
+
+[context]
+power_bonus_adjust = "30"
+hit_location_bonus = "150"

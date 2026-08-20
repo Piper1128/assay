@@ -1,0 +1,9 @@
+# A Rogue holding something, so the exchange has a base damage to
+# start from. The situations in `situations/` are what make one
+# swing different from another.
+name  = "rogue-armed"
+class = "class.rogue"
+perks = ["perk.rogue.jokester"]
+
+[weapons]
+main_hand = "item.flanged_mace"

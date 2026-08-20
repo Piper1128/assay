@@ -6,6 +6,7 @@
 //! printing an empty result that reads like "nothing changed".
 
 mod loadout_file;
+mod situation;
 mod submit;
 
 use std::path::{Path, PathBuf};
@@ -22,7 +23,7 @@ assay — headless stat resolver and patch differ for Dark and Darker
 
 USAGE:
     assay resolve <loadout.toml> [OPTIONS]
-    assay exchange <attacker.toml> <defender.toml> [OPTIONS]
+    assay exchange <attacker.toml> <defender.toml> [--situation <s.toml>] [OPTIONS]
     assay diff <build-a> <build-b> [--loadouts <dir>] [--data <dir>]
     assay versions [--data <dir>]
     assay submit <submission.json> [--apply] [--data <dir>] [--build <id>]
@@ -36,6 +37,9 @@ RESOLVE OPTIONS:
     --strict         exit 2 if any value is below `verified` (ADR-007)
 
 EXCHANGE OPTIONS:
+    --situation <f>  what makes this attack different from a plain swing:
+                     the skill's scaling and bonuses, and the circumstances
+                     around it. Omitted, the weapon simply swings.
     --explain        print all nine damage steps (ADR-006)
     --build / --data as for resolve
 
@@ -89,6 +93,7 @@ struct Flags {
     data: PathBuf,
     build: Option<String>,
     loadouts: Option<PathBuf>,
+    situation: Option<PathBuf>,
     explain: bool,
     json: bool,
     strict: bool,
@@ -100,6 +105,7 @@ fn parse_flags(args: &[String], allowed: &[&str]) -> Result<Flags, String> {
         data: PathBuf::from("data"),
         build: None,
         loadouts: None,
+        situation: None,
         explain: false,
         json: false,
         strict: false,
@@ -126,6 +132,10 @@ fn parse_flags(args: &[String], allowed: &[&str]) -> Result<Flags, String> {
             }
             "--loadouts" => {
                 flags.loadouts = Some(PathBuf::from(needs_value("--loadouts")?));
+                iter.next();
+            }
+            "--situation" => {
+                flags.situation = Some(PathBuf::from(needs_value("--situation")?));
                 iter.next();
             }
             "--explain" => flags.explain = true,
@@ -299,7 +309,7 @@ fn read_loadouts(dir: &Path) -> Result<Vec<assay_core::Loadout>, String> {
 }
 
 fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
-    let flags = parse_flags(args, &["--data", "--build", "--explain"])?;
+    let flags = parse_flags(args, &["--data", "--build", "--explain", "--situation"])?;
     let [attacker_path, defender_path] = flags.positional.as_slice() else {
         return Err("exchange needs an attacker and a defender loadout".to_string());
     };
@@ -332,8 +342,23 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
         .as_ref()
         .ok_or_else(|| format!("{} is not a weapon", item.name))?;
 
-    let strike = Strike::basic_swing(profile);
-    let context = ExchangeContext::default();
+    // A situation is a fact about this attack, not about either character,
+    // which is why it arrives as its own file. Without one the answer is an
+    // unmodified swing — the only question this command could ask until now.
+    let (strike, context, situation_name) = match &flags.situation {
+        Some(path) => {
+            let text =
+                std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let parsed =
+                situation::parse(&text, profile).map_err(|e| format!("{}: {e}", path.display()))?;
+            (parsed.strike, parsed.context, parsed.name)
+        }
+        None => (
+            Strike::basic_swing(profile),
+            ExchangeContext::default(),
+            "an unmodified swing".to_string(),
+        ),
+    };
     let outcome = Exchange::new(&attacker, &defender, &strike, &context, &dataset.entities)
         .damage()
         .map_err(|e| e.to_string())?;
@@ -342,6 +367,9 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
         "{} swinging {} at {}   {} ({build})",
         attacker_loadout.name, item.name, defender_loadout.name, dataset.manifest.label
     );
+    // Which attack this was. Two runs that differ only by a situation file
+    // would otherwise print identical headers and different numbers.
+    println!("  {situation_name}");
     println!();
     println!(
         "  {} damage                {:>12}",

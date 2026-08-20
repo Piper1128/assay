@@ -46,6 +46,34 @@ they come from the wiki rather than from an in-game test.
 committed. Adding the Hotfix 122 numbers is a data task, and the point at
 which the tool starts answering the question it exists for.
 
+### Asking about one attack
+
+```
+assay exchange attacker.toml defender.toml --situation situations/sneak-attack-from-hide.toml --explain
+```
+
+A situation is what makes this attack different from a plain swing: the
+skill's scaling and bonuses, and the circumstances around it. It is a third
+file rather than a section of a loadout because it is a fact about the
+*attack* — two identical builds differ only in whether one of them is behind
+the other, and putting that in a loadout would make it a property of the
+build.
+
+Omitting a field means "as the weapon swings", not zero. Those are different
+statements and only one of them is usually meant.
+
+```
+2. scaling coefficient      × 0% → 0
+3. physical power bonus     × (100-36)% → 0
+4. flat weapon damage       +15 → 15
+8. true damage              +1 (bypasses armor) → 15.091
+```
+
+That is Sneak Attack leaving Hide, and it is the case the whole source
+analysis is built on: 0% scaling means the −30% Hide-exit penalty multiplies
+nothing, so the flat damage and the true damage are immune to it. The
+immunity is not an assertion in a document — it is step 3 reading zero.
+
 ### Taking in what someone else observed
 
 ```
