@@ -193,7 +193,7 @@ impl fmt::Display for ExchangeError {
                 given,
             } => write!(
                 f,
-                "combatant was resolved against build {resolved_against}, but the exchange                  was given build {given}; damage would silently use the wrong curves"
+                "combatant was resolved against build {resolved_against}, but the exchange was given build {given}; damage would silently use the wrong curves"
             ),
             ExchangeError::UnknownClass(id) => write!(f, "class not in dataset: {id}"),
             ExchangeError::UnknownCurve(id) => write!(f, "curve not in dataset: {id}"),

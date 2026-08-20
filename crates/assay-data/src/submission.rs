@@ -115,6 +115,38 @@ pub struct Submission {
 /// The format this build of the tool writes and understands.
 pub const FORMAT: u32 = 1;
 
+/// The most a submission may be. Generous for anything a person would send
+/// and small enough that a hostile file cannot be read into memory first and
+/// rejected second.
+pub const MAX_BYTES: usize = 1 << 20;
+
+/// Refuses an id that would be indistinguishable from another one on screen.
+///
+/// `item.leather_cap` and `item.leather_cap ` are different ids and the same
+/// picture. A reviewer reading `new  item.leather_cap` in a terminal has no
+/// way to see the trailing space, approves it, and the dataset now holds two
+/// items that look identical and disagree. Homoglyphs — a Cyrillic `а` among
+/// Latin letters — are the same attack with better camouflage, and fall to
+/// the same rule: the alphabet is small and explicit, so anything outside it
+/// is named rather than rendered.
+fn check_id(id: &str) -> Result<(), LoadError> {
+    if id.is_empty() {
+        return Err(LoadError::Invalid("an item needs an id".into()));
+    }
+    let bad: Vec<String> = id
+        .chars()
+        .filter(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '.' || *c == '_'))
+        .map(|c| format!("{c:?} (U+{:04X})", u32::from(c)))
+        .collect();
+    if !bad.is_empty() {
+        return Err(LoadError::Invalid(format!(
+            "{id:?}: an id is lowercase ascii, digits, dots and underscores. Refused: {}. Two ids that look alike and are not is how a bad value gets past a reviewer.",
+            bad.join(", ")
+        )));
+    }
+    Ok(())
+}
+
 impl Submission {
     /// Reads a submission, refusing anything it cannot fully understand.
     ///
@@ -134,6 +166,9 @@ impl Submission {
             return Err(LoadError::Invalid(
                 "a submission with nothing in it is not a submission".into(),
             ));
+        }
+        for item in &parsed.items {
+            check_id(&item.id)?;
         }
         if parsed.observer.trim().is_empty() {
             return Err(LoadError::Invalid(
@@ -288,6 +323,25 @@ mod tests {
         let too_fine = one().replace(r#""33""#, r#""33.1234567""#);
         let parsed = Submission::decode(&too_fine).unwrap();
         assert!(parsed.items[0].to_item(parsed.method).is_err());
+    }
+
+    #[test]
+    fn an_id_that_looks_like_another_id_is_refused() {
+        // The whole review step is a person reading a list of ids. Two that
+        // render identically defeat it without any cleverness.
+        for attack in [
+            "item.leather_cap ", // trailing space
+            " item.leather_cap", // leading space
+            "item.leather_сap",  // Cyrillic es
+            "item.Leather_Cap",  // case, which the dataset never uses
+            "item.leather-cap",  // hyphen, likewise
+        ] {
+            let body = one().replace(r#""item.leather_cap""#, &format!("{attack:?}"));
+            let refused = Submission::decode(&body);
+            assert!(refused.is_err(), "accepted {attack:?}");
+        }
+        // And the legitimate form still passes.
+        assert!(Submission::decode(one()).is_ok());
     }
 
     #[test]

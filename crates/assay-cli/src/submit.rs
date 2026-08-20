@@ -56,6 +56,19 @@ pub(crate) fn cmd_submit(args: &[String]) -> Result<ExitCode, String> {
     }
     let path = path.ok_or("submit needs a submission file")?;
 
+    // Size is checked before reading, not after. A submission arrives from
+    // someone else now, and "read it all in, then decide it was too big" is
+    // the wrong order when the file is the attacker's choice.
+    let size = std::fs::metadata(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .len();
+    if size > assay_data::submission::MAX_BYTES as u64 {
+        return Err(format!(
+            "{}: {size} bytes, and a submission may be at most {}. Nothing a person sends is that large.",
+            path.display(),
+            assay_data::submission::MAX_BYTES
+        ));
+    }
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let submission = Submission::decode(&text).map_err(|e| e.to_string())?;
 

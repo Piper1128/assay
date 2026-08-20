@@ -484,7 +484,7 @@ impl ConfidenceDto {
         match (self, note) {
             (ConfidenceDto::Verified | ConfidenceDto::Unverified, Some(_)) => {
                 Err(LoadError::Invalid(
-                    "only an `unknown` value carries a `note`; on any other grade the note                      would be dropped (ADR-007)"
+                    "only an `unknown` value carries a `note`; on any other grade the note would be dropped (ADR-007)"
                         .into(),
                 ))
             }
