@@ -30,15 +30,20 @@
         "class.bard"
       ],
       "slot": "weapon",
-      "grants": {
-        "derived.weapon_damage": {
-          "confidence": "verified",
-          "micro": 32000000
-        }
-      },
+      "grants": {},
       "move_speed_add": {
         "confidence": "verified",
         "micro": -20000000
+      },
+      "weapon": {
+        "base_damage": {
+          "confidence": "verified",
+          "micro": 32000000
+        },
+        "armor_pen": {
+          "confidence": "verified",
+          "micro": 0
+        }
       }
     },
     {

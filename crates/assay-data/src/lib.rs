@@ -293,6 +293,21 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
             grants: {
                 let mut grants: BTreeMap<DerivedStatId, Confidence<Fixed>> = BTreeMap::new();
                 for (id, value) in dto.grants {
+                    // A stat with a field of its own must not also arrive as
+                    // a grant. Both spellings load, and only one of them is
+                    // read — the Arming Sword sat in the dataset looking
+                    // like a weapon, contributing its stats, and failed only
+                    // at the moment someone tried to swing it.
+                    if let Some(home) = RESERVED
+                        .iter()
+                        .find(|(stat, _)| *stat == id)
+                        .map(|(_, home)| *home)
+                    {
+                        return Err(LoadError::Invalid(format!(
+                            "{}: {id} belongs in `{home}`, not in `grants`. Both would load and only one is read.",
+                            dto.id
+                        )));
+                    }
                     if grants
                         .insert(DerivedStatId::new(&id), value.into_fixed()?)
                         .is_some()
@@ -622,6 +637,16 @@ struct ItemDto {
     #[serde(default)]
     weapon: Option<WeaponDto>,
 }
+
+/// Stats that have a field of their own, and where each one belongs.
+///
+/// The dataset would happily hold `derived.weapon_damage` in an item's
+/// `grants` map. Nothing reads it there, so the item loads, resolves, and
+/// contributes everything except the one thing it is for.
+const RESERVED: &[(&str, &str)] = &[
+    ("derived.weapon_damage", "weapon.base_damage"),
+    ("derived.move_speed", "move_speed_add"),
+];
 
 /// Attributes printed on an item: a grade plus the points it grants.
 /// Sparse, so an attribute the item does not touch is simply absent —

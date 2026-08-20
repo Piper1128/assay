@@ -11,9 +11,11 @@ use std::path::PathBuf;
 
 use assay_core::derived::well_known;
 use assay_core::loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
+use assay_core::schema::DatasetSource;
 use assay_core::{
     AttributeKind, ClassId, ConfidenceLevel, DerivedStatId, Fixed, ItemId, PerkId, resolve,
 };
+use assay_data::DatasetText;
 
 fn data_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
@@ -452,4 +454,44 @@ fn the_whole_character_sheet_comes_back() {
         let want: Fixed = printed.parse().expect("test literal parses");
         assert_eq!(*got, want, "{id}");
     }
+}
+
+#[test]
+fn a_stat_with_a_field_of_its_own_cannot_hide_in_grants() {
+    // The Arming Sword sat in the dataset with `derived.weapon_damage` among
+    // its grants. It loaded, it resolved, it contributed every stat it had —
+    // and it could not be swung, because nothing reads weapon damage there.
+    // A value that lands somewhere and does nothing is the failure this
+    // project is built against, so the loader refuses the spelling now.
+    let text = DatasetText {
+        manifest: r#"{"build":"x","label":"t","released":"2026-01-01","sources":[]}"#.to_string(),
+        classes: r#"{"classes":[]}"#.to_string(),
+        curves: r#"{"curves":[]}"#.to_string(),
+        items: r#"{"items":[{"id":"item.x","name":"X","grants":{
+            "derived.weapon_damage":{"confidence":"verified","micro":32000000}}}]}"#
+            .to_string(),
+        perks: r#"{"perks":[]}"#.to_string(),
+        skills: r#"{"skills":[]}"#.to_string(),
+    };
+    let refused = assay_data::decode(&text, "x");
+    let message = match refused {
+        Err(e) => e.to_string(),
+        Ok(_) => panic!("a grant with a field of its own was accepted"),
+    };
+    // And it says where the value belongs, because the person who wrote it
+    // there was not being careless — the schema has two plausible homes.
+    assert!(message.contains("weapon.base_damage"), "{message}");
+}
+
+#[test]
+fn the_arming_sword_can_actually_be_swung() {
+    // The regression the rule above exists for: it is in the dataset as a
+    // weapon, not as an item that merely mentions weapon damage.
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+    let sword = dataset
+        .entities
+        .item(&ItemId::new("item.arming_sword"))
+        .expect("the sword is in the dataset");
+    let weapon = sword.weapon.as_ref().expect("and it is a weapon");
+    assert_eq!(*weapon.base_damage.value(), Fixed::from_int(32));
 }
