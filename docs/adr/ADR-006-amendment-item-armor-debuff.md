@@ -68,7 +68,35 @@ Step 6 already re-samples the curve at the penetrated rating; this changes
 what is handed to it, not how it works. Rounding is unchanged: one banker's
 rounding, still inside `stats::apply_item_armor_bonus`.
 
-### 4. The obstacle: `Resolved` has already thrown the buckets away
+### 4. The same ability does not stack across applicators
+
+Two rogues both landing Weakpoint on one target apply −30%, not −60%. The
+second application refreshes the debuff rather than adding to it.
+
+This is a rule about **abilities**, not about this ability: the same named
+debuff never stacks with itself regardless of who applied it. Two *different*
+abilities that both reduce Item Armor Rating Bonus would sum, because they
+are different debuffs.
+
+That is a statement about identity, so identity is what enforces it. The
+context holds the mods **keyed by the ability that applied them**:
+
+    item_armor_bonus_mods: BTreeMap<AbilityId, Confidence<Fixed>>
+
+A map key cannot appear twice. Two rogues with Weakpoint write the same key
+and produce one entry; two different abilities write two keys and sum. The
+no-stacking rule is then not a check that some caller has to remember to
+perform, and not a comment — it is a thing the type will not let you say.
+
+A single summed `Fixed` was the first proposal here, and it was worse in two
+ways: it would have accepted −60 without complaint, and the trace could not
+have named which ability cost the defender what.
+
+`AbilityId` is a new id newtype rather than `SkillId`, because a debuff of
+this shape could as easily come from a perk, and the map must not be able to
+hold `skill.x` and `perk.x` as distinct keys for one effect.
+
+### 5. The obstacle: `Resolved` has already thrown the buckets away
 
 `Resolved.derived["derived.armor_rating"]` is the **combined** figure. By the
 time an exchange sees a defender, item armour and enchantments are one
@@ -99,12 +127,16 @@ would let an exchange disagree with the `Resolved` it was given.
 
 ## Decision
 
-1. `ExchangeContext` gains `item_armor_bonus_mod: Confidence<Fixed>`,
-   defaulting to `Verified(0)` — a neutral exchange has no debuff.
+1. `ExchangeContext` gains
+   `item_armor_bonus_mods: BTreeMap<AbilityId, Confidence<Fixed>>`, empty by
+   default — a neutral exchange has no debuff, and an empty sum is
+   `Verified(0)` under the existing fold.
 2. `Resolved` gains `armor: ArmorComposition`.
 3. Step 5 composes `effective_ar` as above; step 6 re-samples at it.
-4. The trace shows the composition, including whose bonus is whose. A number
-   that changed because someone else hit you must say so.
+4. `AbilityId` joins the id newtypes.
+5. The trace shows the composition and names each debuff by its ability. A
+   number that changed because someone else hit you must say who, and which
+   ability of theirs.
 
 ## Tests this requires
 
@@ -119,12 +151,12 @@ would let an exchange disagree with the `Resolved` it was given.
   which is exactly where the penetration direction bug lived.
 - A probe that applies the debuff to the combined rating instead of the item
   bucket must fail.
+- Two applications of the same `AbilityId` resolve as one −30, never −60;
+  two different abilities sum. The first case is structural, so the test is
+  really asserting that the structure was not worked around.
 
 ## Open, and deliberately not decided here
 
-- **Stacking.** Whether two rogues debuffing one target apply −30 or −60 is
-  undocumented. Until measured, the context takes one value and the loadout
-  cannot express two.
 - **Duration.** The three seconds are not modelled; the context states
   whether the debuff is live, and the caller owns the clock. A tool that
   answers "what does this hit do" does not need to simulate the window, and
@@ -137,3 +169,8 @@ would let an exchange disagree with the `Resolved` it was given.
 
 Weakpoint's −30% and its conditions are `Unverified`: wiki-sourced, not
 measured in game.
+
+The no-stacking rule is `Verified` — it comes from the same in-game
+authority that settled the 60/75 PDR caps against the wiki's incorrect 65%,
+and it is a rule about how the game treats abilities rather than a number
+read off a page.
