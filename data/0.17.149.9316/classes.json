@@ -85,6 +85,29 @@
           ],
           "curve": "curve.pdr",
           "cap": 60000000
+        },
+        {
+          "id": "derived.magic_resistance",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.will_to_magic_resistance"
+        },
+        {
+          "id": "derived.magical_damage_reduction",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.magic_resistance",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.magic_resistance_to_mdr",
+          "cap": 65000000
         }
       ]
     },
@@ -173,6 +196,29 @@
           ],
           "curve": "curve.pdr",
           "cap": 60000000
+        },
+        {
+          "id": "derived.magic_resistance",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.will_to_magic_resistance"
+        },
+        {
+          "id": "derived.magical_damage_reduction",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.magic_resistance",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.magic_resistance_to_mdr",
+          "cap": 65000000
         }
       ]
     }

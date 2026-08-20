@@ -389,19 +389,38 @@ fn print_table(name: &str, build: &str, label: &str, resolved: &Resolved) {
     println!("{name}   {label} ({build})");
     println!();
 
+    // Strip the `derived.` prefix for reading; the canonical form keeps it.
+    let label_of = |id: &assay_core::DerivedStatId| -> String {
+        id.as_str()
+            .strip_prefix("derived.")
+            .unwrap_or(id.as_str())
+            .to_string()
+    };
+    // The column is measured, not chosen. A dataset may define any stat it
+    // likes (ADR-012), so a width picked for the stats that happened to
+    // exist when this was written is wrong the first time someone adds one —
+    // `magical_damage_reduction` is longer than every stat that came before.
+    let width = resolved
+        .derived
+        .keys()
+        .map(|id| label_of(id).len())
+        .chain(core::iter::once("attributes".len()))
+        .max()
+        .unwrap_or_default();
+
     let attributes = &resolved.attributes;
     println!(
-        "  {} attributes            {}",
+        "  {} {:<width$} {}",
         marker(attributes.level()),
+        "attributes",
         render_attributes(attributes)
     );
 
     for (id, value) in &resolved.derived {
-        // Strip the `derived.` prefix for reading; the canonical form keeps it.
-        let label = id.as_str().strip_prefix("derived.").unwrap_or(id.as_str());
         println!(
-            "  {} {label:<21} {:>12}",
+            "  {} {:<width$} {:>12}",
             marker(value.level()),
+            label_of(id),
             value.value()
         );
     }

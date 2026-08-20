@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use assay_core::derived::well_known;
 use assay_core::loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
-use assay_core::{ClassId, ConfidenceLevel, Fixed, ItemId, PerkId, resolve};
+use assay_core::{AttributeKind, ClassId, ConfidenceLevel, Fixed, ItemId, PerkId, resolve};
 
 fn data_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
@@ -179,5 +179,85 @@ fn defense_mastery_multiplies_worn_armour_but_not_enchantments() {
     assert_eq!(
         build(mastery, vec![Roll::ArmorRating(Fixed::from_int(10))]),
         Fixed::from_micro(51_400_000)
+    );
+}
+
+#[test]
+fn the_magic_resistance_chain_runs_will_through_to_reduction() {
+    // Two curves in series, and the second reads the first: Will feeds
+    // Magic Resistance, Magic Resistance feeds Magical Damage Reduction.
+    // ADR-012 allows a derived stat to be another one's input, and the
+    // topological order is what makes the chain resolve at all.
+    //
+    // Rogue, Will 10: between the 5 and 15 breakpoints at +3/point, so
+    // MR 15. On the reduction curve that is between 8 and 18 at 0.5/point:
+    // -2 + 7 x 0.5 = 1.5.
+    //
+    // Fighter, Will 15: MR 30, which sits between 18 and 33 at 0.4/point:
+    // 3 + 12 x 0.4 = 7.8. Two classes off the same pair of curves, the
+    // same cross-check that settled the rating model.
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+    let chain = |class: &str| {
+        let mut loadout = naked_rogue();
+        loadout.class = ClassId::new(class);
+        let resolved = resolve(&loadout, &dataset.entities).expect("resolves");
+        (
+            *resolved
+                .stat("derived.magic_resistance")
+                .expect("MR")
+                .value(),
+            *resolved
+                .stat("derived.magical_damage_reduction")
+                .expect("MDR")
+                .value(),
+        )
+    };
+    assert_eq!(
+        chain("class.rogue"),
+        (Fixed::from_int(15), Fixed::from_micro(1_500_000))
+    );
+    assert_eq!(
+        chain("class.fighter"),
+        (Fixed::from_int(30), Fixed::from_micro(7_800_000))
+    );
+}
+
+#[test]
+fn magical_damage_reduction_cannot_reach_its_own_cap() {
+    // A canary, not a rule. The wiki caps MDR at 65%, but Will alone tops
+    // out at Magic Resistance 209 (Will 100), which the curve turns into
+    // 47.8% — so the cap never binds and its value has never mattered.
+    //
+    // That matters because the wiki made exactly this claim about Physical
+    // Damage Reduction, also 65%, and it was measured wrong in game (60
+    // base, 75 with Defense Mastery). If this test ever fails, some source
+    // of Magic Resistance has been modelled that Will does not provide, the
+    // cap has started to bind, and the number behind it needs verifying
+    // before anyone trusts an output above it.
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+    let mut loadout = naked_rogue();
+    loadout.class = ClassId::new("class.fighter");
+    loadout.armor = vec![ArmorPiece {
+        // Will 15 + 85 = 100, the top of the documented conversion.
+        id: ItemId::new("item.dark_leather_leggings"),
+        rolls: vec![Roll::Attribute(AttributeKind::Will, 85)],
+    }];
+    let resolved = resolve(&loadout, &dataset.entities).expect("resolves");
+    assert_eq!(
+        *resolved
+            .stat("derived.magic_resistance")
+            .expect("MR")
+            .value(),
+        Fixed::from_int(209),
+        "Will 100 is the end of the conversion table"
+    );
+    let mdr = *resolved
+        .stat("derived.magical_damage_reduction")
+        .expect("MDR")
+        .value();
+    assert_eq!(mdr, Fixed::from_micro(47_800_000));
+    assert!(
+        mdr < Fixed::from_int(65),
+        "if the cap has started to bind, read this test's comment"
     );
 }

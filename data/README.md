@@ -76,6 +76,28 @@ of the curve, now modelled per the ADR-005 amendment. The wrong guess is
 recorded here because it was wrong for an instructive reason: a shortfall
 downstream was assumed to have a downstream cause.*
 
+**The Magical Damage Reduction cap has never mattered, and may be wrong.**
+The chain is transcribed and validated: Will → Magic Resistance in six
+segments, Magic Resistance → Magical Damage Reduction in ten, and every
+segment's stated per-point rate reproduces the next anchor exactly. The wiki
+caps the result at 65%.
+
+But Will alone tops out at Magic Resistance 209 — the end of the conversion
+table, at Will 100 — which the curve turns into 47.8%. The cap cannot bind,
+so its value has never been exercised by anything.
+
+That is worth saying out loud because **the wiki made exactly this claim
+about Physical Damage Reduction, also 65%, and it was wrong**: measured in
+game, PDR caps at 60% and Defense Mastery lifts it to 75%. The same number on
+the same page for the sibling stat is not evidence of anything, and the
+65% is carried here only because nothing yet depends on it. A canary test
+fails if MDR ever reaches its cap.
+
+The page documents no source of Magic Resistance other than Will — no gear
+rolls, no enchantments, no perks or skills. That was checked rather than
+assumed, because the last time a defensive stat fell short of its cap the
+obvious guess about why was wrong.
+
 **Other gaps**
 
 - Hotfix 122's build id `0.17.149.9316` comes from ADR-004's example, not from
