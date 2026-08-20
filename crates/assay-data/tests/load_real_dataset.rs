@@ -45,9 +45,19 @@ fn manifest_describes_the_build_it_lives_in() {
 
 #[test]
 fn naked_rogue_matches_the_games_character_sheet() {
-    // Published for the Rogue at Patch 6.12 / Hotfix 123. Every one of these
-    // falls out of the wiki's own curves through the rating model (ADR-012);
-    // action speed in particular is unreachable from Agility alone.
+    // Read off the in-game character sheet for a naked Rogue, not off a
+    // wiki page. Every one falls out of the wiki's curves through the rating
+    // model (ADR-012) -- action speed in particular is unreachable from
+    // Agility alone -- but the base attributes had to be corrected first:
+    // the wiki-sourced block said Strength 9 and Agility 25, and the game
+    // says 10 and 24. Both sum to 105, so the error was invisible in the
+    // total and visible in four derived stats at once.
+    //
+    // Move speed is the interesting one. The sheet prints 305, which looks
+    // like a near miss against 305.4 -- but it also prints 101.8%, and
+    // 305.4/300 is exactly 101.8%. The percentage carries the precision the
+    // integer rounds away, so the two readings of the same sheet agree and
+    // the fractional answer is the right one.
     let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
     let resolved = resolve(&naked_rogue(), &dataset.entities).expect("resolves");
 
@@ -59,10 +69,14 @@ fn naked_rogue_matches_the_games_character_sheet() {
         let want: Fixed = value.parse().expect("test literal parses");
         assert_eq!(got, want, "{id}");
     };
-    expect(well_known::PHYSICAL_POWER_BONUS, "-14");
-    expect(well_known::ACTION_SPEED, "7.8125");
-    expect(well_known::HEALTH, "108.5");
-    expect(well_known::MOVE_SPEED, "306");
+    expect(well_known::PHYSICAL_POWER_BONUS, "-11");
+    expect(well_known::ACTION_SPEED, "7.5");
+    expect(well_known::HEALTH, "109");
+    expect(well_known::MOVE_SPEED, "305.4");
+    expect(well_known::PDR, "-22");
+    // The magic chain, from the same sheet: Will 10 -> 15 -> 1.5%.
+    expect("derived.magic_resistance", "15");
+    expect("derived.magical_damage_reduction", "1.5");
 }
 
 #[test]
@@ -230,10 +244,15 @@ fn magical_damage_reduction_cannot_reach_its_own_cap() {
     //
     // That matters because the wiki made exactly this claim about Physical
     // Damage Reduction, also 65%, and it was measured wrong in game (60
-    // base, 75 with Defense Mastery). If this test ever fails, some source
-    // of Magic Resistance has been modelled that Will does not provide, the
-    // cap has started to bind, and the number behind it needs verifying
-    // before anyone trusts an output above it.
+    // base, 75 with Defense Mastery).
+    //
+    // The premise is narrower than it looks, and the wiki misled us here
+    // too. Gear *does* grant Magic Resistance -- an Epic pair of Loose
+    // Trousers rolls +9 of it -- so Will is not the only source and the cap
+    // is reachable in play. The model does not have gear-sourced Magic
+    // Resistance yet, which is the only reason this holds; when it lands,
+    // this test fails, and that failure is the signal that the 65% has
+    // started to matter and has never been verified.
     let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
     let mut loadout = naked_rogue();
     loadout.class = ClassId::new("class.fighter");

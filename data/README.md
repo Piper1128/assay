@@ -93,10 +93,29 @@ the same page for the sibling stat is not evidence of anything, and the
 65% is carried here only because nothing yet depends on it. A canary test
 fails if MDR ever reaches its cap.
 
-The page documents no source of Magic Resistance other than Will — no gear
-rolls, no enchantments, no perks or skills. That was checked rather than
-assumed, because the last time a defensive stat fell short of its cap the
-obvious guess about why was wrong.
+*Correction: the wiki page states no source of Magic Resistance other than
+Will, and that was checked rather than assumed — but the game disagrees with
+it. An Epic pair of Loose Trousers rolls **+9 Magic Resistance**. So the cap
+is reachable in play, and it holds here only because gear-sourced Magic
+Resistance is not modelled yet.*
+
+**The game's own sheet shows a term neither chain has.** Read straight off
+the character screen:
+
+    Physical Damage Reduction   -22%
+      From Armor Rating         0 (-22%)
+      From Bonuses              0
+    Magical Damage Reduction    1.5%
+      From Magic Resistance     15 (1.5%)
+      From Bonuses              0
+
+Both reductions are `curve(rating) + Bonuses`, and the two chains are the
+same shape. We model the curve and not the second term. This vindicates the
+first guess made when the armour curve fell short of its cap — that something
+*adds* to the reduction — which was then withdrawn because the wiki lists no
+source of flat damage reduction. The wiki was incomplete; the sheet has a
+line for it. Note that Item Armor Rating Bonus is not that line: it feeds the
+rating, which is the row above.
 
 **Other gaps**
 

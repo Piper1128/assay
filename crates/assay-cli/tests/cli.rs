@@ -32,7 +32,12 @@ fn resolve_prints_the_games_numbers() {
         String::from_utf8_lossy(&out.stderr)
     );
     let text = stdout(&out);
-    for expected in ["7.8125", "108.5", "306", "-14"] {
+    // Read off the Rogue character sheet: action speed 7.5%, health 109,
+    // PDR -22%, physical power bonus -11%, magic resistance 15 -> 1.5%.
+    // Move speed prints as 305 there, but the sheet also shows 101.8%, and
+    // 305.4/300 is exactly that -- the percentage carries the precision the
+    // integer rounds away, so 305.4 is the answer and not a near miss.
+    for expected in ["7.5", "109", "305.4", "-11", "1.5"] {
         assert!(text.contains(expected), "missing {expected} in:\n{text}");
     }
 }
@@ -72,7 +77,7 @@ fn json_output_is_the_canonical_form() {
     let line = text.trim();
     assert!(line.starts_with('{') && line.ends_with('}'));
     assert!(!line.contains(' '), "canonical form carries no whitespace");
-    assert!(line.contains("\"micro\":7812500"), "{line}");
+    assert!(line.contains("\"micro\":7500000"), "{line}");
 }
 
 #[test]

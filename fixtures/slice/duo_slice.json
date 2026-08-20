@@ -118,11 +118,11 @@
         "id": "class.rogue",
         "name": "Rogue",
         "base_attributes": {
-          "confidence": "unverified",
+          "confidence": "verified",
           "points": {
-            "strength": 9,
+            "strength": 10,
             "vigor": 6,
-            "agility": 25,
+            "agility": 24,
             "dexterity": 20,
             "will": 10,
             "knowledge": 10,
@@ -723,7 +723,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":25,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":9,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7812500},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":108500000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":306000000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-14000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":305400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
     },
     {
       "name": "rogue-duo-buffed",
@@ -741,7 +741,7 @@
           "skill.fighter.fortified_ground"
         ]
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":30,\"dexterity\":25,\"knowledge\":15,\"resourcefulness\":30,\"strength\":14,\"vigor\":11,\"will\":15}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":14062500},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":118500000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":30000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":7800000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":309000000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-2000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":29,\"dexterity\":25,\"knowledge\":15,\"resourcefulness\":30,\"strength\":15,\"vigor\":11,\"will\":15}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":13750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":119000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":30000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":7800000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":308400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":0}}"
     },
     {
       "name": "rogue-geared",
@@ -774,7 +774,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":25,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":9,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11562500},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":51400000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":108500000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":304000000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":8910000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-14000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11250000},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":51400000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":303400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":8910000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
     }
   ],
   "exchanges": [
@@ -818,7 +818,7 @@
           "micro": 0
         }
       },
-      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":20984000},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000}}"
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":21716000},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000}}"
     },
     {
       "name": "sneak-attack-from-hide",
@@ -908,7 +908,7 @@
           }
         }
       },
-      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":15946120},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":7290000}}"
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":16502380},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":7290000}}"
     },
     {
       "name": "lethal-mark-back-attack",
@@ -950,7 +950,7 @@
           "micro": 2000000
         }
       },
-      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":25174586},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":5427450}}"
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":25521857},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":5427450}}"
     }
   ]
 }

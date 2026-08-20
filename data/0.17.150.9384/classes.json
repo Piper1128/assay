@@ -115,11 +115,11 @@
       "id": "class.rogue",
       "name": "Rogue",
       "base_attributes": {
-        "confidence": "unverified",
+        "confidence": "verified",
         "points": {
-          "strength": 9,
+          "strength": 10,
           "vigor": 6,
-          "agility": 25,
+          "agility": 24,
           "dexterity": 20,
           "will": 10,
           "knowledge": 10,
