@@ -141,6 +141,21 @@ source of flat damage reduction. The wiki was incomplete; the sheet has a
 line for it. Note that Item Armor Rating Bonus is not that line: it feeds the
 rating, which is the row above.
 
+**Two stats fetched and deliberately not written.** Every curve in this
+dataset had to reproduce the value the game prints for a naked Rogue before
+it was committed — one anchor per stat, from a source that is not the wiki.
+Nine passed. Two did not, and are recorded here rather than guessed at:
+
+- **Regular Interaction Speed.** The sheet reads 46% for a Rogue with
+  Dexterity 20 and Resourcefulness 25. The transcribed curve gives 15.6%
+  under the stated 0.25/0.75 weighting, 11.2% reversed, and 53.6% unweighted.
+  None of them is 46, so either the weighting or the curve is wrong and there
+  is no way to tell which from here.
+- **Debuff Duration Reduction.** The page describes an extensive table and
+  produced three anchors, with a sign convention that does not line up with
+  the sheet's wording — the wiki gives a duration, the sheet gives a
+  reduction, and 12.4% does not fall out of either reading.
+
 **Other gaps**
 
 - Hotfix 122's build id `0.17.149.9316` comes from ADR-004's example, not from

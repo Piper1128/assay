@@ -36,6 +36,39 @@
             "curve": "curve.action_speed"
           },
           {
+            "id": "derived.buff_duration_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.buff_duration_bonus"
+          },
+          {
+            "id": "derived.cooldown_reduction_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.cooldown_reduction_bonus"
+          },
+          {
+            "id": "derived.equip_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.equip_speed"
+          },
+          {
             "id": "derived.health",
             "weights": [
               {
@@ -51,6 +84,17 @@
             ],
             "curve": "curve.health",
             "offset": 25000000
+          },
+          {
+            "id": "derived.health_recovery_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "vigor",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.health_recovery_bonus"
           },
           {
             "id": "derived.magic_resistance",
@@ -74,6 +118,39 @@
             ],
             "curve": "curve.magic_resistance_to_mdr",
             "cap": 65000000
+          },
+          {
+            "id": "derived.magical_interaction_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magical_interaction_speed"
+          },
+          {
+            "id": "derived.manual_dexterity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.manual_dexterity"
+          },
+          {
+            "id": "derived.memory_capacity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.memory_capacity"
           },
           {
             "id": "derived.move_speed",
@@ -101,6 +178,17 @@
             "cap": 60000000
           },
           {
+            "id": "derived.persuasiveness",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.persuasiveness"
+          },
+          {
             "id": "derived.physical_power",
             "weights": [
               {
@@ -122,6 +210,17 @@
             ],
             "curve": "curve.physical_power_bonus",
             "floor": -100000000
+          },
+          {
+            "id": "derived.spell_casting_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.spell_casting_speed"
           }
         ]
       },
@@ -158,6 +257,39 @@
             "curve": "curve.action_speed"
           },
           {
+            "id": "derived.buff_duration_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.buff_duration_bonus"
+          },
+          {
+            "id": "derived.cooldown_reduction_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.cooldown_reduction_bonus"
+          },
+          {
+            "id": "derived.equip_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.equip_speed"
+          },
+          {
             "id": "derived.health",
             "weights": [
               {
@@ -173,6 +305,17 @@
             ],
             "curve": "curve.health",
             "offset": 25000000
+          },
+          {
+            "id": "derived.health_recovery_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "vigor",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.health_recovery_bonus"
           },
           {
             "id": "derived.magic_resistance",
@@ -196,6 +339,39 @@
             ],
             "curve": "curve.magic_resistance_to_mdr",
             "cap": 65000000
+          },
+          {
+            "id": "derived.magical_interaction_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magical_interaction_speed"
+          },
+          {
+            "id": "derived.manual_dexterity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.manual_dexterity"
+          },
+          {
+            "id": "derived.memory_capacity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.memory_capacity"
           },
           {
             "id": "derived.move_speed",
@@ -223,6 +399,17 @@
             "cap": 60000000
           },
           {
+            "id": "derived.persuasiveness",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.persuasiveness"
+          },
+          {
             "id": "derived.physical_power",
             "weights": [
               {
@@ -244,6 +431,17 @@
             ],
             "curve": "curve.physical_power_bonus",
             "floor": -100000000
+          },
+          {
+            "id": "derived.spell_casting_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.spell_casting_speed"
           }
         ]
       }
@@ -288,6 +486,92 @@
         ]
       },
       {
+        "id": "curve.buff_duration_bonus",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -80000000
+          ],
+          [
+            5000000,
+            -30000000
+          ],
+          [
+            7000000,
+            -20000000
+          ],
+          [
+            11000000,
+            -8000000
+          ],
+          [
+            15000000,
+            0
+          ],
+          [
+            50000000,
+            35000000
+          ],
+          [
+            100000000,
+            60000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.cooldown_reduction_bonus",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -30000000
+          ],
+          [
+            20000000,
+            10000000
+          ],
+          [
+            50000000,
+            40000000
+          ],
+          [
+            100000000,
+            65000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.equip_speed",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -95000000
+          ],
+          [
+            2000000,
+            -91000000
+          ],
+          [
+            15000000,
+            0
+          ],
+          [
+            35000000,
+            100000000
+          ],
+          [
+            70000000,
+            170000000
+          ],
+          [
+            100000000,
+            200000000
+          ]
+        ]
+      },
+      {
         "id": "curve.health",
         "confidence": "unverified",
         "points": [
@@ -318,6 +602,40 @@
           [
             100000000,
             184000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.health_recovery_bonus",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -55000000
+          ],
+          [
+            5000000,
+            -30000000
+          ],
+          [
+            15000000,
+            0
+          ],
+          [
+            25000000,
+            70000000
+          ],
+          [
+            35000000,
+            120000000
+          ],
+          [
+            84000000,
+            218000000
+          ],
+          [
+            100000000,
+            250000000
           ]
         ]
       },
@@ -382,6 +700,84 @@
           [
             500000000,
             83500000
+          ]
+        ]
+      },
+      {
+        "id": "curve.magical_interaction_speed",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -75000000
+          ],
+          [
+            15000000,
+            0
+          ],
+          [
+            25000000,
+            70000000
+          ],
+          [
+            35000000,
+            120000000
+          ],
+          [
+            84000000,
+            218000000
+          ],
+          [
+            100000000,
+            250000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.manual_dexterity",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -15000000
+          ],
+          [
+            15000000,
+            0
+          ],
+          [
+            23000000,
+            24000000
+          ],
+          [
+            31000000,
+            40000000
+          ],
+          [
+            45000000,
+            50000000
+          ],
+          [
+            95000000,
+            55000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.memory_capacity",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            6000000,
+            0
+          ],
+          [
+            100000000,
+            94000000
           ]
         ]
       },
@@ -534,6 +930,24 @@
         ]
       },
       {
+        "id": "curve.persuasiveness",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            15000000,
+            15000000
+          ],
+          [
+            100000000,
+            57500000
+          ]
+        ]
+      },
+      {
         "id": "curve.physical_power_bonus",
         "confidence": "unverified",
         "points": [
@@ -568,6 +982,40 @@
           [
             100000000,
             50000000
+          ]
+        ]
+      },
+      {
+        "id": "curve.spell_casting_speed",
+        "confidence": "unverified",
+        "points": [
+          [
+            0,
+            -60000000
+          ],
+          [
+            5000000,
+            -35000000
+          ],
+          [
+            10000000,
+            -15000000
+          ],
+          [
+            15000000,
+            0
+          ],
+          [
+            25000000,
+            21000000
+          ],
+          [
+            40000000,
+            51000000
+          ],
+          [
+            100000000,
+            111000000
           ]
         ]
       },
@@ -1121,7 +1569,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":305400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":25000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-27000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":-25000000},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":4000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":305400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":20000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":-15000000}}"
     },
     {
       "name": "rogue-duo-buffed",
@@ -1139,7 +1587,7 @@
           "skill.fighter.fortified_ground"
         ]
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":29,\"dexterity\":25,\"knowledge\":15,\"resourcefulness\":30,\"strength\":15,\"vigor\":11,\"will\":15}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":13750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":119000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":30000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":7800000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":308400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.physical_power\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":0}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"unverified\",\"points\":{\"agility\":29,\"dexterity\":25,\"knowledge\":15,\"resourcefulness\":30,\"strength\":15,\"vigor\":11,\"will\":15}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":13750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":0},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":20000000},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":50000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":119000000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-12000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":30000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":7800000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":0},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":28000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":9000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":308400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":22500000},\"derived.physical_power\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":0},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":0}}"
     },
     {
       "name": "rogue-geared",
@@ -1174,7 +1622,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11250000},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":51400000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":303400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":8910000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":24,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":11250000},\"derived.armor_rating\":{\"confidence\":\"unverified\",\"micro\":51400000},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":45000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-27000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":-25000000},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":26000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":4000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":303400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":8910000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":20000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":-15000000}}"
     },
     {
       "name": "rogue-kitted",
@@ -1219,7 +1667,7 @@
         "perks": [],
         "skills": []
       },
-      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":28,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":12,\"vigor\":8,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":8750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":69000000},\"derived.headshot_damage_reduction\":{\"confidence\":\"verified\",\"micro\":14000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":113000000},\"derived.magic_penetration\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":24000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":5400000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":302800000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":11550000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":12000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-6000000}}"
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":28,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":12,\"vigor\":8,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":8750000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":69000000},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":25000000},\"derived.headshot_damage_reduction\":{\"confidence\":\"verified\",\"micro\":14000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":113000000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-21000000},\"derived.magic_penetration\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":24000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":5400000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":-25000000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":1000000},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":4000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":302800000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":11550000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":20000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":12000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-6000000},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":-15000000}}"
     }
   ],
   "exchanges": [

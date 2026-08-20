@@ -33,6 +33,39 @@
           "curve": "curve.action_speed"
         },
         {
+          "id": "derived.buff_duration_bonus",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.buff_duration_bonus"
+        },
+        {
+          "id": "derived.cooldown_reduction_bonus",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "resourcefulness",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.cooldown_reduction_bonus"
+        },
+        {
+          "id": "derived.equip_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "dexterity",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.equip_speed"
+        },
+        {
           "id": "derived.health",
           "weights": [
             {
@@ -48,6 +81,17 @@
           ],
           "curve": "curve.health",
           "offset": 25000000
+        },
+        {
+          "id": "derived.health_recovery_bonus",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "vigor",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.health_recovery_bonus"
         },
         {
           "id": "derived.magic_resistance",
@@ -71,6 +115,39 @@
           ],
           "curve": "curve.magic_resistance_to_mdr",
           "cap": 65000000
+        },
+        {
+          "id": "derived.magical_interaction_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.magical_interaction_speed"
+        },
+        {
+          "id": "derived.manual_dexterity",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "dexterity",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.manual_dexterity"
+        },
+        {
+          "id": "derived.memory_capacity",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "knowledge",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.memory_capacity"
         },
         {
           "id": "derived.move_speed",
@@ -98,6 +175,17 @@
           "cap": 60000000
         },
         {
+          "id": "derived.persuasiveness",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "resourcefulness",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.persuasiveness"
+        },
+        {
           "id": "derived.physical_power",
           "weights": [
             {
@@ -119,6 +207,17 @@
           ],
           "curve": "curve.physical_power_bonus",
           "floor": -100000000
+        },
+        {
+          "id": "derived.spell_casting_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "knowledge",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.spell_casting_speed"
         }
       ]
     },
@@ -155,6 +254,39 @@
           "curve": "curve.action_speed"
         },
         {
+          "id": "derived.buff_duration_bonus",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.buff_duration_bonus"
+        },
+        {
+          "id": "derived.cooldown_reduction_bonus",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "resourcefulness",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.cooldown_reduction_bonus"
+        },
+        {
+          "id": "derived.equip_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "dexterity",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.equip_speed"
+        },
+        {
           "id": "derived.health",
           "weights": [
             {
@@ -170,6 +302,17 @@
           ],
           "curve": "curve.health",
           "offset": 25000000
+        },
+        {
+          "id": "derived.health_recovery_bonus",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "vigor",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.health_recovery_bonus"
         },
         {
           "id": "derived.magic_resistance",
@@ -193,6 +336,39 @@
           ],
           "curve": "curve.magic_resistance_to_mdr",
           "cap": 65000000
+        },
+        {
+          "id": "derived.magical_interaction_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.magical_interaction_speed"
+        },
+        {
+          "id": "derived.manual_dexterity",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "dexterity",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.manual_dexterity"
+        },
+        {
+          "id": "derived.memory_capacity",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "knowledge",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.memory_capacity"
         },
         {
           "id": "derived.move_speed",
@@ -220,6 +396,17 @@
           "cap": 60000000
         },
         {
+          "id": "derived.persuasiveness",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "resourcefulness",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.persuasiveness"
+        },
+        {
           "id": "derived.physical_power",
           "weights": [
             {
@@ -241,6 +428,17 @@
           ],
           "curve": "curve.physical_power_bonus",
           "floor": -100000000
+        },
+        {
+          "id": "derived.spell_casting_speed",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "knowledge",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.spell_casting_speed"
         }
       ]
     }

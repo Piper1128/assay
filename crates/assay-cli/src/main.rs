@@ -452,8 +452,12 @@ fn print_table(name: &str, build: &str, label: &str, resolved: &Resolved) {
         .filter(|v| v.level() != ConfidenceLevel::Verified)
         .count();
     if unverified > 0 {
+        // Precisely: the INPUTS are unconfirmed. Several of these have been
+        // checked against a character sheet at one attribute value, which does
+        // not verify a curve — but saying "not verified against the game" of a
+        // number that was is the kind of small untruth this tool cannot afford.
         println!(
-            "\n  {unverified} of {} values are not verified against the game.",
+            "\n  {unverified} of {} rest on data nobody has confirmed.",
             resolved.derived.len()
         );
     }

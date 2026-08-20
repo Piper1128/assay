@@ -411,3 +411,45 @@ fn the_move_speed_cap_binds_before_armour_takes_its_cut() {
         Fixed::from_int(325)
     );
 }
+
+#[test]
+fn the_whole_character_sheet_comes_back() {
+    // Every stat the game printed for this Rogue, in one place. Each curve
+    // was transcribed from a wiki that has contradicted itself three times
+    // in this project, so each one had to reproduce its line here before it
+    // was written — one anchor per stat, from a source that is not the wiki.
+    //
+    // This is the test that would notice a curve drifting. A single stat can
+    // be wrong quietly; the whole sheet cannot.
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+    let resolved = resolve(&naked_rogue(), &dataset.entities).expect("resolves");
+
+    for (id, printed) in [
+        ("derived.physical_power", "10"),
+        ("derived.physical_power_bonus", "-11"),
+        ("derived.action_speed", "7.5"),
+        ("derived.health", "109"),
+        // The sheet shows 305 and also 101.8%; 305.4/300 is exactly that, so
+        // the integer is the rounding and the fraction is the answer.
+        ("derived.move_speed", "305.4"),
+        ("derived.pdr", "-22"),
+        ("derived.magic_resistance", "15"),
+        ("derived.magical_damage_reduction", "1.5"),
+        ("derived.memory_capacity", "4"),
+        ("derived.spell_casting_speed", "-15"),
+        ("derived.cooldown_reduction_bonus", "15"),
+        ("derived.persuasiveness", "20"),
+        ("derived.buff_duration_bonus", "-11"),
+        ("derived.magical_interaction_speed", "-25"),
+        ("derived.manual_dexterity", "15"),
+        ("derived.equip_speed", "25"),
+        ("derived.health_recovery_bonus", "-27"),
+    ] {
+        let got = resolved
+            .stat(id)
+            .unwrap_or_else(|| panic!("{id} is not in the dataset"))
+            .value();
+        let want: Fixed = printed.parse().expect("test literal parses");
+        assert_eq!(*got, want, "{id}");
+    }
+}

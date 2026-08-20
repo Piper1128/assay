@@ -49,7 +49,7 @@ fn confidence_is_visible_without_asking() {
     let text = stdout(&assay(&["resolve", "loadouts/naked-rogue.toml"]));
     assert!(text.contains('~'), "no confidence marker in:\n{text}");
     assert!(
-        text.contains("not verified against the game"),
+        text.contains("rest on data nobody has confirmed"),
         "no summary line in:\n{text}"
     );
 }
