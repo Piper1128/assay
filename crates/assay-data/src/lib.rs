@@ -29,6 +29,8 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod submission;
+
 use assay_core::confidence::Confidence;
 use assay_core::curve::Curve;
 use assay_core::derived::{DerivedStatDef, RatingInput};

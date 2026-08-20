@@ -6,6 +6,7 @@
 //! printing an empty result that reads like "nothing changed".
 
 mod loadout_file;
+mod submit;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -24,6 +25,7 @@ USAGE:
     assay exchange <attacker.toml> <defender.toml> [OPTIONS]
     assay diff <build-a> <build-b> [--loadouts <dir>] [--data <dir>]
     assay versions [--data <dir>]
+    assay submit <submission.json> [--apply] [--data <dir>] [--build <id>]
 
 RESOLVE OPTIONS:
     --build <id>     dataset build to resolve against (default: the newest
@@ -35,6 +37,12 @@ RESOLVE OPTIONS:
 
 EXCHANGE OPTIONS:
     --explain        print all nine damage steps (ADR-006)
+    --build / --data as for resolve
+
+SUBMIT OPTIONS:
+    --apply          write the submission in. Without it, submit only says
+                     what it would change: reading a submission is not
+                     applying one, and a person stands between the two.
     --build / --data as for resolve
 
 DIFF OPTIONS:
@@ -69,6 +77,7 @@ fn run(args: &[String]) -> Result<ExitCode, String> {
             Ok(ExitCode::SUCCESS)
         }
         Some("diff") => cmd_diff(&args[1..]),
+        Some("submit") => submit::cmd_submit(&args[1..]),
         Some(other) => Err(format!("unknown command: {other}\n\n{USAGE}")),
     }
 }
@@ -369,7 +378,7 @@ fn read_loadout(path: &str) -> Result<assay_core::Loadout, String> {
 }
 
 /// The newest committed build, by the sort order `versions` returns.
-fn newest_build(data: &Path) -> Result<String, String> {
+pub(crate) fn newest_build(data: &Path) -> Result<String, String> {
     let versions = assay_data::versions(data).map_err(|e| e.to_string())?;
     versions
         .last()

@@ -294,6 +294,10 @@
       Screenshot an item tooltip and paste it here. Text recognition needs the
       network once, then works offline; everything else already does.
     </p>
+    <div class="field">
+      <label for="observer">Your handle, for submissions</label>
+      <input id="observer" placeholder="who read this" autocomplete="off">
+    </div>
     <div class="drop" id="drop" tabindex="0">Paste an image, or click to choose one</div>
     <input type="file" id="file" accept="image/*" hidden>
     <div id="read"></div>
@@ -624,6 +628,25 @@
     host.append(copy);
   }
 
+  /// A plausible id from a card's name, for the person to correct rather
+  /// than compose. `Leather Cap (Uncommon)` -> `item.leather_cap`: rarity is
+  /// dropped because it belongs to the copy, not to the kind of thing.
+  function suggestId(name) {
+    if (!name) return "item.";
+    return "item." + name
+      .replace(/\([^)]*\)/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
+  }
+
+  function today() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  }
+
   function redraw() {
     buildTabs();
     const pick = $("class");
@@ -774,6 +797,47 @@
       "Everything a card shows is a fact about the copy in your hands, so it " +
       "all arrives as verified. What is printed versus what is rolled matters " +
       "for the dataset, where a printed value claims something about every copy."));
+
+    // Offering the card to the dataset is a different act from equipping it,
+    // so it is a different button. One answers "what does my gear do"; the
+    // other says "here is an item, for everyone".
+    const offer = el("div", "field");
+    offer.style.marginTop = "10px";
+    const idField = el("input");
+    idField.placeholder = "item.rondel_dagger";
+    idField.value = suggestId(card.name);
+    offer.append(el("label", null, "Submit it to the dataset as"), idField);
+    host.append(offer);
+
+    const how = el("select");
+    for (const [value, label] of [
+      ["screenshot-ocr", "read by text recognition"],
+      ["screenshot-typed", "I read the screenshot and checked every line"],
+      ["in-game", "I read it in the game"],
+    ]) how.append(new Option(label, value));
+    const howField = el("div", "field");
+    howField.append(el("label", null, "How you saw it"), how);
+    host.append(howField);
+
+    const send = el("button", null, "Copy a submission");
+    send.onclick = async () => {
+      const observer = $("observer").value.trim();
+      if (!observer) {
+        $("observer").focus();
+        return;
+      }
+      const out = JSON.parse(wasm_bindgen.submission_json(JSON.stringify({
+        id: idField.value.trim(),
+        name: card.name ?? "",
+        slot: card.slot ?? "",
+        lines: card.taken,
+        unrecognised: card.missed,
+      }), observer, today(), how.value));
+      if (!out.ok) { send.textContent = out.error; return; }
+      await navigator.clipboard.writeText(out.text);
+      send.textContent = "copied — send it on, then `assay submit`";
+    };
+    host.append(send);
   }
 
   // ── start ──────────────────────────────────────────────────────────

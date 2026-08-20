@@ -1,0 +1,298 @@
+//! `assay submit` — reviewing what somebody else observed.
+//!
+//! Reading a submission is not applying one. The default is to say what it
+//! would change and stop, because the whole reason submissions exist as a
+//! separate thing is that a person stands between an observation and the
+//! dataset (ADR-003).
+//!
+//! A submission that disagrees with the dataset is refused whole rather than
+//! applied in part. Two people who read the same card differently are
+//! evidence that something is wrong — a rarity nobody recorded, a patch
+//! nobody noticed, a misread digit — and quietly taking the newer number
+//! throws that evidence away at the exact moment it appeared.
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use assay_core::schema::ItemDef;
+use assay_data::submission::{ItemObservation, Method, Submission};
+use serde_json::{Map, Value};
+
+use crate::newest_build;
+
+/// What reviewing a submission found.
+struct Review {
+    /// Items the dataset does not have.
+    fresh: Vec<(String, Value)>,
+    /// Items already present and identical.
+    known: Vec<String>,
+    /// Items present and different, field by field.
+    conflicts: Vec<Conflict>,
+}
+
+struct Conflict {
+    item: String,
+    field: String,
+    dataset: String,
+    submitted: String,
+}
+
+pub(crate) fn cmd_submit(args: &[String]) -> Result<ExitCode, String> {
+    let mut path: Option<PathBuf> = None;
+    let mut data = PathBuf::from("data");
+    let mut build: Option<String> = None;
+    let mut apply = false;
+
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--apply" => apply = true,
+            "--data" => data = PathBuf::from(rest.next().ok_or("--data needs a directory")?),
+            "--build" => build = Some(rest.next().ok_or("--build needs an id")?.clone()),
+            other if other.starts_with("--") => return Err(format!("unknown option: {other}")),
+            other => path = Some(PathBuf::from(other)),
+        }
+    }
+    let path = path.ok_or("submit needs a submission file")?;
+
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let submission = Submission::decode(&text).map_err(|e| e.to_string())?;
+
+    let build = match build {
+        Some(id) => id,
+        None => newest_build(&data)?,
+    };
+    if submission.build != build {
+        return Err(format!(
+            "the submission is against build {} and this is {build}. \
+             Numbers move between patches, so the two are not comparable; \
+             pass --build to review it against its own.",
+            submission.build
+        ));
+    }
+
+    let items_path = data.join(&build).join("items.json");
+    let raw = std::fs::read_to_string(&items_path)
+        .map_err(|e| format!("{}: {e}", items_path.display()))?;
+    let mut file: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+
+    let review = review(&submission, &file)?;
+    report(&submission, &review);
+
+    if !review.conflicts.is_empty() {
+        println!(
+            "\n  nothing applied: {} field(s) disagree with the dataset.\n  \
+             Settle each one first — a disagreement is the most informative \
+             thing a submission can contain.",
+            review.conflicts.len()
+        );
+        return Ok(ExitCode::from(2));
+    }
+    if !apply {
+        if !review.fresh.is_empty() {
+            println!(
+                "\n  pass --apply to write {} item(s) in.",
+                review.fresh.len()
+            );
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    if review.fresh.is_empty() {
+        println!("\n  nothing to apply.");
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let list = file
+        .get_mut("items")
+        .and_then(Value::as_array_mut)
+        .ok_or("items.json has no items array")?;
+    for (_, item) in &review.fresh {
+        list.push(item.clone());
+    }
+    list.sort_by(|a, b| {
+        a.get("id")
+            .and_then(Value::as_str)
+            .cmp(&b.get("id").and_then(Value::as_str))
+    });
+    let written = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())? + "\n";
+    std::fs::write(&items_path, written).map_err(|e| format!("{}: {e}", items_path.display()))?;
+    println!(
+        "\n  wrote {} item(s) into {}. Review the diff before committing: \
+         `git diff` is the second half of this step.",
+        review.fresh.len(),
+        items_path.display()
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Compares each observation against what the dataset already says.
+fn review(submission: &Submission, file: &Value) -> Result<Review, String> {
+    let existing: BTreeMap<String, &Value> = file
+        .get("items")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|i| Some((i.get("id")?.as_str()?.to_string(), i)))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut out = Review {
+        fresh: Vec::new(),
+        known: Vec::new(),
+        conflicts: Vec::new(),
+    };
+    for observed in &submission.items {
+        // Building the ItemDef first is the validation: unknown attributes,
+        // unknown slots and over-precise decimals fail here rather than
+        // landing in the dataset and failing at load.
+        let def = observed
+            .to_item(submission.method)
+            .map_err(|e| e.to_string())?;
+        let proposed = to_json(observed, submission.method, &def);
+        match existing.get(&observed.id) {
+            None => out.fresh.push((observed.id.clone(), proposed)),
+            Some(current) => {
+                let before = out.conflicts.len();
+                compare(&observed.id, current, &proposed, &mut out.conflicts);
+                if out.conflicts.len() == before {
+                    out.known.push(observed.id.clone());
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Renders an observation in the dataset's own item shape, so what is
+/// reviewed is exactly what would be written.
+fn to_json(observed: &ItemObservation, method: Method, def: &ItemDef) -> Value {
+    let grade = method.offered_grade();
+    let mut item = Map::new();
+    item.insert("id".into(), Value::String(observed.id.clone()));
+    item.insert("name".into(), Value::String(observed.name.clone()));
+    if let Some(slot) = def.slot {
+        item.insert("slot".into(), Value::String(slot.as_str().into()));
+    }
+    if let Some(attributes) = &def.attributes {
+        let mut points = Map::new();
+        for (kind, value) in attributes.value() {
+            points.insert(kind.as_str().into(), Value::from(*value));
+        }
+        item.insert(
+            "attributes".into(),
+            serde_json::json!({ "confidence": grade, "points": points }),
+        );
+    }
+    let mut grants = Map::new();
+    for (stat, value) in &def.grants {
+        grants.insert(
+            stat.as_str().into(),
+            serde_json::json!({ "confidence": grade, "micro": value.value().micro() }),
+        );
+    }
+    item.insert("grants".into(), Value::Object(grants));
+    if let Some(add) = &def.move_speed_add {
+        item.insert(
+            "moveSpeedAdd".into(),
+            serde_json::json!({ "confidence": grade, "micro": add.value().micro() }),
+        );
+    }
+    Value::Object(item)
+}
+
+/// Walks two item objects and records every field they disagree on.
+///
+/// Compared as rendered JSON rather than through typed structs, for the same
+/// reason `assay-diff` does: a field nobody remembered to compare is a field
+/// that silently agrees with everything.
+fn compare(item: &str, current: &Value, proposed: &Value, into: &mut Vec<Conflict>) {
+    let flat = |v: &Value| -> BTreeMap<String, String> {
+        let mut out = BTreeMap::new();
+        flatten("", v, &mut out);
+        out
+    };
+    let (a, b) = (flat(current), flat(proposed));
+    for key in b.keys() {
+        // A grade is not a disagreement. A submission read by text
+        // recognition offers `unverified` for a number the dataset already
+        // has `verified`, and treating that as a conflict would make every
+        // corroboration look like a fight. What the two say the value IS is
+        // the only thing worth stopping for; how each of them came to see it
+        // is the reviewer's input, not a contradiction.
+        if key.ends_with(".confidence") {
+            continue;
+        }
+        // Only fields the submission speaks to. A dataset field it says
+        // nothing about is not a disagreement.
+        let (Some(was), Some(now)) = (a.get(key), b.get(key)) else {
+            continue;
+        };
+        if was != now {
+            into.push(Conflict {
+                item: item.to_string(),
+                field: key.clone(),
+                dataset: was.clone(),
+                submitted: now.clone(),
+            });
+        }
+    }
+}
+
+fn flatten(prefix: &str, value: &Value, out: &mut BTreeMap<String, String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, inner) in map {
+                let path = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                flatten(&path, inner, out);
+            }
+        }
+        other => {
+            out.insert(prefix.to_string(), other.to_string());
+        }
+    }
+}
+
+fn report(submission: &Submission, review: &Review) {
+    println!(
+        "{} · {} · {} · {:?}",
+        submission.observer, submission.observed_at, submission.build, submission.method
+    );
+    if let Some(note) = &submission.note {
+        println!("  “{note}”");
+    }
+    println!(
+        "  offered as {} — a method, not a verdict",
+        submission.method.offered_grade()
+    );
+    println!();
+
+    for (id, _) in &review.fresh {
+        println!("  new       {id}");
+    }
+    for id in &review.known {
+        println!("  already   {id}");
+    }
+    for c in &review.conflicts {
+        println!(
+            "  DISAGREES {} {}: dataset {} · submitted {}",
+            c.item, c.field, c.dataset, c.submitted
+        );
+    }
+    if !submission.unrecognised.is_empty() {
+        println!("\n  read but not modelled:");
+        for line in &submission.unrecognised {
+            println!("    {line}");
+        }
+        println!(
+            "  These are kept on purpose. A line the schema has no home for \
+             is evidence about the schema, and dropping it loses that."
+        );
+    }
+}

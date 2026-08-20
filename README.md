@@ -46,6 +46,37 @@ they come from the wiki rather than from an in-game test.
 committed. Adding the Hotfix 122 numbers is a data task, and the point at
 which the tool starts answering the question it exists for.
 
+### Taking in what someone else observed
+
+```
+assay submit their-submission.json           # what would it change?
+assay submit their-submission.json --apply   # write it in
+```
+
+A submission is one person's observations, offered to the dataset — not
+added to it. Three things travel with every value, and they are why the
+format exists rather than being a blob of numbers: **who** saw it and when,
+because two people agreeing independently is stronger than one person
+insisting; **how** they saw it, because a number read by text recognition
+and the same number typed off the same screenshot carry different
+transcription risk; and **what they read that had nowhere to go**, because
+fifty submissions quietly dropping "Demon Damage Reduction" is fifty pieces
+of evidence about the schema, discarded one at a time.
+
+The method decides what grade a value is *offered* at. Nothing promotes
+itself, and review may still lower it.
+
+A submission that disagrees with the dataset is refused whole rather than
+applied in part, and exits 2 so a script can tell disagreement from failure.
+Two people reading one card differently means something is wrong — a rarity
+nobody recorded, a patch nobody noticed, a misread digit — and taking the
+newer number throws that away at the moment it appeared. A different *grade*
+is not a disagreement: a text-recognised reading of a value the dataset
+already verified is corroboration.
+
+The browser page writes submissions, so a contributor never has to learn the
+format. Same writer, same reader, both in Rust.
+
 ### In a browser
 
 ```

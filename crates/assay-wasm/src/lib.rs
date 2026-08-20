@@ -22,6 +22,7 @@ use assay_core::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
 use assay_core::resolve::{Resolved, resolve};
 use assay_core::schema::{AttributeKind, DatasetSource};
+use assay_data::submission::{ItemObservation, Method, Submission};
 use assay_data::{Dataset, DatasetText, decode};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
@@ -428,6 +429,94 @@ pub fn resolve_loadout(loadout_json: &str) -> String {
     };
     match resolve(&loadout, &data.entities) {
         Ok(resolved) => render(&resolved, &loadout.name).to_string(),
+        Err(e) => json!({ "ok": false, "error": e.to_string() }).to_string(),
+    }
+}
+
+/// Writes a submission from a card the page read.
+///
+/// The format is written here rather than in JavaScript so there is one
+/// writer and one reader of it, both in Rust. A page that hand-rolled the
+/// JSON would be a second implementation of the contract, free to drift from
+/// the one `assay submit` parses — and the drift would show up as a
+/// contributor's work being rejected, which is the worst place to find it.
+#[wasm_bindgen]
+#[must_use]
+pub fn submission_json(card_json: &str, observer: &str, observed_at: &str, method: &str) -> String {
+    let node: Value = match serde_json::from_str(card_json) {
+        Ok(v) => v,
+        Err(e) => return json!({ "ok": false, "error": e.to_string() }).to_string(),
+    };
+    let method = match method {
+        "screenshot-ocr" => Method::ScreenshotOcr,
+        "screenshot-typed" => Method::ScreenshotTyped,
+        "in-game" => Method::InGame,
+        "documented" => Method::Documented,
+        other => {
+            return json!({ "ok": false, "error": format!("unknown method: {other}") }).to_string();
+        }
+    };
+
+    let text = |key: &str| node.get(key).and_then(Value::as_str).unwrap_or_default();
+    let mut grants: BTreeMap<String, String> = BTreeMap::new();
+    let mut attributes: BTreeMap<String, i32> = BTreeMap::new();
+    let mut move_speed_add = None;
+    if let Some(rows) = node.get("lines").and_then(Value::as_array) {
+        for row in rows {
+            let what = row.get("what").and_then(Value::as_str).unwrap_or_default();
+            let amount = row
+                .get("amount")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if let Some(attr) = what.strip_prefix("attr:") {
+                if let Ok(points) = amount.parse::<i32>() {
+                    *attributes.entry(attr.to_string()).or_default() += points;
+                }
+            } else if let Some(stat) = what.strip_prefix("stat:") {
+                grants.insert(stat.to_string(), amount.to_string());
+            } else if what.starts_with("move:") {
+                move_speed_add = Some(amount.to_string());
+            }
+        }
+    }
+
+    let observation = ItemObservation {
+        id: text("id").to_string(),
+        name: text("name").to_string(),
+        slot: node
+            .get("slot")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .filter(|s| !s.is_empty()),
+        grants,
+        attributes,
+        move_speed_add,
+    };
+    let submission = Submission {
+        submission: assay_data::submission::FORMAT,
+        observer: observer.to_string(),
+        observed_at: observed_at.to_string(),
+        build: BUILD.to_string(),
+        method,
+        note: node
+            .get("note")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .filter(|s| !s.is_empty()),
+        items: vec![observation],
+        unrecognised: node
+            .get("unrecognised")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+    };
+    match submission.encode() {
+        Ok(text) => json!({ "ok": true, "text": text }).to_string(),
         Err(e) => json!({ "ok": false, "error": e.to_string() }).to_string(),
     }
 }
