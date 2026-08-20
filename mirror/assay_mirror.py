@@ -426,13 +426,13 @@ def apply_percent(damage: int, percent: int) -> int:
     return mul_div(damage, PERCENT + percent, PERCENT)
 
 
-def _pdr_at(dataset: dict, defender: dict, armor: int) -> dict:
+def _pdr_at(dataset: dict, defender: dict, armor: int, reduction_id: str = "derived.pdr") -> dict:
     """The defender's PDR at an arbitrary armour rating: the real curve,
     re-sampled, offset and clamped exactly as resolution would have
     (ADR-006 amendment: penetration re-sampling)."""
     cls = dataset["classes"][defender["class"]]
-    d = next(x for x in cls["derived"] if x["id"] == "derived.pdr")
-    cap = defender["caps"].get("derived.pdr", d.get("cap"))
+    d = next(x for x in cls["derived"] if x["id"] == reduction_id)
+    cap = defender["caps"].get(reduction_id, d.get("cap"))
     floor = d.get("floor")
     offset = d.get("offset", 0)
 
@@ -468,9 +468,18 @@ def exchange_damage(
     # 2: × scaling coefficient. 0% is load-bearing (Sneak Attack).
     damage = zip_with(damage, strike["scaling"], lambda d, c: mul_div(d, c, PERCENT))
 
-    # 3: + Physical Power Bonus, with the situational adjustment.
+    # A strike's type chooses which stats the nine steps read. It adds no
+    # step and reorders none, which is what lets ADR-006 stay locked.
+    kind = strike.get("type", "physical")
+    power_id = ("derived.magic_power_bonus" if kind == "magic"
+                else "derived.physical_power_bonus")
+    rating_id = "derived.magic_resistance" if kind == "magic" else "derived.armor_rating"
+    reduction_id = ("derived.magical_damage_reduction" if kind == "magic"
+                    else "derived.pdr")
+
+    # 3: + the type's power bonus, with the situational adjustment.
     power = zip_with(
-        attacker["derived"]["derived.physical_power_bonus"],
+        attacker["derived"][power_id],
         context["power_bonus_adjust"],
         lambda p, a: p + a,
     )
@@ -488,19 +497,26 @@ def exchange_damage(
     #
     # The mods are keyed by ability, so the same ability applied by two
     # people is one entry: two rogues with Weakpoint are -30, not -60.
-    composition = defender["armor"]
-    net_bonus = composition["bonus"]
-    for mod in context.get("item_armor_bonus_mods", {}).values():
-        net_bonus = zip_with(net_bonus, mod, lambda a, b: a + b)
-    debuffed = zip_with(
-        zip_with(
-            composition["item"],
-            net_bonus,
-            lambda ar, bonus: div_round_half_even(ar * (100_000_000 + bonus), 100_000_000),
-        ),
-        composition["other"],
-        lambda scaled, other: scaled + other,
-    )
+    # The recomposition is physical by nature: an Item Armor Rating Bonus
+    # applies to armour, which is what the game calls it. Magic resistance
+    # has no such multiplier and no two buckets, so a magic strike meets the
+    # rating as it resolved.
+    if kind == "magic":
+        debuffed = defender["derived"][rating_id]
+    else:
+        composition = defender["armor"]
+        net_bonus = composition["bonus"]
+        for mod in context.get("item_armor_bonus_mods", {}).values():
+            net_bonus = zip_with(net_bonus, mod, lambda a, b: a + b)
+        debuffed = zip_with(
+            zip_with(
+                composition["item"],
+                net_bonus,
+                lambda ar, bonus: div_round_half_even(ar * (100_000_000 + bonus), 100_000_000),
+            ),
+            composition["other"],
+            lambda scaled, other: scaled + other,
+        )
     armor = zip_with(
         debuffed,
         strike["armor_pen"],
@@ -510,7 +526,7 @@ def exchange_damage(
     # 6: PDR re-sampled from the curve at the penetrated rating. Rescaling
     # the resolved PDR instead is wrong in direction whenever PDR is
     # negative, which is the defect the amendment fixed.
-    pdr = zip_with(armor, _pdr_at(dataset, defender, armor["value"]), lambda _a, p: p)
+    pdr = zip_with(armor, _pdr_at(dataset, defender, armor["value"], reduction_id), lambda _a, p: p)
 
     # 7: × PDR Mod, multiplicative on the PDR; then reduce the damage once.
     effective_pdr = zip_with(pdr, context["pdr_mod"], lambda p, m: mul_div(p, PERCENT + m, PERCENT))

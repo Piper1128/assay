@@ -11,7 +11,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use assay_core::exchange::{Exchange, ExchangeContext, Strike};
+use assay_core::exchange::{DamageType, Exchange, ExchangeContext, Strike};
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use assay_core::{
     AbilityId, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
@@ -323,7 +323,11 @@ fn strike(node: &Value) -> Strike {
         base: graded_micro(&node["base"]).map(Damage::new),
         scaling: graded_micro(&node["scaling"]).map(ScalingCoefficient::new),
         flat_bonus: graded_micro(&node["flat_bonus"]).map(Damage::new),
-        armor_pen: graded_micro(&node["armor_pen"]).map(ArmorPen::new),
+        damage_type: match node.get("type").and_then(Value::as_str) {
+            Some("magic") => DamageType::Magic,
+            _ => DamageType::Physical,
+        },
+        penetration: graded_micro(&node["armor_pen"]).map(ArmorPen::new),
         true_damage: graded_micro(&node["true_damage"]).map(TrueDamage::new),
     }
 }

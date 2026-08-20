@@ -76,7 +76,17 @@ fn json_output_is_the_canonical_form() {
     let text = stdout(&assay(&["resolve", "loadouts/naked-rogue.toml", "--json"]));
     let line = text.trim();
     assert!(line.starts_with('{') && line.ends_with('}'));
-    assert!(!line.contains(' '), "canonical form carries no whitespace");
+    // No *structural* whitespace: the grammar forbids pretty-printing, not
+    // spaces inside a string. A note is prose and legitimately has them, and
+    // asserting otherwise made the first `unknown` value in the output look
+    // like a formatting bug. Re-serialising compactly must give back exactly
+    // what was printed, which is the property that was actually meant.
+    let parsed: serde_json::Value = serde_json::from_str(line).expect("canonical form parses");
+    assert_eq!(
+        serde_json::to_string(&parsed).expect("re-serialises"),
+        line,
+        "canonical form is not compact"
+    );
     assert!(line.contains("\"micro\":7500000"), "{line}");
 }
 
@@ -277,7 +287,7 @@ fn a_situation_makes_the_exchange_askable() {
         "the flat bonus survives the penalty untouched: {sneak}"
     );
     assert!(
-        sneak.contains("+1 (bypasses armor)"),
+        sneak.contains("+1 (bypasses the reduction)"),
         "true damage lands after the whole chain: {sneak}"
     );
 

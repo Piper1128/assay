@@ -229,6 +229,27 @@ EXCHANGES = [
         },
     },
     {
+        # A magic attack. The type picks Magic Power Bonus at step 3 and the
+        # magic resistance chain at 5 through 7, and changes neither the
+        # order of the steps nor their number.
+        "name": "magic-bolt",
+        "attacker": "rogue-duo-buffed",
+        "defender": "rogue-geared",
+        "strike": {
+            "type": "magic",
+            "base": graded_micro("20"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("0"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("0"),
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("0"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+        },
+    },
+    {
         # Lethal Mark: -30 PDR Mod, multiplicative on the defender's PDR,
         # plus Thrust penetration and a back attack.
         "name": "lethal-mark-back-attack",
@@ -264,7 +285,10 @@ def build_vector() -> str:
 
     exchanges = []
     for case in EXCHANGES:
-        strike = {k: graded_from(v) for k, v in case["strike"].items()}
+        strike = {
+            k: (v if k == "type" else graded_from(v))
+            for k, v in case["strike"].items()
+        }
         context = {
             k: (
                 {inner: graded_from(g) for inner, g in v.items()}

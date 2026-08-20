@@ -64,8 +64,66 @@ use crate::stats::{
 
 /// What the attacker brings to one exchange: the strike being made, as
 /// opposed to the attacker's standing stat block.
+/// What kind of damage a strike deals.
+///
+/// The type does not add a step or reorder one: it chooses which stats the
+/// nine already have read (ADR-006 amendment: damage type). Physical Power
+/// Bonus or Magic Power Bonus at step 3; Armor Rating or Magic Resistance at
+/// step 5; the reduction each of those converts into at 6 and 7.
+///
+/// True damage is not a third type. It has its own field and lands after the
+/// whole reduction chain, because bypassing reduction is what it means.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum DamageType {
+    /// Reduced by armour.
+    #[default]
+    Physical,
+    /// Reduced by magic resistance.
+    Magic,
+}
+
+impl DamageType {
+    /// The name used in files and readouts.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DamageType::Physical => "physical",
+            DamageType::Magic => "magic",
+        }
+    }
+
+    /// The attacker's power bonus for this type: step 3.
+    fn power_bonus(self) -> &'static str {
+        match self {
+            DamageType::Physical => well_known::PHYSICAL_POWER_BONUS,
+            DamageType::Magic => well_known::MAGIC_POWER_BONUS,
+        }
+    }
+
+    /// The defender's rating for this type: step 5.
+    fn rating(self) -> &'static str {
+        match self {
+            DamageType::Physical => well_known::ARMOR_RATING,
+            DamageType::Magic => well_known::MAGIC_RESISTANCE,
+        }
+    }
+
+    /// The reduction that rating converts into: steps 6 and 7.
+    fn reduction(self) -> &'static str {
+        match self {
+            DamageType::Physical => well_known::PDR,
+            DamageType::Magic => well_known::MAGICAL_DAMAGE_REDUCTION,
+        }
+    }
+}
+
+/// One attack, as ADR-006 step 1 through 4 describe it: what is being
+/// swung and with what modifiers.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Strike {
+    /// What kind of damage this is, which decides the stats steps 3 and
+    /// 5 through 7 read.
+    pub damage_type: DamageType,
     /// Base damage of the weapon or skill (step 1).
     pub base: Confidence<Damage>,
     /// The skill's scaling coefficient (step 2). 100% for a plain weapon
@@ -73,8 +131,12 @@ pub struct Strike {
     pub scaling: Confidence<ScalingCoefficient>,
     /// Flat Buff Weapon Damage (step 4).
     pub flat_bonus: Confidence<Damage>,
-    /// Armor penetration carried by the strike (step 5).
-    pub armor_pen: Confidence<ArmorPen>,
+    /// Penetration carried by the strike (step 5). Which defence it
+    /// reduces follows from the damage type: armour rating for a physical
+    /// strike, magic resistance for a magic one. Keeping `armor_pen` as the
+    /// name on a field a magic attack also uses would be the sort of small
+    /// lie that survives for years.
+    pub penetration: Confidence<ArmorPen>,
     /// True damage, applied after the whole reduction chain (step 8).
     pub true_damage: Confidence<TrueDamage>,
 }
@@ -90,12 +152,15 @@ impl Strike {
     #[must_use]
     pub fn basic_swing(weapon: &WeaponProfile) -> Strike {
         Strike {
+            // A weapon swings physically unless something says otherwise,
+            // which is the same thing `DamageType::default()` says.
+            damage_type: DamageType::Physical,
             base: weapon.base_damage.clone().map(Damage::new),
             // 100%: an unmodified swing scales fully. Sneak Attack's 0% is a
             // property of the skill, never a default (ADR-006 step 2).
             scaling: Confidence::Verified(ScalingCoefficient::new(Fixed::from_int(100))),
             flat_bonus: Confidence::Verified(Damage::new(Fixed::ZERO)),
-            armor_pen: weapon.armor_pen.clone().map(ArmorPen::new),
+            penetration: weapon.armor_pen.clone().map(ArmorPen::new),
             true_damage: Confidence::Verified(TrueDamage::new(Fixed::ZERO)),
         }
     }
@@ -264,7 +329,7 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             .data
             .class(&self.defender.class)
             .ok_or_else(|| ExchangeError::UnknownClass(self.defender.class.clone()))?;
-        let pdr_id = DerivedStatId::new(well_known::PDR);
+        let pdr_id = DerivedStatId::new(self.strike.damage_type.reduction());
         let def = class
             .derived
             .iter()
@@ -295,9 +360,10 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
     pub fn damage(&self) -> Result<ExchangeOutcome, ExchangeError> {
         self.require_same_build(self.attacker)?;
         self.require_same_build(self.defender)?;
-        let attacker_power = Self::require(self.attacker, well_known::PHYSICAL_POWER_BONUS)?;
-        let defender_armor = Self::require(self.defender, well_known::ARMOR_RATING)?;
-        let defender_pdr = Self::require(self.defender, well_known::PDR)?;
+        let kind = self.strike.damage_type; // probe: damage-type
+        let attacker_power = Self::require(self.attacker, kind.power_bonus())?;
+        let defender_armor = Self::require(self.defender, kind.rating())?;
+        let defender_pdr = Self::require(self.defender, kind.reduction())?;
         let mut trace: Vec<StageNote> = Vec::new();
 
         // ── 1: base damage ───────────────────────────────────────────────
@@ -335,7 +401,10 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         });
         trace.push(StageNote {
             stage: 3,
-            label: "physical power bonus",
+            label: match kind {
+                DamageType::Physical => "physical power bonus",
+                DamageType::Magic => "magic power bonus",
+            },
             detail: format!("× (100{:+})% → {}", power.value(), powered.value().value()),
         });
 
@@ -359,6 +428,14 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         // so it composes first. Penetration is a property of the strike and
         // subtracts from whatever armour it meets
         // (`docs/adr/ADR-006-amendment-item-armor-debuff.md`).
+        //
+        // The recomposition is physical by nature: an Item Armor Rating
+        // Bonus applies to *armour*, which is what the game calls it. Magic
+        // resistance has no such multiplier and no two buckets, so a magic
+        // strike meets the rating as it resolved. Running the armour
+        // composition for a magic attack reduced it by the defender's
+        // armour rating — the right shape reading the wrong stat, which is
+        // the sort of thing only running it finds.
         let composition = &self.defender.armor;
         let mut net_bonus = composition.bonus.clone();
         for mod_value in self.context.item_armor_bonus_mods.values() {
@@ -366,10 +443,13 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         }
         // The debuff's base is the item bucket, exactly as resolution's was.
         let bonus_base = composition.item.clone(); // probe: debuff-item-base
-        let debuffed = bonus_base
-            .zip_with(net_bonus.clone(), apply_item_armor_bonus)
-            .zip_with(composition.other.clone(), |scaled, other| scaled + other);
-        if !self.context.item_armor_bonus_mods.is_empty() {
+        let debuffed = match kind {
+            DamageType::Physical => bonus_base
+                .zip_with(net_bonus.clone(), apply_item_armor_bonus)
+                .zip_with(composition.other.clone(), |scaled, other| scaled + other),
+            DamageType::Magic => defender_armor.clone(),
+        };
+        if !self.context.item_armor_bonus_mods.is_empty() && kind == DamageType::Physical {
             trace.push(StageNote {
                 stage: 5,
                 label: "armor debuffed",
@@ -392,14 +472,18 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         let armor = debuffed
             .clone()
             .map(ArmorRating::new)
-            .zip_with(self.strike.armor_pen.clone(), penetrate);
+            .zip_with(self.strike.penetration.clone(), penetrate);
         trace.push(StageNote {
             stage: 5,
-            label: "armor penetration",
+            label: "penetration",
             detail: format!(
-                "armor {} − pen {}% → {}",
+                "{} {} − pen {}% → {}",
+                match kind {
+                    DamageType::Physical => "armor",
+                    DamageType::Magic => "magic resistance",
+                },
                 debuffed.value(),
-                self.strike.armor_pen.value().value(),
+                self.strike.penetration.value().value(),
                 armor.value().value()
             ),
         });
@@ -418,7 +502,10 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             .zip_with(resampled, |_, pdr| PdrPercent::new(pdr));
         trace.push(StageNote {
             stage: 6,
-            label: "PDR from curve",
+            label: match kind {
+                DamageType::Physical => "PDR from curve",
+                DamageType::Magic => "magical DR from curve",
+            },
             detail: format!(
                 "{} → {} re-sampled at the penetrated rating",
                 base_pdr.value().value(),
@@ -435,7 +522,10 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             .zip_with(effective_pdr.clone(), reduce_by_pdr);
         trace.push(StageNote {
             stage: 7,
-            label: "PDR mod",
+            label: match kind {
+                DamageType::Physical => "PDR mod",
+                DamageType::Magic => "magical DR mod",
+            },
             detail: format!(
                 "PDR mod {}% → effective PDR {}% → {}",
                 self.context.pdr_mod.value().value(),
@@ -457,7 +547,7 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             stage: 8,
             label: "true damage",
             detail: format!(
-                "{:+} (bypasses armor) → {}",
+                "{:+} (bypasses the reduction) → {}",
                 self.strike.true_damage.value().value(),
                 with_true.value().value()
             ),
@@ -665,10 +755,11 @@ mod tests {
 
     fn strike(base: i64, scaling: i64, flat: i64, pen: i64, true_dmg: i64) -> Strike {
         Strike {
+            damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(base))),
             scaling: Confidence::Verified(ScalingCoefficient::new(fx(scaling))),
             flat_bonus: Confidence::Verified(Damage::new(fx(flat))),
-            armor_pen: Confidence::Verified(ArmorPen::new(fx(pen))),
+            penetration: Confidence::Verified(ArmorPen::new(fx(pen))),
             true_damage: Confidence::Verified(TrueDamage::new(fx(true_dmg))),
         }
     }
@@ -708,10 +799,11 @@ mod tests {
         let data = dataset();
         let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let sneak = Strike {
+            damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(10))),
             scaling: Confidence::Verified(ScalingCoefficient::new(Fixed::ZERO)),
             flat_bonus: Confidence::Verified(Damage::new(fx(15))),
-            armor_pen: Confidence::Verified(ArmorPen::new(Fixed::ZERO)),
+            penetration: Confidence::Verified(ArmorPen::new(Fixed::ZERO)),
             true_damage: Confidence::Verified(TrueDamage::new(Fixed::ZERO)),
         };
         let neutral = ExchangeContext::default();
@@ -933,6 +1025,61 @@ mod tests {
                 ),
             "a different ability is a different debuff and must sum"
         );
+    }
+
+    #[test]
+    fn a_magic_strike_reads_the_magic_chain() {
+        // The type changes which stats the nine steps read and nothing else:
+        // no step is added, removed or reordered, which is what lets ADR-006
+        // stay locked while this exists.
+        let data = dataset();
+        let attacker = combatant(&data, 0);
+        let defender = layered(&data, 200, 0, false);
+        let strike = strike(100, 100, 0, 0, 0);
+        let neutral = ExchangeContext::default();
+
+        let physical = Exchange::new(&attacker, &defender, &strike, &neutral, &data)
+            .damage()
+            .expect("physical resolves");
+        let magic_strike = Strike {
+            damage_type: DamageType::Magic,
+            ..strike.clone()
+        };
+        // The test dataset defines no magic chain, so a magic strike is a
+        // named error rather than a silent zero — the same way a missing
+        // PDR already is.
+        let refused = Exchange::new(&attacker, &defender, &magic_strike, &neutral, &data).damage();
+        assert!(
+            matches!(refused, Err(ExchangeError::MissingStat(_))),
+            "a class with no magic chain must say so: {refused:?}"
+        );
+        // And the physical answer is untouched by the type existing.
+        assert!(physical.damage.value().value() > Fixed::ZERO);
+    }
+
+    #[test]
+    fn every_step_names_the_stat_it_actually_read() {
+        // The first version of this amendment selected the right stats and
+        // kept the physical labels, so a magic attack printed "armor 36"
+        // while reducing by magic resistance. A trace that names the wrong
+        // stat is worse than none: it invites a reader to check the wrong
+        // number and find it correct.
+        let data = dataset();
+        let attacker = combatant(&data, 0);
+        let defender = layered(&data, 200, 0, false);
+        let out = Exchange::new(
+            &attacker,
+            &defender,
+            &strike(100, 100, 0, 0, 0),
+            &ExchangeContext::default(),
+            &data,
+        )
+        .damage()
+        .expect("resolves");
+        let five = out.trace.iter().find(|n| n.stage == 5).expect("step 5");
+        assert!(five.detail.starts_with("armor "), "{}", five.detail);
+        let three = out.trace.iter().find(|n| n.stage == 3).expect("step 3");
+        assert_eq!(three.label, "physical power bonus");
     }
 
     #[test]

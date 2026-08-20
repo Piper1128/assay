@@ -397,6 +397,7 @@
     // the attack, so it belongs to neither build and lives here.
     situation: new Set(),
     hitLocation: "",
+    damageType: "physical",
   };
 
   /// The circumstances with numbers this project already has. Each one is a
@@ -607,12 +608,24 @@
     }
     const hit = state.hitLocation.replace(/−/g, "-").trim();
     if (hit) out.context.hitLocationBonus = hit;
+    out.type = state.damageType;
     return JSON.stringify(out);
   }
 
   function renderHit() {
     const host = $("sheet");
     host.replaceChildren();
+
+    // Physical or magic. The type chooses which stats the nine steps read;
+    // it does not add one or change their order.
+    const kinds = el("div", "situations");
+    for (const [id, label] of [["physical", "Physical"], ["magic", "Magic"]]) {
+      const b = el("button", null, label);
+      b.setAttribute("aria-pressed", String(state.damageType === id));
+      b.onclick = () => { state.damageType = id; renderHit(); };
+      kinds.append(b);
+    }
+    host.append(kinds);
 
     const picks = el("div", "situations");
     for (const [id, label] of SITUATIONS) {

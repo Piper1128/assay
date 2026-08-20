@@ -21,7 +21,7 @@ use std::fmt;
 
 use assay_core::AbilityId;
 use assay_core::confidence::Confidence;
-use assay_core::exchange::{ExchangeContext, Strike};
+use assay_core::exchange::{DamageType, ExchangeContext, Strike};
 use assay_core::fixed::Fixed;
 use assay_core::schema::WeaponProfile;
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
@@ -75,6 +75,15 @@ pub(crate) fn parse(text: &str, weapon: &WeaponProfile) -> Result<Situation, Sit
     };
 
     let strike = Strike {
+        damage_type: match dto.strike.damage_type.as_deref() {
+            Some("magic") => DamageType::Magic,
+            Some("physical") | None => DamageType::Physical,
+            Some(other) => {
+                return Err(SituationError::Invalid(format!(
+                    "unknown damage type: {other}. It is `physical` or `magic`;                      true damage is a field, not a type, because bypassing                      reduction is what it means."
+                )));
+            }
+        },
         base: match fixed(&dto.strike.base, "base")? {
             Some(v) => Confidence::Verified(Damage::new(v)),
             None => basic.base,
@@ -87,9 +96,9 @@ pub(crate) fn parse(text: &str, weapon: &WeaponProfile) -> Result<Situation, Sit
             Some(v) => Confidence::Verified(Damage::new(v)),
             None => basic.flat_bonus,
         },
-        armor_pen: match fixed(&dto.strike.armor_pen, "armor_pen")? {
+        penetration: match fixed(&dto.strike.penetration, "penetration")? {
             Some(v) => Confidence::Verified(ArmorPen::new(v)),
-            None => basic.armor_pen,
+            None => basic.penetration,
         },
         true_damage: match fixed(&dto.strike.true_damage, "true_damage")? {
             Some(v) => Confidence::Verified(TrueDamage::new(v)),
@@ -144,6 +153,10 @@ struct SituationDto {
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StrikeDto {
+    /// `physical` or `magic`. Chooses which stats steps 3 and 5 through 7
+    /// read; it does not add a step or change their order.
+    #[serde(default, rename = "type")]
+    damage_type: Option<String>,
     /// Base damage, if the skill has its own rather than the weapon's.
     #[serde(default)]
     base: Option<String>,
@@ -155,9 +168,10 @@ struct StrikeDto {
     /// Flat Buff Weapon Damage.
     #[serde(default)]
     flat_bonus: Option<String>,
-    /// Armour penetration, if the skill differs from the weapon.
+    /// Penetration, if the skill differs from the weapon. Which defence it
+    /// reduces follows from the damage type.
     #[serde(default)]
-    armor_pen: Option<String>,
+    penetration: Option<String>,
     /// True damage, which lands after the whole reduction chain.
     #[serde(default)]
     true_damage: Option<String>,
@@ -205,7 +219,7 @@ mod tests {
         // answering a question nobody asked.
         let s = parse("", &weapon()).unwrap();
         assert_eq!(s.strike.base.value().value(), Fixed::from_int(32));
-        assert_eq!(s.strike.armor_pen.value().value(), Fixed::from_int(15));
+        assert_eq!(s.strike.penetration.value().value(), Fixed::from_int(15));
         assert_eq!(s.strike.scaling.value().value(), Fixed::from_int(100));
     }
 

@@ -156,6 +156,18 @@ Nine passed. Two did not, and are recorded here rather than guessed at:
   the sheet's wording — the wiki gives a duration, the sheet gives a
   reduction, and 12.4% does not fall out of either reading.
 
+**Two assumptions the magic chain rests on**, both graded rather than
+asserted, so nothing built on them can be mistaken for measured:
+
+- **Magic Power Bonus shares the Physical Power Bonus curve.** The character
+  sheet reads `-11%` for Physical Power 10 and `-11%` for Magic Power 10 on
+  the same character. That is one point of agreement, not a proof. The curve
+  is graded `unknown` and carries that reasoning, so every magic damage
+  number comes back with it attached and `--strict` refuses it.
+- **Magic Penetration reduces Magic Resistance the way armour penetration
+  reduces Armor Rating.** Both print as percentages on item cards and both
+  sit opposite a rating. That is symmetry rather than evidence.
+
 **Other gaps**
 
 - Hotfix 122's build id `0.17.149.9316` comes from ADR-004's example, not from

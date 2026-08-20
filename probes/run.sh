@@ -94,6 +94,19 @@ fi
 git checkout --quiet -- crates/assay-core/src/resolve.rs
 verdict pipeline_order "$gate_rejected"
 
+# ── damage_type ──────────────────────────────────────────────────────────────
+# A strike's type chooses which stats the nine steps read. Forcing it back to
+# physical must fail: a magic attack would be reduced by armour rating, which
+# is the right shape reading the wrong stat (ADR-006 amendment: damage type).
+sed -i '/probe: damage-type/ s/self\.strike\.damage_type/DamageType::Physical/' crates/assay-core/src/exchange.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/exchange.rs
+verdict damage_type "$gate_rejected"
+
 # ── ability_bonus ────────────────────────────────────────────────────────────
 # An ability's flat contribution reaches the `From Bonuses` row the game
 # prints under every stat that has one. Dropping it must fail.

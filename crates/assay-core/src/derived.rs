@@ -46,6 +46,13 @@ pub mod well_known {
     pub const MOVE_SPEED: &str = "derived.move_speed";
     /// Absolute health.
     pub const HEALTH: &str = "derived.health";
+    /// Magic resistance; the magic side's rating, as armour rating is the
+    /// physical side's.
+    pub const MAGIC_RESISTANCE: &str = "derived.magic_resistance";
+    /// Magical damage reduction in percentage points.
+    pub const MAGICAL_DAMAGE_REDUCTION: &str = "derived.magical_damage_reduction";
+    /// Magic power bonus in percentage points.
+    pub const MAGIC_POWER_BONUS: &str = "derived.magic_power_bonus";
 }
 
 /// What feeds a rating.

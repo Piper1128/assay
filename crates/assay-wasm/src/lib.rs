@@ -17,7 +17,7 @@
 
 use assay_core::confidence::{Confidence, ConfidenceLevel};
 use assay_core::derived::StatBreakdown;
-use assay_core::exchange::{Exchange, ExchangeContext, Strike};
+use assay_core::exchange::{DamageType, Exchange, ExchangeContext, Strike};
 use assay_core::fixed::Fixed;
 use assay_core::ids::{AbilityId, ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
@@ -661,6 +661,11 @@ fn build_situation(
     };
 
     let strike = Strike {
+        damage_type: match node.get("type").and_then(Value::as_str) {
+            Some("magic") => DamageType::Magic,
+            Some("physical") | None => DamageType::Physical,
+            Some(other) => return Err(format!("unknown damage type: {other}")),
+        },
         base: fixed("strike", "base")?.map_or(basic.base, |v| {
             Confidence::Verified(assay_core::stats::Damage::new(v))
         }),
@@ -670,7 +675,7 @@ fn build_situation(
         flat_bonus: fixed("strike", "flatBonus")?.map_or(basic.flat_bonus, |v| {
             Confidence::Verified(assay_core::stats::Damage::new(v))
         }),
-        armor_pen: fixed("strike", "armorPen")?.map_or(basic.armor_pen, |v| {
+        penetration: fixed("strike", "penetration")?.map_or(basic.penetration, |v| {
             Confidence::Verified(assay_core::stats::ArmorPen::new(v))
         }),
         true_damage: fixed("strike", "trueDamage")?.map_or(basic.true_damage, |v| {

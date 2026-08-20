@@ -207,6 +207,45 @@
       ]
     },
     {
+      "id": "curve.magic_power_bonus",
+      "confidence": "unknown",
+      "note": "assumed to be the Physical Power Bonus curve. The character sheet reads -11% for Physical Power 10 and -11% for Magic Power 10 on the same character, which is one point of agreement and not a proof that the curves are identical",
+      "points": [
+        [
+          0,
+          -80000000
+        ],
+        [
+          5000000,
+          -30000000
+        ],
+        [
+          7000000,
+          -20000000
+        ],
+        [
+          11000000,
+          -8000000
+        ],
+        [
+          15000000,
+          0
+        ],
+        [
+          50000000,
+          35000000
+        ],
+        [
+          60000000,
+          40000000
+        ],
+        [
+          100000000,
+          50000000
+        ]
+      ]
+    },
+    {
       "id": "curve.magic_resistance_to_mdr",
       "confidence": "unverified",
       "points": [

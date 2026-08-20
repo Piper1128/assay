@@ -1,0 +1,7 @@
+# A magic attack. The type chooses which stats the nine steps read — Magic
+# Power Bonus at step 3, Magic Resistance at step 5, Magical Damage
+# Reduction at 6 and 7 — and changes neither their order nor their number.
+name = "a magic attack"
+
+[strike]
+type = "magic"

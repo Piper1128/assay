@@ -94,6 +94,18 @@
           "curve": "curve.health_recovery_bonus"
         },
         {
+          "id": "derived.magic_power_bonus",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.magical_power",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.magic_power_bonus",
+          "floor": -100000000
+        },
+        {
           "id": "derived.magic_resistance",
           "weights": [
             {
@@ -126,6 +138,17 @@
             }
           ],
           "curve": "curve.magical_interaction_speed"
+        },
+        {
+          "id": "derived.magical_power",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.identity"
         },
         {
           "id": "derived.manual_dexterity",
@@ -315,6 +338,18 @@
           "curve": "curve.health_recovery_bonus"
         },
         {
+          "id": "derived.magic_power_bonus",
+          "weights": [
+            {
+              "kind": "derived",
+              "ref": "derived.magical_power",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.magic_power_bonus",
+          "floor": -100000000
+        },
+        {
           "id": "derived.magic_resistance",
           "weights": [
             {
@@ -347,6 +382,17 @@
             }
           ],
           "curve": "curve.magical_interaction_speed"
+        },
+        {
+          "id": "derived.magical_power",
+          "weights": [
+            {
+              "kind": "attribute",
+              "ref": "will",
+              "weight": 1000000
+            }
+          ],
+          "curve": "curve.identity"
         },
         {
           "id": "derived.manual_dexterity",

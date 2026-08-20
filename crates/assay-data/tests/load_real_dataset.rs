@@ -348,8 +348,12 @@ fn three_item_cards_reach_the_block_through_every_route_they_have() {
     // 33 printed + 25 printed + 11 rolled. The rolled 11 is outside any
     // Item Armor Rating Bonus, which is what the game calls it: Additional.
     assert_eq!(stat(well_known::ARMOR_RATING), Fixed::from_int(69));
-    // A necklace grants stats, and they are not attributes.
-    assert_eq!(stat("derived.magical_power"), Fixed::from_int(1));
+    // A necklace grants stats, and they are not attributes. Magical Power
+    // is 11 rather than the choker's 1: Will feeds it the way Strength
+    // feeds Physical Power, so the choker adds to the 10 the Rogue already
+    // had. Before the magic chain existed this read 1, which was the
+    // choker's contribution going nowhere.
+    assert_eq!(stat("derived.magical_power"), Fixed::from_int(11));
     assert_eq!(stat("derived.magic_penetration"), Fixed::from_int(1));
     // A cap grants a defensive stat nothing computes.
     assert_eq!(
