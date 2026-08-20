@@ -323,6 +323,92 @@ fn breakdown(parts: &StatBreakdown, total: &Confidence<Fixed>) -> Value {
     })
 }
 
+/// Resolves two loadouts and states the difference between them.
+///
+/// The subtraction happens here rather than in the page. A delta computed in
+/// JavaScript would be a `parseFloat` away from the exact error class this
+/// project exists to prevent — and it would be a second implementation of
+/// arithmetic the core already does exactly, which is what the mirror exists
+/// to catch. So the page renders differences; it never computes one.
+///
+/// A stat present in only one build is reported as appearing or vanishing
+/// rather than as a difference from zero, because those are different facts.
+#[wasm_bindgen]
+#[must_use]
+pub fn compare_loadouts(a_json: &str, b_json: &str) -> String {
+    let a: Value = match serde_json::from_str(&resolve_loadout(a_json)) {
+        Ok(v) => v,
+        Err(e) => return json!({ "ok": false, "error": e.to_string() }).to_string(),
+    };
+    let b: Value = match serde_json::from_str(&resolve_loadout(b_json)) {
+        Ok(v) => v,
+        Err(e) => return json!({ "ok": false, "error": e.to_string() }).to_string(),
+    };
+    if a["ok"] != json!(true) {
+        return json!({ "ok": false, "error": a["error"], "side": "a" }).to_string();
+    }
+    if b["ok"] != json!(true) {
+        return json!({ "ok": false, "error": b["error"], "side": "b" }).to_string();
+    }
+
+    let read = |side: &Value| -> BTreeMap<String, (String, String)> {
+        side["derived"]
+            .as_array()
+            .map(|rows| {
+                rows.iter()
+                    .filter_map(|row| {
+                        Some((
+                            row["id"].as_str()?.to_string(),
+                            (
+                                row["label"].as_str()?.to_string(),
+                                row["value"].as_str()?.to_string(),
+                            ),
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let (left, right) = (read(&a), read(&b));
+
+    let mut ids: Vec<&String> = left.keys().chain(right.keys()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+
+    let mut deltas = Vec::new();
+    for id in ids {
+        let entry = match (left.get(id), right.get(id)) {
+            (Some((label, from)), Some((_, to))) => {
+                let (from_v, to_v) = match (from.parse::<Fixed>(), to.parse::<Fixed>()) {
+                    (Ok(f), Ok(t)) => (f, t),
+                    _ => continue,
+                };
+                let change = to_v - from_v;
+                json!({
+                    "id": id,
+                    "label": label,
+                    "from": from,
+                    "to": to,
+                    // `{:+}` so a delta always carries its sign: an unsigned
+                    // "3" in a difference column is ambiguous in the one
+                    // place ambiguity costs the most.
+                    "delta": format!("{change:+}"),
+                    "same": change == Fixed::ZERO,
+                })
+            }
+            (Some((label, from)), None) => json!({
+                "id": id, "label": label, "from": from, "to": Value::Null, "gone": true,
+            }),
+            (None, Some((label, to))) => json!({
+                "id": id, "label": label, "from": Value::Null, "to": to, "new": true,
+            }),
+            (None, None) => continue,
+        };
+        deltas.push(entry);
+    }
+    json!({ "ok": true, "a": a, "b": b, "delta": deltas }).to_string()
+}
+
 /// Resolves one loadout, given as JSON. Returns JSON either way: a failure is
 /// a result the page can show, not an exception it has to catch.
 #[wasm_bindgen]

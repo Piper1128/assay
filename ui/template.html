@@ -205,6 +205,57 @@
   .read-line.dropped { color: var(--unknown); }
   .read-line code { font-family: var(--mono); }
 
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs button {
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 3px 3px 0 0;
+    background: transparent;
+    color: var(--ink-dim);
+    padding: 6px 12px;
+    margin-bottom: -1px;
+  }
+  .tabs button[aria-selected="true"] {
+    color: var(--ink);
+    background: var(--surface);
+    border-color: var(--line);
+  }
+  .tabs .spacer { flex: 1; }
+
+  /* Four columns: what it is, each build, and the difference. The
+     difference column is the reason the page exists in this mode, so it
+     carries the weight and the others stay quiet. */
+  .cmp {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 0 18px;
+    align-items: baseline;
+    max-width: 720px;
+  }
+  .cmp > * { padding: 6px 0 5px; border-bottom: 1px solid var(--line); }
+  .cmp .head {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border-bottom-color: var(--gold);
+  }
+  .cmp .name { font-family: var(--serif); font-size: 15px; }
+  .cmp .num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .cmp .num.quiet { color: var(--ink-dim); }
+  .cmp .num.up { color: var(--verified); }
+  .cmp .num.down { color: var(--bad); }
+  .cmp .num.flat { color: var(--ink-dim); }
+
   details.trace { margin-top: 18px; }
   details.trace summary { cursor: pointer; color: var(--ink-dim); font-size: 13px; }
   details.trace pre {
@@ -228,6 +279,8 @@
   <section class="panel">
     <h2>Build</h2>
     <p class="hint">Everything here is a question about one character. Nothing is saved anywhere.</p>
+
+    <div class="tabs" id="tabs" role="tablist"></div>
 
     <div class="field">
       <label for="class">Class</label>
@@ -289,7 +342,14 @@
   };
 
   let CATALOG = null;
-  const state = { class: null, gear: {} };   // gear: slotKey -> piece
+  // Two builds and a view. "A vs B" is a view rather than a third build:
+  // the question it answers is about the other two, and giving it state of
+  // its own would let it disagree with them.
+  const state = {
+    builds: { A: { class: null, gear: {} }, B: { class: null, gear: {} } },
+    view: "A",
+  };
+  const editing = () => state.builds[state.view === "cmp" ? "A" : state.view];
 
   // ── stat vocabulary ────────────────────────────────────────────────
   // What an item card can say, and where each line goes. A line the tool
@@ -333,7 +393,7 @@
   }
 
   function slotCard(slotId, key) {
-    const piece = state.gear[key];
+    const piece = editing().gear[key];
     const box = el("details", "slot");
     if (piece) box.open = false;
 
@@ -356,8 +416,8 @@
     }
     if (piece && !piece.custom) pick.value = piece.id;
     pick.onchange = () => {
-      if (!pick.value) delete state.gear[key];
-      else state.gear[key] = { id: pick.value, slot: slotId, rolls: [] };
+      if (!pick.value) delete editing().gear[key];
+      else editing().gear[key] = { id: pick.value, slot: slotId, rolls: [] };
       redraw();
     };
     const f = el("div", "field");
@@ -406,9 +466,9 @@
   }
 
   // ── talking to the resolver ────────────────────────────────────────
-  function loadoutJson() {
+  function loadoutJson(build) {
     const gear = [];
-    for (const [key, piece] of Object.entries(state.gear)) {
+    for (const [key, piece] of Object.entries(build.gear)) {
       const attributes = {};
       const additional = {};
       let moveSpeedAdd = null;
@@ -432,12 +492,61 @@
       gear.push(out);
       void key;
     }
-    return JSON.stringify({ name: "build", class: state.class, gear });
+    return JSON.stringify({ name: "build", class: build.class, gear });
   }
 
   function resolveNow() {
-    const out = JSON.parse(wasm_bindgen.resolve_loadout(loadoutJson()));
-    renderSheet(out);
+    if (state.view === "cmp") {
+      const out = JSON.parse(wasm_bindgen.compare_loadouts(
+        loadoutJson(state.builds.A), loadoutJson(state.builds.B)));
+      renderCompare(out);
+    } else {
+      const out = JSON.parse(wasm_bindgen.resolve_loadout(loadoutJson(editing())));
+      renderSheet(out);
+    }
+  }
+
+  /// A and B beside each other, with the difference in its own column.
+  ///
+  /// Every number here was computed by the resolver, including the deltas.
+  /// Subtracting two decimals in JavaScript would mean a `parseFloat` in the
+  /// one column people read most carefully.
+  function renderCompare(out) {
+    const host = $("sheet");
+    host.replaceChildren();
+    if (!out.ok) {
+      const where = out.side ? `build ${out.side.toUpperCase()}: ` : "";
+      host.append(el("div", "error", where + (out.error?.toString() ?? "")));
+      $("trace").textContent = "";
+      return;
+    }
+    const grid = el("div", "cmp");
+    for (const h of ["", "A", "B", "change"]) {
+      grid.append(el("div", "head" + (h ? " num" : ""), h));
+    }
+    for (const row of out.delta) {
+      grid.append(el("div", "name", row.label.replace(/_/g, " ")));
+      grid.append(el("div", "num quiet", row.from ?? "—"));
+      grid.append(el("div", "num quiet", row.to ?? "—"));
+      if (row.new) {
+        grid.append(el("div", "num up", "new"));
+      } else if (row.gone) {
+        grid.append(el("div", "num down", "gone"));
+      } else {
+        const dir = row.same ? "flat" : row.delta.startsWith("-") ? "down" : "up";
+        grid.append(el("div", "num " + dir, row.same ? "·" : row.delta));
+      }
+    }
+    host.append(grid);
+    host.append(el("p", "hint",
+      "Green is larger and red is smaller, which is not the same as better: " +
+      "a smaller number is what you want from anything called a reduction " +
+      "you are on the wrong end of."));
+    $("trace").textContent = out.a.trace
+      .map(n => `A  ${n.stage}. ${n.label.padEnd(28)} ${n.detail}`).join("\n")
+      + "\n\n"
+      + out.b.trace
+      .map(n => `B  ${n.stage}. ${n.label.padEnd(28)} ${n.detail}`).join("\n");
   }
 
   function renderSheet(out) {
@@ -492,7 +601,40 @@
     return row;
   }
 
-  function redraw() { buildSlots(); resolveNow(); }
+  function buildTabs() {
+    const host = $("tabs");
+    host.replaceChildren();
+    for (const [view, label] of [["A", "Build A"], ["B", "Build B"], ["cmp", "A vs B"]]) {
+      const tab = el("button", null, label);
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(state.view === view));
+      tab.onclick = () => { state.view = view; redraw(); };
+      host.append(tab);
+    }
+    host.append(el("div", "spacer"));
+    // Starting B from A is the common move: you change one piece and want
+    // to know what that piece was worth.
+    const copy = el("button", null, "A → B");
+    copy.title = "copy build A into build B";
+    copy.onclick = () => {
+      state.builds.B = JSON.parse(JSON.stringify(state.builds.A));
+      state.view = "cmp";
+      redraw();
+    };
+    host.append(copy);
+  }
+
+  function redraw() {
+    buildTabs();
+    const pick = $("class");
+    pick.value = editing().class ?? "";
+    // The left panel edits A while the comparison is in view: there is only
+    // one editor, and it stays pointed at something.
+    document.querySelectorAll(".panel")[0].querySelectorAll("h2")[0].textContent =
+      state.view === "cmp" ? "Build A" : "Build " + state.view;
+    buildSlots();
+    resolveNow();
+  }
 
   // ── reading a card ─────────────────────────────────────────────────
   const drop = $("drop");
@@ -616,7 +758,7 @@
     const use = el("button", "primary", "Add to the build");
     use.onclick = () => {
       const key = where.value;
-      state.gear[key] = {
+      editing().gear[key] = {
         id: "item.blank",
         custom: true,
         label: card.name || "described by hand",
@@ -645,9 +787,10 @@
     $("build").append(`${CATALOG.label} · `, el("code", null, CATALOG.build));
     const pick = $("class");
     for (const c of CATALOG.classes) pick.append(new Option(c.name, c.id));
-    state.class = CATALOG.classes[0]?.id ?? null;
-    pick.value = state.class;
-    pick.onchange = () => { state.class = pick.value; resolveNow(); };
+    const first = CATALOG.classes[0]?.id ?? null;
+    state.builds.A.class = first;
+    state.builds.B.class = first;
+    pick.onchange = () => { editing().class = pick.value; resolveNow(); };
     redraw();
   }
 })();
