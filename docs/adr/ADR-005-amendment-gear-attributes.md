@@ -1,4 +1,4 @@
-# ADR-005 amendment: gear contributes attributes, from every slot
+# ADR-005 amendment: what gear contributes, from every slot
 
 Status: Proposed
 Amends: ADR-005 (resolution pipeline), stage 2; ADR-004 (dataset schema),
@@ -46,6 +46,54 @@ verified, and folding rolls into the item definition would make a question
 about one player's gear into a claim about every copy of the item. Both
 directions corrupt the grade, which is the one thing this tool sells.
 
+## What the game shows, and how it names it
+
+Three item cards settle most of the shape. **Loose Trousers** (Epic, Legs):
+Armor Rating 25, Move Speed −2, Agility 4 in white; +2 Strength, +9 Magic
+Resistance, +2.8% Demon Damage Reduction in blue. **Leather Cap** (Uncommon,
+Head): Armor Rating 33, Headshot Damage Reduction 14%, Move Speed −3, Vigor 2
+in white; **+11 Additional Armor Rating** in blue. **Phoenix Choker**
+(Uncommon, Necklace): Magical Power 1, Magic Penetration 1% in white; +1
+Additional Physical Damage in blue.
+
+Three things follow that this amendment could not have guessed.
+
+**The static/rolled split is the item card's own layout**, white against
+blue. It is not a modelling convenience.
+
+**"Additional" is the game's word for the second bucket.** A cap carries
+`Armor Rating 33` printed on it and `+11 Additional Armor Rating` rolled onto
+it, and the two are named differently on the same card. That is the
+distinction the item-armor-bonus amendment invented as *item* and *other*,
+and the game had a vocabulary for it already. It is also evidence for that
+amendment's central assumption — an Item Armor Rating Bonus multiplying
+`Armor Rating` and leaving `Additional Armor Rating` alone reads as the
+obvious meaning of those two labels.
+
+**Gear grants derived stats, not only attributes.** Magic Resistance,
+Magical Power, Magic Penetration and Headshot Damage Reduction all appear on
+item cards. Magic Resistance in particular is not an attribute and does not
+arrive through Will, which the wiki said was its only source.
+
+## The shape all four chains share
+
+The character sheet breaks each defensive and offensive stat into a rating
+and a second term, in the same layout every time:
+
+    Physical Damage Reduction   -22%        Physical Power Bonus   -11%
+      From Armor Rating         0 (-22%)      From Physical Power   10 (-11%)
+      From Bonuses              0             From Bonuses          0
+    Magical Damage Reduction    1.5%        Magic Power Bonus      -11%
+      From Magic Resistance     15 (1.5%)     From Magic Power      10 (-11%)
+      From Bonuses              0             From Bonuses          0
+
+So each is `curve(rating) + bonuses`, and each rating is an attribute plus
+gear: Physical Power is Strength plus gear, Magic Power is Will plus gear,
+Magic Resistance is Will through a conversion plus gear, Armor Rating is
+gear alone. We model the curve for three of the four and the gear seeding for
+one, and no chain has its bonus term. The `+ bonuses` half is a separate
+question and is not decided here — recorded in `data/README.md`.
+
 ## Decision
 
 ### 1. Items carry static attributes
@@ -53,16 +101,34 @@ directions corrupt the grade, which is the one thing this tool sells.
 ```rust
 pub struct ItemDef {
     // ...
-    /// Attributes printed on the item, present on every copy. Sparse:
-    /// an attribute the item does not grant is absent, not zero
-    /// (ADR-001 canonical encoding: absence is not null).
+    /// Attributes printed on the item, present on every copy. Sparse: an
+    /// attribute the item does not grant is absent, not zero (ADR-001
+    /// canonical encoding: absence is not null).
     pub attributes: Option<Confidence<BTreeMap<AttributeKind, i32>>>,
+    /// Derived stats printed on the item — armour rating, magic resistance,
+    /// magical power, magic penetration. Seeds the graph the way gear-
+    /// sourced armour rating already does (ADR-012).
+    pub grants: BTreeMap<DerivedStatId, Confidence<Fixed>>,
 }
 ```
 
 Sparse rather than an `AttributeBlock`, because a full block cannot say the
 difference between "grants no Will" and "grants Will 0", and the canonical
 encoding already forbids that conflation everywhere else.
+
+`grants` replaces the special-cased `armor_rating` field. One item card can
+carry armour rating, magic resistance and magical power at once, and adding
+a field per stat means the schema changes every time the game does — where
+ADR-012 has already established that a new derived stat is a dataset job.
+`Roll` gains the matching general case, replacing `Roll::ArmorRating`:
+
+```rust
+Roll::Derived(DerivedStatId, Fixed)   // "+11 Additional Armor Rating"
+```
+
+Which bucket a contribution lands in follows the card's own wording: the
+printed line is item-sourced, the `Additional` roll is not, exactly as
+`ItemDef` and `Roll` already divide them.
 
 ### 2. A loadout has gear, not just armour
 
@@ -95,7 +161,8 @@ rounding point for attributes because there is none: they are whole points.
 
 ## Open, and named rather than guessed
 
-**Does jewelry armour rating count as "item armour"?** The Item Armor Rating
+**Does a piece of jewelry that grants armour rating count as "item
+armour"?** The Item Armor Rating
 Bonus multiplies "armour rating from equipped armour, excluding
 enchantments" (ADR-005 amendment: item armor bonus). Whether a ring's armour
 rating is inside that base is undocumented. This is why `Slot` exists: when
