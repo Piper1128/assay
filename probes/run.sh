@@ -27,7 +27,7 @@ verdict() {
     fi
 }
 
-require_clean crates/assay-core/src/lib.rs crates/assay-core/src/confidence.rs \
+require_clean crates/assay-core/src/lib.rs crates/assay-core/src/confidence.rs \n    crates/assay-core/src/derived.rs \
     crates/assay-core/src/resolve.rs crates/assay-core/src/exchange.rs \
     crates/assay-core/src/stats.rs crates/assay-diff/src/lib.rs crates/assay-data/Cargo.toml
 
@@ -93,6 +93,19 @@ else
 fi
 git checkout --quiet -- crates/assay-core/src/resolve.rs
 verdict pipeline_order "$gate_rejected"
+
+# ── seed_adds ────────────────────────────────────────────────────────────────
+# A gear-granted stat ADDS to what its definition computes. Dropping the seed
+# must fail: Magic Resistance would read 15 from Will alone, ignoring the +9
+# the trousers roll (ADR-005 amendment: gear attributes).
+sed -i '/probe: seed-adds/ s/gear\.cloned()/None/' crates/assay-core/src/derived.rs
+if cargo test --quiet -p assay-core -p assay-data >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/derived.rs
+verdict seed_adds "$gate_rejected"
 
 # ── ability_dedupe ───────────────────────────────────────────────────────────
 # An ability applies once however many people bring it. Letting a duplicate

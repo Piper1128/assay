@@ -35,8 +35,8 @@ use assay_core::derived::{DerivedStatDef, RatingInput};
 use assay_core::fixed::Fixed;
 use assay_core::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::schema::{
-    AttributeBlock, AttributeKind, ClassDef, Effect, InMemoryDataset, ItemDef, PerkDef, SkillDef,
-    StackedEffect, WeaponProfile,
+    AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, Effect, InMemoryDataset, ItemDef,
+    PerkDef, SkillDef, StackedEffect, WeaponProfile,
 };
 use serde::Deserialize;
 
@@ -272,7 +272,22 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         entities.insert_item(ItemDef {
             id: ItemId::new(&dto.id),
             name: dto.name,
-            armor_rating: dto.armor_rating.map(GradedMicro::into_fixed).transpose()?,
+            attributes: dto
+                .attributes
+                .map(ItemAttributesDto::into_delta)
+                .transpose()?,
+            grants: {
+                let mut grants: BTreeMap<DerivedStatId, Confidence<Fixed>> = BTreeMap::new();
+                for (id, value) in dto.grants {
+                    if grants
+                        .insert(DerivedStatId::new(&id), value.into_fixed()?)
+                        .is_some()
+                    {
+                        return Err(LoadError::Invalid(format!("{}: grants {id} twice", dto.id)));
+                    }
+                }
+                grants
+            },
             move_speed_add: dto
                 .move_speed_add
                 .map(GradedMicro::into_fixed)
@@ -570,12 +585,42 @@ struct ItemDto {
     #[serde(default)]
     renamed_from: Option<String>,
     name: String,
+    /// Attributes printed on the item, sparse and graded as a block.
     #[serde(default)]
-    armor_rating: Option<GradedMicro>,
+    attributes: Option<ItemAttributesDto>,
+    /// Derived stats printed on the item, by id.
+    #[serde(default)]
+    grants: BTreeMap<String, GradedMicro>,
     #[serde(default)]
     move_speed_add: Option<GradedMicro>,
     #[serde(default)]
     weapon: Option<WeaponDto>,
+}
+
+/// Attributes printed on an item: a grade plus the points it grants.
+/// Sparse, so an attribute the item does not touch is simply absent —
+/// writing it as zero would claim the item grants zero of it, which the
+/// canonical encoding treats as a different statement.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ItemAttributesDto {
+    confidence: ConfidenceDto,
+    points: BTreeMap<String, i32>,
+    #[serde(default)]
+    note: Option<String>,
+}
+
+impl ItemAttributesDto {
+    fn into_delta(self) -> Result<Confidence<AttributeBlockDelta>, LoadError> {
+        let mut delta = AttributeBlockDelta::new();
+        for (name, points) in &self.points {
+            if delta.insert(attribute_kind(name)?, *points).is_some() {
+                return Err(LoadError::Invalid(format!("attribute {name} listed twice")));
+            }
+        }
+        let note = self.note;
+        self.confidence.wrap_with_note(delta, note.as_deref())
+    }
 }
 
 /// Wielded-item stats (ADR-006 step 1). Rarity I base values; per-rarity

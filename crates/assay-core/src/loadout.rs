@@ -10,7 +10,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::fixed::Fixed;
-use crate::ids::{ClassId, ItemId, PerkId, SkillId};
+use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::schema::AttributeKind;
 
 /// An explicit gear roll chosen in the loadout. Rolls are part of the
@@ -23,15 +23,91 @@ pub enum Roll {
     Attribute(AttributeKind, i32),
     /// Flat move speed rolled on the piece (`move_speed = 2`).
     MoveSpeedAdd(Fixed),
-    /// Armour rating rolled on the piece (`armor_rating = 5`). This is an
-    /// enchantment, so it lands in stage 7's *other* bucket and no Item
-    /// Armor Rating Bonus multiplies it.
-    ArmorRating(Fixed),
+    /// A derived stat rolled onto this copy — the game prints these as
+    /// `+11 Additional Armor Rating`, and the word *Additional* is what
+    /// separates them from the value printed on the item itself.
+    ///
+    /// Lands in stage 7's *other* bucket, outside any Item Armor Rating
+    /// Bonus, for the same reason: it is not armour the item carries, it is
+    /// armour rolled onto this one.
+    Derived(DerivedStatId, Fixed),
 }
 
-/// One equipped piece: an item id plus the explicit rolls on this copy.
+/// Where a piece is worn.
+///
+/// The pipeline does not need this to add stats up — a piece is a piece —
+/// so it is not here for arithmetic. It is here so a loadout that cannot
+/// exist can be rejected, and so the open question about whether a ring's
+/// armour rating counts as *item* armour is expressible when it is
+/// answered (ADR-005 amendment: gear attributes).
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Slot {
+    /// Helmets and caps.
+    Head,
+    /// Body armour.
+    Chest,
+    /// Trousers and leggings.
+    Legs,
+    /// Gloves and gauntlets.
+    Hands,
+    /// Boots.
+    Feet,
+    /// Back slot.
+    Cape,
+    /// Neck slot.
+    Necklace,
+    /// Either ring slot.
+    Ring,
+    /// A held weapon, which carries stats like anything else.
+    Weapon,
+}
+
+impl Slot {
+    /// The name used in loadout files and diffs.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Slot::Head => "head",
+            Slot::Chest => "chest",
+            Slot::Legs => "legs",
+            Slot::Hands => "hands",
+            Slot::Feet => "feet",
+            Slot::Cape => "cape",
+            Slot::Necklace => "necklace",
+            Slot::Ring => "ring",
+            Slot::Weapon => "weapon",
+        }
+    }
+
+    /// How many of this slot a character may wear at once.
+    #[must_use]
+    pub fn capacity(self) -> usize {
+        match self {
+            Slot::Ring | Slot::Weapon => 2,
+            _ => 1,
+        }
+    }
+
+    /// Every slot, for validation and for iteration in a fixed order.
+    pub const ALL: [Slot; 9] = [
+        Slot::Head,
+        Slot::Chest,
+        Slot::Legs,
+        Slot::Hands,
+        Slot::Feet,
+        Slot::Cape,
+        Slot::Necklace,
+        Slot::Ring,
+        Slot::Weapon,
+    ];
+}
+
+/// One equipped piece: where it is worn, which item it is, and the rolls on
+/// this copy.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ArmorPiece {
+pub struct GearPiece {
+    /// Where this piece is worn.
+    pub slot: Slot,
     /// Which item definition this piece instantiates.
     pub id: ItemId,
     /// Explicit rolls on this copy; explicit values win over any
@@ -71,8 +147,8 @@ pub struct Loadout {
     pub perks: Vec<PerkId>,
     /// Slotted skills, in declaration order.
     pub skills: Vec<SkillId>,
-    /// Equipped armor pieces.
-    pub armor: Vec<ArmorPiece>,
+    /// Every equipped piece, in any order.
+    pub gear: Vec<GearPiece>,
     /// Wielded weapons.
     pub weapons: Weapons,
     /// Active stacks per stacking source, keyed by perk or skill id.

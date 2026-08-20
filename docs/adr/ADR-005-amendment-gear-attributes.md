@@ -1,6 +1,6 @@
 # ADR-005 amendment: what gear contributes, from every slot
 
-Status: Proposed
+Status: Accepted
 Amends: ADR-005 (resolution pipeline), stage 2; ADR-004 (dataset schema),
 `ItemDef`; ADR-009 (loadout file)
 Date: 2026-08-19
@@ -193,6 +193,23 @@ The loadout file grows a `slot` on each piece and an `attributes` table that
 is already there in spirit; `[[armor]]` becomes `[[gear]]`. Existing loadout
 files break loudly rather than resolving low, because an unknown section is
 rejected rather than ignored (ADR-009 deviation 2).
+
+## One thing this changed that the amendment did not foresee
+
+A seed had to start **adding** to its definition instead of replacing it.
+`evaluate_all` skipped any stat that arrived seeded, which was invisible
+while armour rating was the only one — no class computes armour rating, so
+there was nothing to replace. The moment gear granted Magic Resistance, a
+pair of trousers rolling +9 silently deleted the 15 that Will produces.
+
+The seed lands after the curve and before the clamp. Adding after the clamp
+would let a capped stat pass its cap, and clamping twice is not clamping
+once whenever the seed is negative.
+
+Found by the Python mirror refusing to agree, which is the second time in
+this arc that the second implementation caught what one pass of tests did
+not — the Rust side had already been fixed and the mirror had not, so the
+two disagreed by exactly the size of the bug.
 
 ## Confidence
 

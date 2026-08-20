@@ -19,7 +19,14 @@ use crate::curve::Curve;
 use crate::derived::DerivedStatDef;
 use crate::fixed::Fixed;
 use crate::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
+use alloc::collections::BTreeMap;
+
 use crate::stats::Attribute;
+
+/// A sparse set of attribute contributions: what a piece of gear adds,
+/// not a whole character's block. Absence means "grants none", which is
+/// exactly not the same as granting zero.
+pub type AttributeBlockDelta = BTreeMap<AttributeKind, i32>;
 
 /// The game's seven character attributes.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -161,10 +168,26 @@ pub struct ItemDef {
     pub id: ItemId,
     /// Display name.
     pub name: String,
-    /// Armor rating contributed to the defensive chain, if any. This is
-    /// the *item* bucket of ADR-005's amended stage 7 — the only armour a
-    /// percentage Item Armor Rating Bonus multiplies.
-    pub armor_rating: Option<Confidence<Fixed>>,
+    /// Attributes printed on the item, on every copy of it. Sparse: an
+    /// attribute the item does not grant is absent rather than zero, the
+    /// same rule the canonical encoding applies everywhere else.
+    ///
+    /// Separate from `Roll::Attribute` because the two differ in grade, not
+    /// in kind: this is a dataset claim about every copy, a roll is a
+    /// verified fact about one (ADR-005 amendment: gear attributes). The
+    /// item card draws the same line, printing one in white and the other
+    /// in blue.
+    pub attributes: Option<Confidence<AttributeBlockDelta>>,
+    /// Derived stats printed on the item — armour rating, magic resistance,
+    /// magical power. Seeds the derived graph the way gear-sourced armour
+    /// rating always did, now without a field per stat: one item card
+    /// carries several of these at once, and ADR-012 already settled that a
+    /// new derived stat is a dataset job rather than a schema change.
+    ///
+    /// This is the *item* bucket of stage 7. For armour rating specifically
+    /// it is what a percentage Item Armor Rating Bonus multiplies; the
+    /// game's own card names the other bucket `Additional Armor Rating`.
+    pub grants: BTreeMap<DerivedStatId, Confidence<Fixed>>,
     /// Flat move speed contribution; negative for armour and heavy weapon
     /// penalties alike (ADR-005 stage 5).
     pub move_speed_add: Option<Confidence<Fixed>>,

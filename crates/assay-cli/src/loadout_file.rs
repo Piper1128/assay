@@ -12,11 +12,12 @@
 //! perks  = ["perk.rogue.jokester"]
 //! skills = []
 //!
-//! [[armor]]
+//! [[gear]]
+//! slot = "legs"
 //! id = "item.dark_leather_leggings"
 //! attributes = { dexterity = 4 }
 //! move_speed_add = "2"
-//! armor_rating = "5"
+//! additional = { "derived.armor_rating" = "5" }
 //!
 //! [weapons]
 //! main_hand = "item.flanged_mace"
@@ -47,9 +48,10 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use assay_core::DerivedStatId;
 use assay_core::fixed::Fixed;
 use assay_core::ids::{ClassId, ItemId, PerkId, SkillId};
-use assay_core::loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
+use assay_core::loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
 use assay_core::schema::AttributeKind;
 use serde::Deserialize;
 
@@ -77,8 +79,21 @@ impl std::error::Error for LoadoutError {}
 pub(crate) fn parse(text: &str) -> Result<Loadout, LoadoutError> {
     let dto: LoadoutDto = toml::from_str(text).map_err(LoadoutError::Syntax)?;
 
-    let mut armor = Vec::new();
-    for piece in &dto.armor {
+    let mut gear = Vec::new();
+    let mut worn: BTreeMap<&str, usize> = BTreeMap::new();
+    for piece in &dto.gear {
+        let slot = slot_of(&piece.slot)
+            .ok_or_else(|| LoadoutError::Invalid(format!("unknown slot {:?}", piece.slot)))?;
+        let count = worn.entry(slot.as_str()).or_default();
+        *count += 1;
+        if *count > slot.capacity() {
+            return Err(LoadoutError::Invalid(format!(
+                "{} pieces in the {} slot, which holds {}",
+                count,
+                slot.as_str(),
+                slot.capacity()
+            )));
+        }
         let mut rolls = Vec::new();
         for (name, points) in &piece.attributes {
             rolls.push(Roll::Attribute(attribute_kind(name)?, *points));
@@ -91,13 +106,16 @@ pub(crate) fn parse(text: &str) -> Result<Loadout, LoadoutError> {
             })?;
             rolls.push(Roll::MoveSpeedAdd(parsed));
         }
-        if let Some(ar) = &piece.armor_rating {
-            let parsed: Fixed = ar.parse().map_err(|e| {
-                LoadoutError::Invalid(format!("{}: armor_rating {ar:?}: {e}", piece.id))
+        // The game writes these `+11 Additional Armor Rating`. They are rolls
+        // on this copy, so they sit outside any Item Armor Rating Bonus.
+        for (stat, value) in &piece.additional {
+            let parsed: Fixed = value.parse().map_err(|e| {
+                LoadoutError::Invalid(format!("{}: additional {stat} {value:?}: {e}", piece.id))
             })?;
-            rolls.push(Roll::ArmorRating(parsed));
+            rolls.push(Roll::Derived(DerivedStatId::new(stat), parsed));
         }
-        armor.push(ArmorPiece {
+        gear.push(GearPiece {
+            slot,
             id: ItemId::new(&piece.id),
             rolls,
         });
@@ -108,7 +126,7 @@ pub(crate) fn parse(text: &str) -> Result<Loadout, LoadoutError> {
         class: ClassId::new(&dto.class),
         perks: dto.perks.iter().map(PerkId::new).collect(),
         skills: dto.skills.iter().map(SkillId::new).collect(),
-        armor,
+        gear,
         weapons: Weapons {
             main_hand: dto.weapons.main_hand.as_deref().map(ItemId::new),
         },
@@ -137,7 +155,7 @@ struct LoadoutDto {
     #[serde(default)]
     skills: Vec<String>,
     #[serde(default)]
-    armor: Vec<ArmorDto>,
+    gear: Vec<GearDto>,
     #[serde(default)]
     weapons: WeaponsDto,
     /// Active stacks per stacking source. Omit a source and it resolves at
@@ -157,7 +175,10 @@ struct WeaponsDto {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ArmorDto {
+struct GearDto {
+    /// Where the piece is worn: head, chest, legs, hands, feet, cape,
+    /// necklace, ring or weapon.
+    slot: String,
     id: String,
     /// Whole attribute points rolled on this copy.
     #[serde(default)]
@@ -165,10 +186,17 @@ struct ArmorDto {
     /// Flat move speed rolled on this copy, as an exact decimal string.
     #[serde(default)]
     move_speed_add: Option<String>,
-    /// Armour rating enchanted onto this copy, as an exact decimal string.
-    /// An enchantment, so no Item Armor Rating Bonus multiplies it.
+    /// Derived stats rolled onto this copy, by stat id — the game prints
+    /// these as `+11 Additional Armor Rating`. Outside any Item Armor
+    /// Rating Bonus, because they are not what the item carries.
     #[serde(default)]
-    armor_rating: Option<String>,
+    additional: BTreeMap<String, String>,
+}
+
+/// Parses a slot name. Unknown names are rejected rather than defaulted:
+/// a typo that silently became a chest piece would change the answer.
+fn slot_of(name: &str) -> Option<Slot> {
+    Slot::ALL.into_iter().find(|s| s.as_str() == name)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -193,7 +221,8 @@ name  = "rogue-duo-buffed"
 class = "class.rogue"
 perks = ["perk.rogue.jokester"]
 
-[[armor]]
+[[gear]]
+slot = "legs"
 id = "item.dark_leather_leggings"
 attributes = { dexterity = 4 }
 move_speed_add = "2"
@@ -204,8 +233,8 @@ skills = ["skill.fighter.fortified_ground"]
         let loadout = parse(text).unwrap();
         assert_eq!(loadout.name, "rogue-duo-buffed");
         assert_eq!(loadout.perks.len(), 1);
-        assert_eq!(loadout.armor.len(), 1);
-        assert_eq!(loadout.armor[0].rolls.len(), 2);
+        assert_eq!(loadout.gear.len(), 1);
+        assert_eq!(loadout.gear[0].rolls.len(), 2);
         assert_eq!(loadout.party.skills.len(), 1);
     }
 
@@ -213,7 +242,7 @@ skills = ["skill.fighter.fortified_ground"]
     fn a_minimal_loadout_needs_only_name_and_class() {
         let loadout = parse("name = \"naked\"\nclass = \"class.rogue\"\n").unwrap();
         assert!(loadout.perks.is_empty());
-        assert!(loadout.armor.is_empty());
+        assert!(loadout.gear.is_empty());
     }
 
     #[test]
@@ -241,8 +270,9 @@ off_hand = "item.x"
         let with_rarity = r#"
 name  = "x"
 class = "class.rogue"
-[[armor]]
-id = "item.x"
+[[gear]]
+slot = \"legs\"
+id = \"item.x\"
 rarity = "epic"
 "#;
         assert!(matches!(parse(with_rarity), Err(LoadoutError::Syntax(_))));
@@ -251,22 +281,64 @@ rarity = "epic"
     #[test]
     fn move_speed_is_an_exact_decimal_string() {
         let ok = parse(
-            "name = \"x\"\nclass = \"class.rogue\"\n[[armor]]\nid = \"item.x\"\nmove_speed_add = \"2.5\"\n",
+            "name = \"x\"\nclass = \"class.rogue\"\n[[gear]]\nslot = \"legs\"\nid = \"item.x\"\nmove_speed_add = \"2.5\"\n",
         )
         .unwrap();
-        assert_eq!(ok.armor[0].rolls.len(), 1);
+        assert_eq!(ok.gear[0].rolls.len(), 1);
 
         // Over-precision is refused, not rounded away.
         let too_precise = parse(
-            "name = \"x\"\nclass = \"class.rogue\"\n[[armor]]\nid = \"item.x\"\nmove_speed_add = \"2.1234567\"\n",
+            "name = \"x\"\nclass = \"class.rogue\"\n[[gear]]\nslot = \"legs\"\nid = \"item.x\"\nmove_speed_add = \"2.1234567\"\n",
         );
         assert!(matches!(too_precise, Err(LoadoutError::Invalid(_))));
     }
 
     #[test]
+    fn a_slot_cannot_hold_more_than_it_has_room_for() {
+        // Two rings are fine, three are not, and one cape is the limit.
+        // The pipeline never needed the slot to add stats up; this is the
+        // question it exists to answer.
+        let two_rings = parse(
+            "name = \"x\"\nclass = \"class.rogue\"\n\
+             [[gear]]\nslot = \"ring\"\nid = \"item.x\"\n\
+             [[gear]]\nslot = \"ring\"\nid = \"item.x\"\n",
+        );
+        assert!(two_rings.is_ok(), "{two_rings:?}");
+
+        let three_rings = parse(
+            "name = \"x\"\nclass = \"class.rogue\"\n\
+             [[gear]]\nslot = \"ring\"\nid = \"item.x\"\n\
+             [[gear]]\nslot = \"ring\"\nid = \"item.x\"\n\
+             [[gear]]\nslot = \"ring\"\nid = \"item.x\"\n",
+        );
+        assert!(matches!(three_rings, Err(LoadoutError::Invalid(_))));
+
+        let two_capes = parse(
+            "name = \"x\"\nclass = \"class.rogue\"\n\
+             [[gear]]\nslot = \"cape\"\nid = \"item.x\"\n\
+             [[gear]]\nslot = \"cape\"\nid = \"item.x\"\n",
+        );
+        assert!(matches!(two_capes, Err(LoadoutError::Invalid(_))));
+    }
+
+    #[test]
+    fn an_unknown_slot_is_refused_rather_than_defaulted() {
+        // A typo that silently became a chest piece would change the answer
+        // without saying so.
+        let bad = parse(
+            "name = \"x\"\nclass = \"class.rogue\"\n\
+             [[gear]]\nslot = \"backpack\"\nid = \"item.x\"\n",
+        );
+        match bad {
+            Err(LoadoutError::Invalid(msg)) => assert!(msg.contains("backpack"), "{msg}"),
+            other => panic!("expected a named error, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn unknown_attribute_names_are_named_in_the_error() {
         let bad = parse(
-            "name = \"x\"\nclass = \"class.rogue\"\n[[armor]]\nid = \"item.x\"\nattributes = { luck = 3 }\n",
+            "name = \"x\"\nclass = \"class.rogue\"\n[[gear]]\nslot = \"legs\"\nid = \"item.x\"\nattributes = { luck = 3 }\n",
         );
         match bad {
             Err(LoadoutError::Invalid(msg)) => assert!(msg.contains("luck"), "{msg}"),

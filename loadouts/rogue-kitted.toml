@@ -1,0 +1,23 @@
+# Three item cards read straight off the game, in three different slots —
+# the loadout that only exists because gear stopped meaning "armour".
+#
+# The blue lines on those cards are rolls on these particular copies, so
+# they live here and not in the dataset: +2 Strength and +9 Magic Resistance
+# on the trousers, +11 Additional Armor Rating on the cap.
+name  = "rogue-kitted"
+class = "class.rogue"
+
+[[gear]]
+slot = "head"
+id = "item.leather_cap"
+additional = { "derived.armor_rating" = "11" }
+
+[[gear]]
+slot = "legs"
+id = "item.loose_trousers"
+attributes = { strength = 2 }
+additional = { "derived.magic_resistance" = "9" }
+
+[[gear]]
+slot = "necklace"
+id = "item.phoenix_choker"

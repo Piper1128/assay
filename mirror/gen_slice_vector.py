@@ -81,7 +81,7 @@ LOADOUTS = [
         "class": "class.rogue",
         "perks": [],
         "skills": [],
-        "armor": [],
+        "gear": [],
         "party": {"perks": [], "skills": []},
     },
     {
@@ -91,7 +91,7 @@ LOADOUTS = [
         "class": "class.rogue",
         "perks": ["perk.rogue.jokester"],
         "skills": [],
-        "armor": [],
+        "gear": [],
         # The party also holds Jokester. It must change nothing: an ability
         # applies once however many people bring it, so this loadout's
         # expected values are identical to the same one without it.
@@ -110,15 +110,51 @@ LOADOUTS = [
         "class": "class.rogue",
         "perks": ["perk.fighter.defense_mastery"],
         "skills": [],
-        "armor": [
+        "gear": [
             {
+                "slot": "legs",
                 "id": "item.dark_leather_leggings",
                 "rolls": [
                     {"kind": "attribute", "attribute": "dexterity", "points": 4},
                     {"kind": "move_speed_add", "micro": m("2")},
-                    {"kind": "armor_rating", "micro": m("10")},
+                    {"kind": "derived", "stat": "derived.armor_rating", "micro": m("10")},
                 ],
             }
+        ],
+        "party": {"perks": [], "skills": []},
+    },
+    {
+        # Three item cards read in game, in three slots. Covers everything the
+        # gear amendment added at once: static attributes (Vigor 2 on the cap,
+        # Agility 4 on the trousers), a derived roll that must not be
+        # multiplied (+11 Additional Armor Rating), and a seed that has to be
+        # ADDED to what the class computes rather than replacing it (+9 Magic
+        # Resistance on top of the 15 Will produces).
+        "name": "rogue-kitted",
+        "class": "class.rogue",
+        "perks": [],
+        "skills": [],
+        "gear": [
+            {
+                "slot": "head",
+                "id": "item.leather_cap",
+                "rolls": [
+                    {"kind": "derived", "stat": "derived.armor_rating", "micro": m("11")}
+                ],
+            },
+            {
+                "slot": "legs",
+                "id": "item.loose_trousers",
+                "rolls": [
+                    {"kind": "attribute", "attribute": "strength", "points": 2},
+                    {
+                        "kind": "derived",
+                        "stat": "derived.magic_resistance",
+                        "micro": m("9"),
+                    },
+                ],
+            },
+            {"slot": "necklace", "id": "item.phoenix_choker", "rolls": []},
         ],
         "party": {"perks": [], "skills": []},
     },

@@ -514,7 +514,7 @@ mod tests {
     use crate::curve::Curve;
     use crate::derived::{DerivedStatDef, RatingInput};
     use crate::ids::{ClassId, CurveId, ItemId};
-    use crate::loadout::{ArmorPiece, Loadout, PartyBuffs, Weapons};
+    use crate::loadout::{GearPiece, Loadout, PartyBuffs, Slot, Weapons};
     use crate::resolve::resolve;
     use crate::schema::{ClassDef, InMemoryDataset, ItemDef};
     use alloc::collections::BTreeMap;
@@ -587,7 +587,11 @@ mod tests {
             data.insert_item(ItemDef {
                 id: ItemId::new(alloc::format!("item.armor_{rating}")),
                 name: alloc::format!("Armor {rating}"),
-                armor_rating: Some(Confidence::Verified(fx(rating))),
+                attributes: None,
+                grants: BTreeMap::from([(
+                    DerivedStatId::new(well_known::ARMOR_RATING),
+                    Confidence::Verified(fx(rating)),
+                )]),
                 move_speed_add: None,
                 weapon: None,
             });
@@ -602,7 +606,8 @@ mod tests {
             class: ClassId::new("class.test"),
             perks: vec![],
             skills: vec![],
-            armor: vec![ArmorPiece {
+            gear: vec![GearPiece {
+                slot: Slot::Legs,
                 id: ItemId::new(alloc::format!("item.armor_{armor}")),
                 rolls: vec![],
             }],
@@ -626,9 +631,13 @@ mod tests {
                 vec![]
             },
             skills: vec![],
-            armor: vec![ArmorPiece {
+            gear: vec![GearPiece {
+                slot: Slot::Legs,
                 id: ItemId::new(alloc::format!("item.armor_{armor}")),
-                rolls: vec![crate::loadout::Roll::ArmorRating(fx(enchant))],
+                rolls: vec![crate::loadout::Roll::Derived(
+                    DerivedStatId::new(well_known::ARMOR_RATING),
+                    fx(enchant),
+                )],
             }],
             weapons: Weapons::default(),
             stacks: BTreeMap::new(),

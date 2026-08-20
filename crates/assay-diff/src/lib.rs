@@ -293,7 +293,23 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
             EntityKind::Item => {
                 if let Some(def) = entities.item(&ItemId::new(id)) {
                     map.insert("name".into(), def.name.clone());
-                    insert_graded(&mut map, "armor_rating", def.armor_rating.as_ref());
+                    // Every granted stat, by id. A map field means the
+                    // differ has to walk it: a new stat on an item is a
+                    // patch change like any other, and `fields()` is
+                    // hand-written, so anything not enumerated here is
+                    // invisible to `assay diff` (see the module doc).
+                    for (stat, value) in &def.grants {
+                        insert_graded(&mut map, &format!("grants.{}", stat.as_str()), Some(value));
+                    }
+                    if let Some(attributes) = &def.attributes {
+                        for (kind, points) in attributes.value() {
+                            map.insert(format!("attributes.{}", kind.as_str()), points.to_string());
+                        }
+                        map.insert(
+                            "attributes.confidence".into(),
+                            level(attributes.level()).into(),
+                        );
+                    }
                     insert_graded(&mut map, "move_speed_add", def.move_speed_add.as_ref());
                     if let Some(weapon) = &def.weapon {
                         insert_graded(&mut map, "weapon.base_damage", Some(&weapon.base_damage));

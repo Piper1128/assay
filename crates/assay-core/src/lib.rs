@@ -28,7 +28,7 @@ pub use derived::{DerivedError, DerivedStatDef, RatingInput, well_known};
 pub use exchange::{Exchange, ExchangeContext, ExchangeOutcome, Strike};
 pub use fixed::{Fixed, ParseFixedError, SCALE};
 pub use ids::{AbilityId, ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
-pub use loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
+pub use loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
 pub use resolve::{ResolveError, Resolved, StageNote, resolve};
 pub use schema::{
     AttributeBlock, AttributeKind, ClassDef, DatasetSource, Effect, InMemoryDataset, ItemDef,

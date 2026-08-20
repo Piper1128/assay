@@ -14,9 +14,9 @@ use std::path::PathBuf;
 use assay_core::exchange::{Exchange, ExchangeContext, Strike};
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use assay_core::{
-    AbilityId, ArmorPiece, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve,
-    CurveId, DerivedStatDef, DerivedStatId, Effect, Fixed, InMemoryDataset, ItemDef, ItemId,
-    Loadout, PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId,
+    AbilityId, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
+    DerivedStatDef, DerivedStatId, Effect, Fixed, GearPiece, InMemoryDataset, ItemDef, ItemId,
+    Loadout, PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId, Slot,
     StackedEffect, Weapons, canonical_exchange, canonical_statblock, resolve,
 };
 use serde_json::Value;
@@ -191,7 +191,28 @@ fn dataset(node: &Value) -> InMemoryDataset {
         data.insert_item(ItemDef {
             id: ItemId::new(item["id"].as_str().expect("item id")),
             name: item["name"].as_str().expect("item name").to_string(),
-            armor_rating: optional("armor_rating"),
+            attributes: item.get("attributes").map(|node| {
+                let points = node["points"].as_object().expect("attribute points");
+                let delta: BTreeMap<AttributeKind, i32> = points
+                    .iter()
+                    .map(|(name, v)| {
+                        (
+                            attribute_kind(name),
+                            i32::try_from(v.as_i64().expect("points")).expect("fits i32"),
+                        )
+                    })
+                    .collect();
+                graded(node, delta)
+            }),
+            grants: item
+                .get("grants")
+                .and_then(serde_json::Value::as_object)
+                .map(|map| {
+                    map.iter()
+                        .map(|(id, v)| (DerivedStatId::new(id), graded_micro(v)))
+                        .collect()
+                })
+                .unwrap_or_default(),
             move_speed_add: optional("move_speed_add"),
             weapon: None,
         });
@@ -232,11 +253,12 @@ fn loadout(node: &Value) -> Loadout {
             .map(|v| v.as_str().expect("id").to_string())
             .collect::<Vec<_>>()
     };
-    let armor = node["armor"]
+    let gear = node["gear"]
         .as_array()
-        .expect("armor")
+        .expect("gear")
         .iter()
-        .map(|piece| ArmorPiece {
+        .map(|piece| GearPiece {
+            slot: slot_of(piece["slot"].as_str().expect("slot")),
             id: ItemId::new(piece["id"].as_str().expect("item id")),
             rolls: piece["rolls"]
                 .as_array()
@@ -251,9 +273,10 @@ fn loadout(node: &Value) -> Loadout {
                     "move_speed_add" => Roll::MoveSpeedAdd(Fixed::from_micro(
                         roll["micro"].as_i64().expect("micro"),
                     )),
-                    "armor_rating" => {
-                        Roll::ArmorRating(Fixed::from_micro(roll["micro"].as_i64().expect("micro")))
-                    }
+                    "derived" => Roll::Derived(
+                        DerivedStatId::new(roll["stat"].as_str().expect("stat")),
+                        Fixed::from_micro(roll["micro"].as_i64().expect("micro")),
+                    ),
                     other => panic!("unknown roll kind: {other}"),
                 })
                 .collect(),
@@ -264,7 +287,7 @@ fn loadout(node: &Value) -> Loadout {
         class: ClassId::new(node["class"].as_str().expect("class id")),
         perks: ids("perks").into_iter().map(PerkId::new).collect(),
         skills: ids("skills").into_iter().map(SkillId::new).collect(),
-        armor,
+        gear,
         weapons: Weapons {
             main_hand: node
                 .get("weapons")
@@ -298,6 +321,14 @@ fn strike(node: &Value) -> Strike {
         armor_pen: graded_micro(&node["armor_pen"]).map(ArmorPen::new),
         true_damage: graded_micro(&node["true_damage"]).map(TrueDamage::new),
     }
+}
+
+/// Slot names as the vector spells them.
+fn slot_of(name: &str) -> Slot {
+    Slot::ALL
+        .into_iter()
+        .find(|s| s.as_str() == name)
+        .unwrap_or_else(|| panic!("unknown slot: {name}"))
 }
 
 fn exchange_context(node: &Value) -> ExchangeContext {

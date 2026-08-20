@@ -188,13 +188,15 @@ def evaluate_derived(defs: list[dict], attributes: dict, seeded: dict, cap_overr
     rating   = sum(weight * input)   each product rounds half to even
     derived  = curve(rating) + offset, then clamped by floor/cap.
 
-    A definition whose id is already seeded is skipped: a seeded value is
-    provided (gear-sourced armour rating), not computed. Cycles and dangling
-    references are dataset errors.
+    A seed ADDS to its definition rather than replacing it: gear grants
+    Magic Resistance on top of what Will produces, not instead of it. A seed
+    with no definition -- armour rating, which no class computes -- is the
+    whole value, the same rule with nothing on the other side of the plus.
+    Cycles and dangling references are dataset errors.
     """
-    computed = dict(seeded)
     defined = {d["id"] for d in defs}
-    pending = [d for d in defs if d["id"] not in computed]
+    computed = {k: v for k, v in seeded.items() if k not in defined}
+    pending = list(defs)
 
     while pending:
         progressed = False
@@ -224,15 +226,22 @@ def evaluate_derived(defs: list[dict], attributes: dict, seeded: dict, cap_overr
             floor = d.get("floor")
             offset = d.get("offset", 0)
 
-            def apply(rating_value, points, off=offset, fl=floor, cp=cap):
-                value = curve_sample(points, rating_value) + off
+            # Gear lands before the clamp. Adding after it would let a
+            # capped stat exceed its cap, and clamping twice is not the same
+            # as clamping once when the gear term is negative.
+            gear = seeded.get(d["id"], conf("verified", 0))
+            rating_and_gear = zip_with(rating, gear, lambda r, g: (r, g))
+
+            def apply(pair, points, off=offset, fl=floor, cp=cap):
+                rating_value, gear_value = pair
+                value = curve_sample(points, rating_value) + off + gear_value
                 if fl is not None:
                     value = max(value, fl)
                 if cp is not None:
                     value = min(value, cp)
                 return value
 
-            computed[d["id"]] = zip_with(rating, d["curve"], apply)
+            computed[d["id"]] = zip_with(rating_and_gear, d["curve"], apply)
             progressed = True
         if not progressed:
             raise ValueError(f"cyclic derived-stat dependency among {[d['id'] for d in still]}")
@@ -255,9 +264,19 @@ def resolve(dataset: dict, loadout: dict) -> dict:
         "note": cls["base_attributes"]["note"],
     }
 
-    # Stage 2: attributes from gear rolls (facts of the question: Verified,
-    # so they do not degrade the block's grade).
-    for piece in loadout["armor"]:
+    # Stage 2: attributes from gear, in two grades. What is printed on the
+    # item is a dataset claim about every copy and carries the item's grade;
+    # a roll is a fact about this copy and does not degrade anything. The
+    # item card draws the same line, white against blue.
+    for piece in loadout["gear"]:
+        printed = dataset["items"][piece["id"]].get("attributes")
+        if printed is not None:
+            delta = printed["value"]
+            attributes = zip_with(
+                attributes,
+                printed,
+                lambda block, _p, d=delta: {k: v + d.get(k, 0) for k, v in block.items()},
+            )
         for roll in piece["rolls"]:
             if roll["kind"] == "attribute":
                 attributes["value"][roll["attribute"]] += roll["points"]
@@ -289,17 +308,18 @@ def resolve(dataset: dict, loadout: dict) -> dict:
     # pieces themselves carry, and nothing else. Enchantment rolls are the
     # formula's "other Armor Rating" term and stay outside the multiply, so
     # the two sums are kept apart until they are combined below.
-    item_ar_parts = [
-        dataset["items"][piece["id"]]["armor_rating"]
-        for piece in loadout["armor"]
-        if dataset["items"][piece["id"]]["armor_rating"] is not None
-    ]
-    other_ar_parts = [
-        conf("verified", roll["micro"])
-        for piece in loadout["armor"]
-        for roll in piece["rolls"]
-        if roll["kind"] == "armor_rating"
-    ]
+    item_parts: dict = {}
+    other_parts: dict = {}
+    for piece in loadout["gear"]:
+        for stat, value in dataset["items"][piece["id"]]["grants"].items():
+            item_parts.setdefault(stat, []).append(value)
+        for roll in piece["rolls"]:
+            if roll["kind"] == "derived":
+                other_parts.setdefault(roll["stat"], []).append(
+                    conf("verified", roll["micro"])
+                )
+    item_ar_parts = item_parts.get("derived.armor_rating", [])
+    other_ar_parts = other_parts.get("derived.armor_rating", [])
     item_bonus = fold_sum(
         [
             {**e, "value": e["value"]["micro"]}
@@ -314,6 +334,13 @@ def resolve(dataset: dict, loadout: dict) -> dict:
     )
     armor_rating = zip_with(scaled_item_ar, fold_sum(other_ar_parts), lambda a, b: a + b)
     seeded = {"derived.armor_rating": armor_rating}
+    # Every other gear-granted stat is a plain sum of its two buckets: the
+    # multiply belongs to armour rating alone, which is what the effect is
+    # called.
+    for stat in sorted(set(item_parts) | set(other_parts)):
+        if stat in seeded:
+            continue
+        seeded[stat] = fold_sum(item_parts.get(stat, []) + other_parts.get(stat, []))
     cap_overrides: dict = {}
     for effect in effects:
         if effect["value"]["kind"] == "raise_cap":
@@ -326,7 +353,7 @@ def resolve(dataset: dict, loadout: dict) -> dict:
 
     # Stage 5: flat adds, on the move-speed entry.
     adds: list[dict] = []
-    for piece in loadout["armor"]:
+    for piece in loadout["gear"]:
         item = dataset["items"][piece["id"]]
         if item["move_speed_add"] is not None:
             adds.append(item["move_speed_add"])
@@ -589,9 +616,13 @@ def dataset_from_json(node: dict) -> dict:
     for it in node["items"]:
         items[it["id"]] = {
             "name": it["name"],
-            "armor_rating": (
-                graded_from_json(it["armor_rating"], "micro")
-                if it.get("armor_rating") is not None
+            "grants": {
+                stat: graded_from_json(v, "micro")
+                for stat, v in it.get("grants", {}).items()
+            },
+            "attributes": (
+                graded_from_json(it["attributes"], "points")
+                if it.get("attributes") is not None
                 else None
             ),
             "move_speed_add": (

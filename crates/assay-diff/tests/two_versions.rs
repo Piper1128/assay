@@ -111,7 +111,7 @@ fn naked_rogue() -> Loadout {
         class: ClassId::new("class.rogue"),
         perks: vec![],
         skills: vec![],
-        armor: vec![],
+        gear: vec![],
         weapons: Weapons::default(),
         stacks: BTreeMap::new(),
         party: PartyBuffs::default(),

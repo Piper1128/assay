@@ -10,8 +10,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use assay_core::derived::well_known;
-use assay_core::loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
-use assay_core::{AttributeKind, ClassId, ConfidenceLevel, Fixed, ItemId, PerkId, resolve};
+use assay_core::loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
+use assay_core::{
+    AttributeKind, ClassId, ConfidenceLevel, DerivedStatId, Fixed, ItemId, PerkId, resolve,
+};
 
 fn data_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
@@ -25,7 +27,7 @@ fn naked_rogue() -> Loadout {
         class: ClassId::new("class.rogue"),
         perks: vec![],
         skills: vec![],
-        armor: vec![],
+        gear: vec![],
         weapons: Weapons::default(),
         stacks: BTreeMap::new(),
         party: PartyBuffs::default(),
@@ -101,7 +103,8 @@ fn the_armor_curve_hits_its_known_anchors() {
         class: ClassId::new("class.rogue"),
         perks: vec![],
         skills: vec![],
-        armor: vec![assay_core::ArmorPiece {
+        gear: vec![assay_core::GearPiece {
+            slot: Slot::Legs,
             id: assay_core::ItemId::new("item.dark_leather_leggings"),
             rolls: vec![],
         }],
@@ -166,7 +169,8 @@ fn defense_mastery_multiplies_worn_armour_but_not_enchantments() {
             class: ClassId::new("class.fighter"),
             perks,
             skills: vec![],
-            armor: vec![ArmorPiece {
+            gear: vec![GearPiece {
+                slot: Slot::Legs,
                 id: leggings.clone(),
                 rolls,
             }],
@@ -191,7 +195,13 @@ fn defense_mastery_multiplies_worn_armour_but_not_enchantments() {
     // With 10 enchanted on: 41.4 + 10. Were the enchantment inside the
     // multiplier's base it would be 52.9 instead.
     assert_eq!(
-        build(mastery, vec![Roll::ArmorRating(Fixed::from_int(10))]),
+        build(
+            mastery,
+            vec![Roll::Derived(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                Fixed::from_int(10)
+            )]
+        ),
         Fixed::from_micro(51_400_000)
     );
 }
@@ -256,7 +266,8 @@ fn magical_damage_reduction_cannot_reach_its_own_cap() {
     let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
     let mut loadout = naked_rogue();
     loadout.class = ClassId::new("class.fighter");
-    loadout.armor = vec![ArmorPiece {
+    loadout.gear = vec![GearPiece {
+        slot: Slot::Legs,
         // Will 15 + 85 = 100, the top of the documented conversion.
         id: ItemId::new("item.dark_leather_leggings"),
         rolls: vec![Roll::Attribute(AttributeKind::Will, 85)],
@@ -278,5 +289,77 @@ fn magical_damage_reduction_cannot_reach_its_own_cap() {
     assert!(
         mdr < Fixed::from_int(65),
         "if the cap has started to bind, read this test's comment"
+    );
+}
+
+#[test]
+fn three_item_cards_reach_the_block_through_every_route_they_have() {
+    // Read off three cards in game, in three slots. One loadout exercises
+    // everything the gear amendment added, and each assertion below fails
+    // for a different reason if one route is wrong.
+    let dataset = assay_data::load(&data_root(), BUILD).expect("dataset loads");
+    let mut loadout = naked_rogue();
+    loadout.gear = vec![
+        GearPiece {
+            slot: Slot::Head,
+            id: ItemId::new("item.leather_cap"),
+            rolls: vec![Roll::Derived(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                Fixed::from_int(11),
+            )],
+        },
+        GearPiece {
+            slot: Slot::Legs,
+            id: ItemId::new("item.loose_trousers"),
+            rolls: vec![
+                Roll::Attribute(AttributeKind::Strength, 2),
+                Roll::Derived(
+                    DerivedStatId::new("derived.magic_resistance"),
+                    Fixed::from_int(9),
+                ),
+            ],
+        },
+        GearPiece {
+            slot: Slot::Necklace,
+            id: ItemId::new("item.phoenix_choker"),
+            rolls: vec![],
+        },
+    ];
+    let r = resolve(&loadout, &dataset.entities).expect("resolves");
+    let block = r.attributes.value();
+
+    // Printed on the items: Vigor 2 on the cap, Agility 4 on the trousers.
+    assert_eq!(block.get(AttributeKind::Vigor).points(), 8, "6 + 2 printed");
+    assert_eq!(
+        block.get(AttributeKind::Agility).points(),
+        28,
+        "24 + 4 printed"
+    );
+    // Rolled on this copy of the trousers.
+    assert_eq!(
+        block.get(AttributeKind::Strength).points(),
+        12,
+        "10 + 2 rolled"
+    );
+
+    let stat = |id: &str| *r.stat(id).unwrap_or_else(|| panic!("{id} missing")).value();
+    // 33 printed + 25 printed + 11 rolled. The rolled 11 is outside any
+    // Item Armor Rating Bonus, which is what the game calls it: Additional.
+    assert_eq!(stat(well_known::ARMOR_RATING), Fixed::from_int(69));
+    // A necklace grants stats, and they are not attributes.
+    assert_eq!(stat("derived.magical_power"), Fixed::from_int(1));
+    assert_eq!(stat("derived.magic_penetration"), Fixed::from_int(1));
+    // A cap grants a defensive stat nothing computes.
+    assert_eq!(
+        stat("derived.headshot_damage_reduction"),
+        Fixed::from_int(14)
+    );
+    // The one that is easy to get wrong: gear ADDS to Magic Resistance
+    // rather than replacing it. Will 10 gives 15; the trousers roll 9.
+    // Replacing would give 9, and the chain below it would read -1.5%.
+    assert_eq!(stat("derived.magic_resistance"), Fixed::from_int(24));
+    assert_eq!(
+        stat("derived.magical_damage_reduction"),
+        Fixed::from_micro(5_400_000)
     );
 }

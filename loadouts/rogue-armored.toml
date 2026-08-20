@@ -2,5 +2,6 @@
 name  = "rogue-armored"
 class = "class.rogue"
 
-[[armor]]
+[[gear]]
+slot = "legs"
 id = "item.dark_leather_leggings"

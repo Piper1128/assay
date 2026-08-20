@@ -181,14 +181,35 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         ),
     });
 
-    // ── Stage 2: attributes from gear rolls ──────────────────────────────
-    // Explicit rolls are facts of the question, so they do not degrade
-    // confidence (see `loadout::Roll`).
+    // ── Stage 2: attributes from gear ────────────────────────────────────
+    // Two sources with different grades. What is printed on the item is a
+    // dataset claim about every copy and carries the item's grade; a roll is
+    // a fact about the copy in the question and does not degrade anything
+    // (ADR-005 amendment: gear attributes). Folding them into one field
+    // would promote one or demote the other, so they stay apart right up to
+    // the addition — which commutes, so their order does not matter.
     let mut attributes_after_gear = base_attributes;
-    for piece in &loadout.armor {
+    for piece in &loadout.gear {
         let item = data
             .item(&piece.id)
             .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
+        if let Some(printed) = &item.attributes {
+            let delta = printed.value().clone();
+            attributes_after_gear =
+                attributes_after_gear
+                    .clone()
+                    .zip_with(printed.clone(), |mut block, _| {
+                        for (kind, points) in &delta {
+                            block.add(*kind, *points);
+                        }
+                        block
+                    });
+            trace.push(StageNote {
+                stage: 2,
+                label: "gear attributes",
+                detail: format!("{}: {}", item.name, render_delta(printed.value())),
+            });
+        }
         for roll in &piece.rolls {
             if let Roll::Attribute(kind, points) = roll {
                 let (kind, points) = (*kind, *points);
@@ -270,23 +291,34 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     // multiplies armour that came from the pieces themselves and nothing
     // else. Summing first would erase the distinction the formula needs
     // (ADR-005 amendment: item armor bonus).
-    let mut item_ar_parts: Vec<Confidence<Fixed>> = Vec::new();
-    let mut other_ar_parts: Vec<Confidence<Fixed>> = Vec::new();
-    for piece in &loadout.armor {
+    // Gear seeds the derived graph. Two buckets per stat, because the game
+    // draws that line itself: the value printed on an item is one thing and
+    // `+11 Additional Armor Rating` rolled onto it is another, and only the
+    // printed one is multiplied by an Item Armor Rating Bonus.
+    let mut item_parts: BTreeMap<DerivedStatId, Vec<Confidence<Fixed>>> = BTreeMap::new();
+    let mut other_parts: BTreeMap<DerivedStatId, Vec<Confidence<Fixed>>> = BTreeMap::new();
+    for piece in &loadout.gear {
         let item = data
             .item(&piece.id)
             .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
-        if let Some(ar) = &item.armor_rating {
-            item_ar_parts.push(ar.clone());
+        for (id, value) in &item.grants {
+            item_parts
+                .entry(id.clone())
+                .or_default()
+                .push(value.clone());
         }
         for roll in &piece.rolls {
-            if let Roll::ArmorRating(ar) = roll {
-                other_ar_parts.push(Confidence::Verified(*ar));
+            if let Roll::Derived(id, value) = roll {
+                other_parts
+                    .entry(id.clone())
+                    .or_default()
+                    .push(Confidence::Verified(*value));
             }
         }
     }
-    let item_ar = fold_sum(item_ar_parts);
-    let other_ar = fold_sum(other_ar_parts);
+    let armor_id = DerivedStatId::new(well_known::ARMOR_RATING);
+    let item_ar = fold_sum(item_parts.get(&armor_id).cloned().unwrap_or_default());
+    let other_ar = fold_sum(other_parts.get(&armor_id).cloned().unwrap_or_default());
 
     let mut bonus_parts: Vec<Confidence<Fixed>> = Vec::new();
     for sourced in &effects {
@@ -314,10 +346,18 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     }
 
     let mut seeded: BTreeMap<DerivedStatId, Confidence<Fixed>> = BTreeMap::new();
-    seeded.insert(
-        DerivedStatId::new(well_known::ARMOR_RATING),
-        armor_rating.clone(),
-    );
+    seeded.insert(armor_id.clone(), armor_rating.clone());
+    // Every other gear-granted stat is a plain sum of its two buckets. The
+    // multiply belongs to armour rating alone, which is what the effect's
+    // own name says: *Item Armor Rating Bonus*.
+    for id in item_parts.keys().chain(other_parts.keys()) {
+        if *id == armor_id || seeded.contains_key(id) {
+            continue;
+        }
+        let mut parts = item_parts.get(id).cloned().unwrap_or_default();
+        parts.extend(other_parts.get(id).cloned().unwrap_or_default());
+        seeded.insert(id.clone(), fold_sum(parts));
+    }
 
     // ── Stage 4a/4b: attributes → ratings → derived stats ────────────────
     // The single most consequential line in the file: ratings read the
@@ -334,7 +374,7 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
 
     // ── Stage 5: flat adds ───────────────────────────────────────────────
     let mut move_speed_adds: Vec<Confidence<Fixed>> = Vec::new();
-    for piece in &loadout.armor {
+    for piece in &loadout.gear {
         let item = data
             .item(&piece.id)
             .ok_or_else(|| ResolveError::UnknownItem(piece.id.clone()))?;
@@ -612,6 +652,21 @@ fn collect_effects(
     })
 }
 
+/// Renders a sparse attribute delta for the trace: `strength +2 will +9`.
+fn render_delta(delta: &crate::schema::AttributeBlockDelta) -> String {
+    let mut out = String::new();
+    for (kind, points) in delta {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&format!("{} {points:+}", kind.as_str()));
+    }
+    if out.is_empty() {
+        out.push_str("nothing");
+    }
+    out
+}
+
 /// Sums graded values; the sum's grade is the minimum over the inputs.
 /// An empty sum is `Verified(0)` — the absence of modifiers is a certain
 /// fact, not a guess.
@@ -659,7 +714,7 @@ mod tests {
     use crate::curve::Curve;
     use crate::derived::{DerivedStatDef, RatingInput};
     use crate::ids::{ClassId, CurveId, ItemId, PerkId, SkillId};
-    use crate::loadout::{ArmorPiece, PartyBuffs, Weapons};
+    use crate::loadout::{GearPiece, PartyBuffs, Slot, Weapons};
     use crate::schema::{ClassDef, InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect};
     use crate::stats::Attribute;
     use proptest::prelude::*;
@@ -819,7 +874,11 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.dark_leather_leggings"),
             name: "Dark Leather Leggings".to_string(),
-            armor_rating: Some(Confidence::Unverified(fx(36))),
+            attributes: None,
+            grants: BTreeMap::from([(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                Confidence::Unverified(fx(36)),
+            )]),
             move_speed_add: Some(Confidence::Unverified(fx(-4))),
             weapon: None,
         });
@@ -859,7 +918,7 @@ mod tests {
             class: ClassId::new("class.rogue"),
             perks: vec![],
             skills: vec![],
-            armor: vec![],
+            gear: vec![],
             weapons: Weapons::default(),
             stacks: BTreeMap::new(),
             party: PartyBuffs::default(),
@@ -900,7 +959,8 @@ mod tests {
         let data = test_dataset();
         let base = resolve(&naked_rogue(), &data).unwrap();
         let mut dex_loadout = naked_rogue();
-        dex_loadout.armor = vec![ArmorPiece {
+        dex_loadout.gear = vec![GearPiece {
+            slot: Slot::Legs,
             id: ItemId::new("item.dark_leather_leggings"),
             rolls: vec![Roll::Attribute(AttributeKind::Dexterity, 4)],
         }];
@@ -958,7 +1018,8 @@ mod tests {
     #[test]
     fn gear_rolls_and_flat_move_speed_apply_at_their_stages() {
         let mut loadout = naked_rogue();
-        loadout.armor = vec![ArmorPiece {
+        loadout.gear = vec![GearPiece {
+            slot: Slot::Legs,
             id: ItemId::new("item.dark_leather_leggings"),
             rolls: vec![
                 Roll::Attribute(AttributeKind::Dexterity, 4),
@@ -992,14 +1053,19 @@ mod tests {
         let heavy = ItemDef {
             id: ItemId::new("item.test_plate"),
             name: "Test Plate".to_string(),
-            armor_rating: Some(Confidence::Unverified(fx(400))),
+            attributes: None,
+            grants: BTreeMap::from([(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                Confidence::Unverified(fx(400)),
+            )]),
             move_speed_add: None,
             weapon: None,
         };
         let mut data = test_dataset();
         data.insert_item(heavy);
         let mut loadout = naked_rogue();
-        loadout.armor = vec![ArmorPiece {
+        loadout.gear = vec![GearPiece {
+            slot: Slot::Legs,
             id: ItemId::new("item.test_plate"),
             rolls: vec![],
         }];
@@ -1022,7 +1088,11 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
-            armor_rating: Some(Confidence::Verified(fx(100))),
+            attributes: None,
+            grants: BTreeMap::from([(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                Confidence::Verified(fx(100)),
+            )]),
             move_speed_add: None,
             weapon: None,
         });
@@ -1034,9 +1104,13 @@ mod tests {
             ))],
         });
         let mut loadout = naked_rogue();
-        loadout.armor = vec![ArmorPiece {
+        loadout.gear = vec![GearPiece {
+            slot: Slot::Legs,
             id: ItemId::new("item.test_cuirass"),
-            rolls: vec![Roll::ArmorRating(fx(100))],
+            rolls: vec![Roll::Derived(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                fx(100),
+            )],
         }];
         loadout.perks = vec![PerkId::new("perk.test.armor_bonus")];
         let resolved = resolve(&loadout, &data).unwrap();
@@ -1054,14 +1128,22 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
-            armor_rating: Some(Confidence::Verified(fx(100))),
+            attributes: None,
+            grants: BTreeMap::from([(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                Confidence::Verified(fx(100)),
+            )]),
             move_speed_add: None,
             weapon: None,
         });
         let mut loadout = naked_rogue();
-        loadout.armor = vec![ArmorPiece {
+        loadout.gear = vec![GearPiece {
+            slot: Slot::Legs,
             id: ItemId::new("item.test_cuirass"),
-            rolls: vec![Roll::ArmorRating(fx(10))],
+            rolls: vec![Roll::Derived(
+                DerivedStatId::new(well_known::ARMOR_RATING),
+                fx(10),
+            )],
         }];
         loadout.perks = vec![PerkId::new("perk.fighter.defense_mastery")];
         let resolved = resolve(&loadout, &data).unwrap();
@@ -1098,7 +1180,8 @@ mod tests {
             data.insert_item(ItemDef {
                 id: ItemId::new("item.prop_plate"),
                 name: "Prop Plate".to_string(),
-                armor_rating: Some(Confidence::Verified(fx(item_ar))),
+                attributes: None,
+                grants: BTreeMap::from([(DerivedStatId::new(well_known::ARMOR_RATING), Confidence::Verified(fx(item_ar)))]),
                 move_speed_add: None,
                 weapon: None,
             });
@@ -1112,9 +1195,10 @@ mod tests {
                     ))],
                 });
                 let mut loadout = naked_rogue();
-                loadout.armor = vec![ArmorPiece {
+                loadout.gear = vec![GearPiece {
+                    slot: Slot::Legs,
                     id: ItemId::new("item.prop_plate"),
-                    rolls: vec![Roll::ArmorRating(fx(other_ar))],
+                    rolls: vec![Roll::Derived(DerivedStatId::new(well_known::ARMOR_RATING), fx(other_ar))],
                 }];
                 loadout.perks = vec![PerkId::new("perk.prop.bonus")];
                 *resolve(&loadout, &data)

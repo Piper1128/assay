@@ -21,13 +21,15 @@
     {
       "id": "item.dark_leather_leggings",
       "name": "Dark Leather Leggings",
-      "armor_rating": {
-        "confidence": "unverified",
-        "micro": 36000000
-      },
       "move_speed_add": {
         "confidence": "unverified",
         "micro": -4000000
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "unverified",
+          "micro": 36000000
+        }
       }
     },
     {
@@ -49,6 +51,50 @@
       }
     },
     {
+      "id": "item.leather_cap",
+      "name": "Leather Cap (Uncommon)",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "vigor": 2
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 33000000
+        },
+        "derived.headshot_damage_reduction": {
+          "confidence": "verified",
+          "micro": 14000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -3000000
+      }
+    },
+    {
+      "id": "item.loose_trousers",
+      "name": "Loose Trousers (Epic)",
+      "attributes": {
+        "confidence": "verified",
+        "points": {
+          "agility": 4
+        }
+      },
+      "grants": {
+        "derived.armor_rating": {
+          "confidence": "verified",
+          "micro": 25000000
+        }
+      },
+      "move_speed_add": {
+        "confidence": "verified",
+        "micro": -2000000
+      }
+    },
+    {
       "id": "item.morning_star",
       "name": "Morning Star",
       "move_speed_add": {
@@ -63,6 +109,20 @@
         "armor_pen": {
           "confidence": "unverified",
           "micro": 15000000
+        }
+      }
+    },
+    {
+      "id": "item.phoenix_choker",
+      "name": "Phoenix Choker (Uncommon)",
+      "grants": {
+        "derived.magical_power": {
+          "confidence": "verified",
+          "micro": 1000000
+        },
+        "derived.magic_penetration": {
+          "confidence": "verified",
+          "micro": 1000000
         }
       }
     },

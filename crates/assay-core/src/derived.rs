@@ -118,6 +118,7 @@ fn evaluate(
     computed: &BTreeMap<DerivedStatId, Confidence<Fixed>>,
     curve: &Confidence<Curve>,
     cap_override: Option<Fixed>,
+    gear: Option<&Confidence<Fixed>>,
 ) -> Confidence<Fixed> {
     // Rating: the weighted sum. Each product is one Fixed multiplication and
     // rounds half to even; the terms then sum exactly. For the weights the
@@ -146,24 +147,38 @@ fn evaluate(
     let offset = def.offset;
     let floor = def.floor;
     let cap = cap_override.or(def.cap);
-    rating.zip_with(curve.clone(), move |rating, curve| {
-        let mut value = curve.sample(rating) + offset;
-        if let Some(floor) = floor {
-            value = value.max(floor);
-        }
-        if let Some(cap) = cap {
-            value = value.min(cap);
-        }
-        value
-    })
+    // Gear adds to the curve's output, before the clamp. The game states
+    // these stats that way -- Magic Resistance is Will through a conversion
+    // *plus* what your gear grants -- and the order is load-bearing: adding
+    // after the clamp would let a capped stat exceed its cap, and clamping
+    // twice is not the same as clamping once whenever the gear term is
+    // negative.
+    let gear = gear.cloned().unwrap_or(Confidence::Verified(Fixed::ZERO)); // probe: seed-adds
+    rating
+        .zip_with(gear, |rating, gear| (rating, gear))
+        .zip_with(curve.clone(), move |(rating, gear), curve| {
+            let mut value = curve.sample(rating) + offset + gear;
+            if let Some(floor) = floor {
+                value = value.max(floor);
+            }
+            if let Some(cap) = cap {
+                value = value.min(cap);
+            }
+            value
+        })
 }
 
 /// Evaluates every definition in dependency order, starting from `seeded`
 /// values (gear-sourced quantities such as Armor Rating).
 ///
 /// `cap_overrides` carries perk-raised caps (ADR-005 stage 7); `curves`
-/// resolves curve ids. A definition whose id is already seeded is skipped —
-/// a seeded value is provided, not computed.
+/// resolves curve ids.
+///
+/// A seed **adds to** its definition rather than replacing it. Gear grants
+/// Magic Resistance on top of what Will produces, not instead of it, and the
+/// character sheet says so in as many words. A seed with no definition —
+/// armour rating, which no class computes — is the whole value, which is the
+/// same rule with nothing on the other side of the plus.
 pub fn evaluate_all(
     defs: &[DerivedStatDef],
     attributes: &Confidence<AttributeBlock>,
@@ -178,11 +193,14 @@ pub fn evaluate_all(
     }
 
     let defined: BTreeSet<DerivedStatId> = defs.iter().map(|d| d.id.clone()).collect();
-    let mut computed = seeded;
-    let mut pending: Vec<&DerivedStatDef> = defs
+    // A seed for a stat nobody computes stands on its own; a seed for one
+    // that is computed waits and is added to the result.
+    let mut computed: BTreeMap<DerivedStatId, Confidence<Fixed>> = seeded
         .iter()
-        .filter(|d| !computed.contains_key(&d.id))
+        .filter(|(id, _)| !defined.contains(*id))
+        .map(|(id, v)| (id.clone(), v.clone()))
         .collect();
+    let mut pending: Vec<&DerivedStatDef> = defs.iter().collect();
 
     // A dataset defines a handful of derived stats, so a repeated ready-scan
     // is clearer than building an explicit graph — and it can name the
@@ -211,6 +229,7 @@ pub fn evaluate_all(
                     &computed,
                     &curve,
                     cap_overrides.get(&def.id).copied(),
+                    seeded.get(&def.id),
                 );
                 computed.insert(def.id.clone(), value);
                 progressed = true;
