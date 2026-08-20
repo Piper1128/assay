@@ -169,6 +169,30 @@ EXCHANGES = [
         },
     },
     {
+        # Weakpoint Attack: the attacker imposes -30% Item Armor Rating Bonus
+        # on the defender. rogue-geared wears 36 of item armour with 10
+        # enchanted onto it, so the debuff must take 36 to 25.2 and leave the
+        # 10 alone -- the whole point of carrying the composition forward.
+        "name": "weakpoint-debuff",
+        "attacker": "naked-rogue",
+        "defender": "rogue-geared",
+        "strike": {
+            "base": graded_micro("20"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("0"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("0"),
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("0"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+            "item_armor_bonus_mods": {
+                "skill.rogue.weakpoint_attack": graded_micro("-30"),
+            },
+        },
+    },
+    {
         # Lethal Mark: -30 PDR Mod, multiplicative on the defender's PDR,
         # plus Thrust penetration and a back attack.
         "name": "lethal-mark-back-attack",
@@ -205,7 +229,14 @@ def build_vector() -> str:
     exchanges = []
     for case in EXCHANGES:
         strike = {k: graded_from(v) for k, v in case["strike"].items()}
-        context = {k: graded_from(v) for k, v in case["context"].items()}
+        context = {
+            k: (
+                {inner: graded_from(g) for inner, g in v.items()}
+                if k == "item_armor_bonus_mods"
+                else graded_from(v)
+            )
+            for k, v in case["context"].items()
+        }
         outcome = exchange_damage(
             indexed,
             resolved_by_name[case["attacker"]],

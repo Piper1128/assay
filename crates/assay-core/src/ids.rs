@@ -59,6 +59,17 @@ id_newtype!(
     SkillId
 );
 id_newtype!(
+    /// Identity of whatever granted an effect, perk or skill alike
+    /// (`skill.rogue.weakpoint_attack`).
+    ///
+    /// Perks and skills have their own id types because the dataset looks
+    /// them up in different tables. This one exists for the places that do
+    /// not care which table an ability came from, only that two mentions of
+    /// it are the same ability — which is the whole no-stacking rule
+    /// (ADR-006 amendment: item armor debuff).
+    AbilityId
+);
+id_newtype!(
     /// Identity of a curve definition (`curve.rogue.str_to_physical_power`).
     CurveId
 );

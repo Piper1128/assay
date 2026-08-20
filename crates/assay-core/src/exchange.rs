@@ -44,6 +44,7 @@
 //! *reduce* the attacker's damage. The magnitude is still wiki-sourced and
 //! therefore `Unverified` (ADR-007) until tested in game.
 
+use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -52,12 +53,13 @@ use core::fmt;
 use crate::confidence::Confidence;
 use crate::derived::well_known;
 use crate::fixed::Fixed;
-use crate::ids::{ClassId, CurveId, DerivedStatId};
+use crate::ids::{AbilityId, ClassId, CurveId, DerivedStatId};
 use crate::resolve::{Resolved, StageNote};
 use crate::schema::{DatasetSource, WeaponProfile};
 use crate::stats::{
     ArmorPen, ArmorRating, Damage, EffectivePdr, PdrMod, PdrPercent, ScalingCoefficient,
-    TrueDamage, apply_pdr_mod, apply_percent, apply_scaling, penetrate, reduce_by_pdr,
+    TrueDamage, apply_item_armor_bonus, apply_pdr_mod, apply_percent, apply_scaling, penetrate,
+    reduce_by_pdr,
 };
 
 /// What the attacker brings to one exchange: the strike being made, as
@@ -108,6 +110,21 @@ pub struct ExchangeContext {
     pub power_bonus_adjust: Confidence<Fixed>,
     /// Multiplicative PDR Mod on the defender (step 7): Lethal Mark −30.
     pub pdr_mod: Confidence<PdrMod>,
+    /// Item Armor Rating Bonus the attacker imposes on the defender for
+    /// this strike, in percentage points, keyed by the ability that imposed
+    /// it: Rogue's Weakpoint Attack is −30 under
+    /// `skill.rogue.weakpoint_attack`.
+    ///
+    /// Keyed rather than summed because the same ability never stacks
+    /// across the people carrying it — two rogues with Weakpoint apply −30,
+    /// not −60. A map key cannot appear twice, so the rule holds without
+    /// anyone remembering to check it. Different abilities are different
+    /// keys and do sum.
+    ///
+    /// Whether a debuff is live is a fact about the moment, not about
+    /// either build, so it is stated here and never inferred from the
+    /// attacker owning the skill (ADR-006 amendment: item armor debuff).
+    pub item_armor_bonus_mods: BTreeMap<AbilityId, Confidence<Fixed>>,
     /// Hit location multiplier in percentage points relative to 100
     /// (step 9): headshot and airborne bonuses.
     pub hit_location_bonus: Confidence<Fixed>,
@@ -119,6 +136,7 @@ impl Default for ExchangeContext {
         ExchangeContext {
             power_bonus_adjust: Confidence::Verified(Fixed::ZERO),
             pdr_mod: Confidence::Verified(PdrMod::new(Fixed::ZERO)),
+            item_armor_bonus_mods: BTreeMap::new(),
             hit_location_bonus: Confidence::Verified(Fixed::ZERO),
         }
     }
@@ -335,8 +353,43 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             ),
         });
 
-        // ── 5: defender's armor rating, reduced by penetration ───────────
-        let armor = defender_armor
+        // ── 5: defender's armor rating, debuffed then penetrated ─────────
+        // Order is not arbitrary. The bonus is defender-side state — what
+        // their armour is worth right now, before anyone specific swings —
+        // so it composes first. Penetration is a property of the strike and
+        // subtracts from whatever armour it meets
+        // (`docs/adr/ADR-006-amendment-item-armor-debuff.md`).
+        let composition = &self.defender.armor;
+        let mut net_bonus = composition.bonus.clone();
+        for mod_value in self.context.item_armor_bonus_mods.values() {
+            net_bonus = net_bonus.zip_with(mod_value.clone(), |a, b| a + b);
+        }
+        // The debuff's base is the item bucket, exactly as resolution's was.
+        let bonus_base = composition.item.clone(); // probe: debuff-item-base
+        let debuffed = bonus_base
+            .zip_with(net_bonus.clone(), apply_item_armor_bonus)
+            .zip_with(composition.other.clone(), |scaled, other| scaled + other);
+        if !self.context.item_armor_bonus_mods.is_empty() {
+            trace.push(StageNote {
+                stage: 5,
+                label: "armor debuffed",
+                detail: format!(
+                    "armor {} = item {} ×(100{:+})% + other {} → {} [{}]",
+                    defender_armor.value(),
+                    composition.item.value(),
+                    net_bonus.value(),
+                    composition.other.value(),
+                    debuffed.value(),
+                    self.context
+                        .item_armor_bonus_mods
+                        .iter()
+                        .map(|(id, v)| format!("{}: {}", id.as_str(), v.value()))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            });
+        }
+        let armor = debuffed
             .clone()
             .map(ArmorRating::new)
             .zip_with(self.strike.armor_pen.clone(), penetrate);
@@ -345,7 +398,7 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             label: "armor penetration",
             detail: format!(
                 "armor {} − pen {}% → {}",
-                defender_armor.value(),
+                debuffed.value(),
                 self.strike.armor_pen.value().value(),
                 armor.value().value()
             ),
@@ -523,6 +576,13 @@ mod tests {
             CurveId::new("curve.flat"),
             Confidence::Verified(Curve::linear(vec![(fx(0), fx(0)), (fx(100), fx(0))]).unwrap()),
         );
+        data.insert_perk(crate::schema::PerkDef {
+            id: crate::ids::PerkId::new("perk.test.mastery"),
+            name: "Test Mastery".to_string(),
+            effects: vec![crate::schema::StackedEffect::once(Confidence::Verified(
+                crate::schema::Effect::ItemArmorBonus(fx(15)),
+            ))],
+        });
         for rating in [0i64, 40, 150, 200, 250] {
             data.insert_item(ItemDef {
                 id: ItemId::new(alloc::format!("item.armor_{rating}")),
@@ -551,6 +611,45 @@ mod tests {
             party: PartyBuffs::default(),
         };
         resolve(&loadout, data).expect("test loadout resolves")
+    }
+
+    /// A defender wearing `armor` on the piece with `enchant` rolled onto
+    /// the same copy, optionally holding the +15% Item Armor Rating Bonus
+    /// perk. The two buckets differ, which is what the debuff tests need.
+    fn layered(data: &InMemoryDataset, armor: i64, enchant: i64, mastery: bool) -> Resolved {
+        let loadout = Loadout {
+            name: alloc::format!("layered-{armor}-{enchant}"),
+            class: ClassId::new("class.test"),
+            perks: if mastery {
+                vec![crate::ids::PerkId::new("perk.test.mastery")]
+            } else {
+                vec![]
+            },
+            skills: vec![],
+            armor: vec![ArmorPiece {
+                id: ItemId::new(alloc::format!("item.armor_{armor}")),
+                rolls: vec![crate::loadout::Roll::ArmorRating(fx(enchant))],
+            }],
+            weapons: Weapons::default(),
+            stacks: BTreeMap::new(),
+            party: PartyBuffs::default(),
+        };
+        resolve(&loadout, data).expect("layered loadout resolves")
+    }
+
+    /// Weakpoint Attack at the given percentage points, keyed by its ability.
+    fn weakpoint(points: i64) -> BTreeMap<AbilityId, Confidence<Fixed>> {
+        BTreeMap::from([(
+            AbilityId::new("skill.rogue.weakpoint_attack"),
+            Confidence::Verified(fx(points)),
+        )])
+    }
+
+    fn debuff(mods: BTreeMap<AbilityId, Confidence<Fixed>>) -> ExchangeContext {
+        ExchangeContext {
+            item_armor_bonus_mods: mods,
+            ..ExchangeContext::default()
+        }
     }
 
     fn strike(base: i64, scaling: i64, flat: i64, pen: i64, true_dmg: i64) -> Strike {
@@ -724,6 +823,108 @@ mod tests {
     }
 
     #[test]
+    fn the_defenders_bonus_and_the_attackers_debuff_are_one_quantity() {
+        // The game calls both Item Armor Rating Bonus, so they sum:
+        // +15 - 30 = -15. Not "apply one and discard the other", and not
+        // two multiplications in sequence.
+        let data = dataset();
+        let attacker = combatant(&data, 0);
+        let defender = layered(&data, 200, 0, true);
+        let strike = strike(100, 100, 0, 0, 0);
+
+        let neutral = ExchangeContext::default();
+        let debuffed = debuff(weakpoint(-30));
+        // 200 x 1.15 = 230 undamaged; 200 x 0.85 = 170 under the debuff.
+        assert!(
+            damage_of(&data, &attacker, &defender, &strike, &debuffed)
+                > damage_of(&data, &attacker, &defender, &strike, &neutral),
+            "a debuff on the defender must help the attacker"
+        );
+
+        // The sum is genuinely -15 and not -30: a defender without the perk
+        // drops to 200 x 0.70 = 140, strictly less armour and so strictly
+        // more damage. The perk still buys something under the debuff.
+        let unperked = layered(&data, 200, 0, false);
+        assert!(
+            damage_of(&data, &attacker, &unperked, &strike, &debuffed)
+                > damage_of(&data, &attacker, &defender, &strike, &debuffed),
+            "the perk must still be worth something under the debuff"
+        );
+    }
+
+    #[test]
+    fn the_debuff_reaches_worn_armour_and_not_its_enchantments() {
+        // The three-way discrimination the resolve-side test makes, from the
+        // other side: 200 item + 50 enchant under -30% is 140 + 50 = 190.
+        // Debuffing the combined 250 would give 175; debuffing nothing, 250.
+        let data = dataset();
+        let attacker = combatant(&data, 0);
+        let split = layered(&data, 200, 50, false);
+        let all_item = layered(&data, 250, 0, false);
+        let strike = strike(100, 100, 0, 0, 0);
+        let debuffed = debuff(weakpoint(-30));
+
+        // Both defenders resolve to the same armour rating undamaged...
+        assert_eq!(
+            split.stat(well_known::ARMOR_RATING).unwrap().value(),
+            all_item.stat(well_known::ARMOR_RATING).unwrap().value()
+        );
+        // ...but the one whose armour is partly enchantment keeps more of it
+        // through the debuff, and so takes strictly less damage.
+        assert!(
+            damage_of(&data, &attacker, &split, &strike, &debuffed)
+                < damage_of(&data, &attacker, &all_item, &strike, &debuffed),
+            "an enchantment must survive a debuff that worn armour does not"
+        );
+    }
+
+    #[test]
+    fn the_same_ability_cannot_be_applied_twice() {
+        // Two rogues both landing Weakpoint apply -30, not -60. The map key
+        // enforces it, so this asserts the structure was not worked around,
+        // and that two different abilities still sum.
+        let data = dataset();
+        let attacker = combatant(&data, 0);
+        let defender = layered(&data, 200, 0, false);
+        let strike = strike(100, 100, 0, 0, 0);
+
+        let mut twice = weakpoint(-30);
+        twice.insert(
+            AbilityId::new("skill.rogue.weakpoint_attack"),
+            Confidence::Verified(fx(-30)),
+        );
+        assert_eq!(twice.len(), 1, "one ability, one entry");
+        assert_eq!(
+            damage_of(&data, &attacker, &defender, &strike, &debuff(twice)),
+            damage_of(
+                &data,
+                &attacker,
+                &defender,
+                &strike,
+                &debuff(weakpoint(-30))
+            ),
+            "a second rogue with the same skill adds nothing"
+        );
+
+        let mut two_abilities = weakpoint(-30);
+        two_abilities.insert(
+            AbilityId::new("perk.other.sunder"),
+            Confidence::Verified(fx(-10)),
+        );
+        assert!(
+            damage_of(&data, &attacker, &defender, &strike, &debuff(two_abilities))
+                > damage_of(
+                    &data,
+                    &attacker,
+                    &defender,
+                    &strike,
+                    &debuff(weakpoint(-30))
+                ),
+            "a different ability is a different debuff and must sum"
+        );
+    }
+
+    #[test]
     fn a_dataset_from_another_build_is_refused() {
         // The failure the three-input form could not have. Silently using
         // another patch's curves is exactly what this guard exists to stop.
@@ -774,6 +975,28 @@ mod tests {
         /// penetration never yields less damage. A golden fixture at one
         /// penetration value could not have caught a direction error.
         #[test]
+        /// A bigger debuff never leaves the attacker with less damage.
+        /// The sibling of the penetration property, written for the same
+        /// defect class: this amendment puts a second signed quantity into
+        /// the same subtraction, and that is precisely where the
+        /// penetration direction bug lived.
+        #[test]
+        fn a_bigger_debuff_never_deals_less_damage(
+            enchant in 0i64..100,
+            small in 0i64..40,
+            extra in 0i64..40,
+            mastery in proptest::bool::ANY,
+        ) {
+            let data = dataset();
+            let attacker = combatant(&data, 0);
+            let defender = layered(&data, 200, enchant, mastery);
+            let strike = strike(100, 100, 0, 0, 0);
+            let at = |points: i64| {
+                damage_of(&data, &attacker, &defender, &strike, &debuff(weakpoint(-points)))
+            };
+            prop_assert!(at(small + extra) >= at(small));
+        }
+
         fn more_penetration_never_deals_less_damage(
             armor in prop::sample::select(vec![0i64, 40, 150, 200, 250]),
             pen_a in 0i64..=100,

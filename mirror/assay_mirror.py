@@ -370,6 +370,15 @@ def resolve(dataset: dict, loadout: dict) -> dict:
         "attributes": attributes,
         "derived": derived,
         "caps": caps,
+        # What stage 7 combined. The exchange needs the parts to re-compose
+        # the rating at a different Item Armor Rating Bonus, and a combined
+        # figure cannot be taken apart again (ADR-006 amendment: item armor
+        # debuff) -- the same reason caps travels.
+        "armor": {
+            "item": fold_sum(item_ar_parts),
+            "bonus": item_bonus,
+            "other": fold_sum(other_ar_parts),
+        },
     }
 
 
@@ -436,9 +445,30 @@ def exchange_damage(
     # 4: + flat Buff Weapon Damage.
     damage = zip_with(damage, strike["flat_bonus"], lambda d, f: d + f)
 
-    # 5: defender's armor rating, reduced by penetration (floored at zero).
+    # 5: the defender's armour, debuffed and then penetrated.
+    #
+    # Order is not arbitrary. An Item Armor Rating Bonus the attacker imposes
+    # is defender-side state -- what their armour is worth right now, before
+    # anyone specific swings -- so it composes first. Penetration belongs to
+    # the strike and subtracts from whatever armour it meets.
+    #
+    # The mods are keyed by ability, so the same ability applied by two
+    # people is one entry: two rogues with Weakpoint are -30, not -60.
+    composition = defender["armor"]
+    net_bonus = composition["bonus"]
+    for mod in context.get("item_armor_bonus_mods", {}).values():
+        net_bonus = zip_with(net_bonus, mod, lambda a, b: a + b)
+    debuffed = zip_with(
+        zip_with(
+            composition["item"],
+            net_bonus,
+            lambda ar, bonus: div_round_half_even(ar * (100_000_000 + bonus), 100_000_000),
+        ),
+        composition["other"],
+        lambda scaled, other: scaled + other,
+    )
     armor = zip_with(
-        defender["derived"]["derived.armor_rating"],
+        debuffed,
         strike["armor_pen"],
         lambda ar, pen: max(mul_div(ar, PERCENT - pen, PERCENT), 0),
     )

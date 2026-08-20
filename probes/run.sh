@@ -119,6 +119,19 @@ fi
 git checkout --quiet -- crates/assay-core/src/resolve.rs
 verdict item_armor_bonus_base "$gate_rejected"
 
+# ── debuff_item_base ─────────────────────────────────────────────
+# An attacker-applied Item Armor Rating Bonus multiplies the defender's worn
+# armour, not their enchantments. Widening its base must fail, the same way
+# widening resolution's does (ADR-006 amendment: item armor debuff).
+sed -i '/probe: debuff-item-base/ s/composition\.item\.clone()/composition.item.clone().zip_with(composition.other.clone(), |a, b| a + b)/' crates/assay-core/src/exchange.rs
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/exchange.rs
+verdict debuff_item_base "$gate_rejected"
+
 # ── scaling_ignored ──────────────────────────────────────────────────────────
 # Hardcoding the skill scaling coefficient to 100% (ADR-006 step 2) must fail
 # the Sneak Attack fixture: 0% scaling is what makes it immune to the

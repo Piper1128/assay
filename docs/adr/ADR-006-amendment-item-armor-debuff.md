@@ -1,6 +1,6 @@
 # ADR-006 amendment: attacker-applied Item Armor Rating Bonus
 
-Status: Proposed
+Status: Accepted
 Amends: ADR-006 (exchange model), steps 5–6; ADR-005 amendment (item armor
 bonus); the shape of `Resolved`
 Date: 2026-08-19
@@ -172,6 +172,23 @@ would let an exchange disagree with the `Resolved` it was given.
 - Whether Weakpoint's own AR reduction is affected by the defender's
   Armor Rating *Bonus* sources beyond items — moot while the wiki says
   plain Armor Rating Bonus does not exist in the game.
+
+## What this amendment does not reach
+
+Two boundaries, stated so they are not mistaken for oversights.
+
+**The debuff is not reachable from the CLI.** `assay exchange` builds
+`ExchangeContext::default()` and always has: none of the four context fields
+— power adjustment, PDR Mod, hit location, and now the armour debuff — can be
+set from a file or a flag. Exposing them is one job for all four, not a
+special case for this one, and it is not part of this amendment.
+
+**The dataset does not carry Weakpoint Attack.** `Effect` describes what an
+ability does to *its owner*, and a debuff on someone else has no vocabulary
+there yet. Adding one means deciding what resolution does when it meets an
+effect it must not apply — a decision this amendment deliberately does not
+make. Until then the −30 is a number the caller states, and `assay diff`
+cannot see it change between patches.
 
 ## Confidence
 

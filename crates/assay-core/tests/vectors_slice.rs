@@ -14,10 +14,10 @@ use std::path::PathBuf;
 use assay_core::exchange::{Exchange, ExchangeContext, Strike};
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use assay_core::{
-    ArmorPiece, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
-    DerivedStatDef, DerivedStatId, Effect, Fixed, InMemoryDataset, ItemDef, ItemId, Loadout,
-    PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId, StackedEffect,
-    Weapons, canonical_exchange, canonical_statblock, resolve,
+    AbilityId, ArmorPiece, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve,
+    CurveId, DerivedStatDef, DerivedStatId, Effect, Fixed, InMemoryDataset, ItemDef, ItemId,
+    Loadout, PartyBuffs, PerkDef, PerkId, RatingInput, Resolved, Roll, SkillDef, SkillId,
+    StackedEffect, Weapons, canonical_exchange, canonical_statblock, resolve,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -305,6 +305,15 @@ fn exchange_context(node: &Value) -> ExchangeContext {
         power_bonus_adjust: graded_micro(&node["power_bonus_adjust"]),
         pdr_mod: graded_micro(&node["pdr_mod"]).map(PdrMod::new),
         hit_location_bonus: graded_micro(&node["hit_location_bonus"]),
+        item_armor_bonus_mods: node
+            .get("item_armor_bonus_mods")
+            .and_then(serde_json::Value::as_object)
+            .map(|map| {
+                map.iter()
+                    .map(|(id, v)| (AbilityId::new(id), graded_micro(v)))
+                    .collect()
+            })
+            .unwrap_or_default(),
     }
 }
 

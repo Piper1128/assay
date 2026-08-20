@@ -733,6 +733,54 @@
       "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":14663500},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":8910000}}"
     },
     {
+      "name": "weakpoint-debuff",
+      "attacker": "naked-rogue",
+      "defender": "rogue-geared",
+      "strike": {
+        "base": {
+          "confidence": "verified",
+          "micro": 20000000
+        },
+        "scaling": {
+          "confidence": "verified",
+          "micro": 100000000
+        },
+        "flat_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "armor_pen": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "true_damage": {
+          "confidence": "verified",
+          "micro": 0
+        }
+      },
+      "context": {
+        "power_bonus_adjust": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "pdr_mod": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "hit_location_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "item_armor_bonus_mods": {
+          "skill.rogue.weakpoint_attack": {
+            "confidence": "verified",
+            "micro": -30000000
+          }
+        }
+      },
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":15946120},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":7290000}}"
+    },
+    {
       "name": "lethal-mark-back-attack",
       "attacker": "rogue-duo-buffed",
       "defender": "rogue-geared",

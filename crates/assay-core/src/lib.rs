@@ -27,7 +27,7 @@ pub use curve::{Curve, CurveError, Interpolation};
 pub use derived::{DerivedError, DerivedStatDef, RatingInput, well_known};
 pub use exchange::{Exchange, ExchangeContext, ExchangeOutcome, Strike};
 pub use fixed::{Fixed, ParseFixedError, SCALE};
-pub use ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
+pub use ids::{AbilityId, ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 pub use loadout::{ArmorPiece, Loadout, PartyBuffs, Roll, Weapons};
 pub use resolve::{ResolveError, Resolved, StageNote, resolve};
 pub use schema::{

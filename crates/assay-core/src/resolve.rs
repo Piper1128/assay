@@ -105,6 +105,25 @@ pub struct StageNote {
     pub detail: String,
 }
 
+/// What stage 7 combined into the armour rating, kept apart.
+///
+/// The combined figure alone cannot be re-composed at a different Item
+/// Armor Rating Bonus, because a percentage that applies to worn armour and
+/// not to enchantments has no meaning once the two are one number. An
+/// exchange needs exactly that when the attacker debuffs the defender
+/// (ADR-006 amendment: item armor debuff), so resolution carries the parts
+/// forward — the same reason `caps` is here.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArmorComposition {
+    /// Armour from the equipped pieces themselves: the multiplier's base.
+    pub item: Confidence<Fixed>,
+    /// The defender's own Item Armor Rating Bonus, in percentage points.
+    pub bonus: Confidence<Fixed>,
+    /// Every other source, enchantment rolls included. Outside the
+    /// multiplier by definition.
+    pub other: Confidence<Fixed>,
+}
+
 /// The resolved stat block. Presentation-independent; the canonical encoding
 /// (ADR-001 rev 2 §3) is derived from this, the trace is not part of it.
 ///
@@ -128,6 +147,8 @@ pub struct Resolved {
     /// must clamp the same way, and the raise came from the loadout rather
     /// than from the dataset.
     pub caps: BTreeMap<DerivedStatId, Fixed>,
+    /// What stage 7 combined to reach `derived.armor_rating`.
+    pub armor: ArmorComposition,
     /// The `--explain` trail, in stage order.
     pub trace: Vec<StageNote>,
 }
@@ -428,6 +449,11 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
         attributes: attributes_final,
         derived,
         caps,
+        armor: ArmorComposition {
+            item: item_ar,
+            bonus: item_bonus,
+            other: other_ar,
+        },
         trace,
     })
 }
