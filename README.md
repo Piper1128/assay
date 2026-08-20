@@ -46,6 +46,32 @@ they come from the wiki rather than from an in-game test.
 committed. Adding the Hotfix 122 numbers is a data task, and the point at
 which the tool starts answering the question it exists for.
 
+### In a browser
+
+```
+python tools/build-ui.py --open
+```
+
+Builds `ui/assay.html` and opens it: one file, no server, no install, no
+network. It runs the same resolver the CLI does — `assay-core` is
+`no_std + alloc` with no floats and no hash maps, which compiles to
+`wasm32-unknown-unknown` unchanged, so the page does not carry a second
+implementation of the pipeline. Numbers cross into JavaScript as decimal
+strings; a `f64` at that boundary would reintroduce the error class this
+project exists to prevent.
+
+Screenshot an item tooltip and paste it in, and it reads the card — showing
+what it understood and what it did not, because a card half-read in silence
+is worse than one that says which half. Text recognition fetches its engine
+once; nothing else on the page ever touches the network.
+
+Nothing here reads the game's memory or injects an overlay. The page only
+sees what you hand it.
+
+The page is built rather than committed: an 800 KiB result in git would drift
+behind the resolver it embeds. The build needs the `wasm32-unknown-unknown`
+target and a `wasm-bindgen` CLI matching the pinned crate version.
+
 ## Layout
 
 | Path | Std? | Role |
