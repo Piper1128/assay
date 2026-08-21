@@ -186,6 +186,15 @@ fn to_json(observed: &ItemObservation, method: Method, def: &ItemDef) -> Value {
     let mut item = Map::new();
     item.insert("id".into(), Value::String(observed.id.clone()));
     item.insert("name".into(), Value::String(observed.name.clone()));
+    // Rarity is written from the parsed value rather than the raw string:
+    // whatever lands in the dataset is then something the loader understood.
+    // It was missing here entirely — read off the card, validated on the way
+    // in, and dropped on the way out, which is a checked value that does
+    // nothing. Keyed after `name` so the order matches the hand-authored
+    // items and a submission does not stand out for the wrong reason.
+    if let Some(rarity) = def.rarity {
+        item.insert("rarity".into(), Value::String(rarity.as_str().into()));
+    }
     if let Some(slot) = def.slot {
         item.insert("slot".into(), Value::String(slot.as_str().into()));
     }

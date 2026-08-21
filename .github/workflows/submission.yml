@@ -188,7 +188,33 @@ jobs:
             echo "The gates run on this branch, and merging is the review."
             echo "Nothing here decided whether the numbers are right."
           } > pr.md
+          # Creating a pull request from Actions is gated by a repository
+          # setting as well as by the token's permissions, and it is off by
+          # default. The branch is pushed either way, so a refusal here has
+          # to hand over the one-click link rather than fail and leave the
+          # work sitting on a branch nobody was told about.
+          set +e
           url=$(gh pr create --title "data: observation from #$ISSUE" \
-                             --body-file pr.md --base main --head "$branch")
-          gh issue comment "$ISSUE" \
-            --body "Proposed as $url — the gates run there, and merging is the review."
+                             --body-file pr.md --base main --head "$branch" 2> pr.err)
+          created=$?
+          set -e
+          if [ "$created" -eq 0 ]; then
+            gh issue comment "$ISSUE" \
+              --body "Proposed as $url — the gates run there, and merging is the review."
+            exit 0
+          fi
+          {
+            echo "Applied on \`$branch\` and pushed, but I could not open"
+            echo "the pull request myself:"
+            echo
+            echo '```'
+            cat pr.err
+            echo '```'
+            echo
+            echo "Open it here: ${{ github.server_url }}/${{ github.repository }}/compare/main...$branch?expand=1"
+            echo
+            echo "To let this step do it instead: **Settings -> Actions ->"
+            echo "General -> Workflow permissions -> Allow GitHub Actions to"
+            echo "create and approve pull requests**."
+          } > comment.md
+          gh issue comment "$ISSUE" --body-file comment.md

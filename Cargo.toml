@@ -25,7 +25,15 @@ assay-scrape = { path = "crates/assay-scrape" }
 # assay-data: dataset I/O. serde stays OUT of assay-core - the file format
 # is a separate concern from the domain types (see assay-data's module doc).
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order` keeps an object's keys in the order the file wrote them
+# instead of sorting them. Without it, `assay submit --apply` re-serialised
+# every item alphabetically, so adding one item rewrote all of them and a
+# submission arrived as a 300-line diff nobody could read — which defeats
+# the only review this project has (ADR-003: a human, looking at a change).
+#
+# Safe for the no_std gate: assay-core has no dependencies at all, and takes
+# serde_json only as a dev-dependency.
+serde_json = { version = "1", features = ["preserve_order"] }
 
 # assay-cli: the loadout file format (ADR-009).
 toml = "0.9"
