@@ -711,6 +711,10 @@
       JSON.stringify({ strike: {}, context: {}, type: "physical" })));
     if (back.ok) {
       const race = el("div", "race");
+      // Chained weapons never land the same blow twice running, so the
+      // realistic count is the chain's when there is one.
+      const count = r => r.chainToKill ?? r.hitsToKill;
+      const clock = r => r.chainToKill ? r.chainTimeToKill : r.timeToKill;
       for (const h of ["", "damage", "hits", "seconds"]) {
         race.append(el("div", "head" + (h ? " n" : ""), h));
       }
@@ -721,19 +725,24 @@
       // Only a race if both sides finish and both were timed. Comparing a
       // time to a blank is not a comparison, and colouring one green would
       // be an answer nobody computed.
-      const timed = rows.every(([, r]) => r.timeToKill && r.hitsToKill);
+      const timed = rows.every(([, r]) => clock(r) && count(r));
       const faster = timed
         ? rows.reduce((a, b) =>
-            Number(a[1].timeToKill.value) <= Number(b[1].timeToKill.value) ? a : b)
+            Number(clock(a[1]).value) <= Number(clock(b[1]).value) ? a : b)
         : null;
       for (const row of rows) {
         const [label, r] = row;
         race.append(el("div", "who", label));
         race.append(el("div", "n", r.damage.value));
-        race.append(el("div", "n", r.hitsToKill ?? "never"));
-        const t = el("div", "n " + (r.timeToKill ? (row === faster ? "wins" : "") : "unknown"),
-                     r.timeToKill ? r.timeToKill.value + "s" : "—");
-        race.append(t);
+        const n = count(r);
+        const hits = el("div", "n", n ?? "never");
+        // A chain count is a different figure from a repeated blow and the
+        // reader has no way to tell them apart from the number alone.
+        if (r.chainToKill) hits.title = "running the weapon's chain";
+        race.append(hits);
+        const t = clock(r);
+        race.append(el("div", "n " + (t ? (row === faster ? "wins" : "") : "unknown"),
+                       t ? t.value + "s" : "—"));
       }
       host.append(race);
       if (!timed) {

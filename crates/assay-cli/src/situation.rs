@@ -143,6 +143,14 @@ pub(crate) fn parse(
 
     let strike = Strike {
         weapon: basic.weapon.clone(),
+        // Naming a skill, picking a swing, or overriding the scaling by
+        // hand all say "this blow", and the weapon's chain is a different
+        // question. Overriding some other field — a hit location, a flat
+        // bonus — still leaves the weapon swinging normally.
+        pinned: dto.combo_hit.is_some()
+            || dto.skill.is_some()
+            || dto.strike.scaling.is_some()
+            || dto.strike.base.is_some(),
         damage_type: match dto.strike.damage_type.as_deref() {
             Some("magic") => DamageType::Magic,
             Some("physical") => DamageType::Physical,

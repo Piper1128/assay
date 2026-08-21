@@ -321,6 +321,7 @@ fn loadout(node: &Value) -> Loadout {
 
 fn strike(node: &Value) -> Strike {
     Strike {
+        pinned: false,
         // The vector's exchanges name no weapon, so nothing looks up a
         // swing time and time-to-kill stays absent — which is what the
         // mirror computes too.

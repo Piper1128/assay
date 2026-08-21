@@ -103,6 +103,26 @@ impl Fixed {
         Some(total.0.div_euclid(self.0) + i64::from(total.0.rem_euclid(self.0) != 0))
     }
 
+    /// How many whole `self` fit inside `total`, rounded **down**.
+    ///
+    /// The floor to `hits_to_cover`'s ceiling. Where that one asks how many
+    /// swings finish the job, this asks how many certainly do not — which
+    /// is what lets a repeating cycle skip straight to its last lap instead
+    /// of walking every swing of a long fight one at a time.
+    ///
+    /// `None` when `self` is zero or negative, for the same reason: a step
+    /// of nothing fits into anything an unbounded number of times.
+    #[must_use]
+    pub fn whole_multiples_in(self, total: Fixed) -> Option<i64> {
+        if self.0 <= 0 {
+            return None;
+        }
+        if total.0 <= 0 {
+            return Some(0);
+        }
+        Some(total.0.div_euclid(self.0))
+    }
+
     /// Division rounding half to even (banker's rounding), per the ADR-001
     /// rev 2 rule that division is only available through named functions.
     /// Panics if `rhs` is zero.

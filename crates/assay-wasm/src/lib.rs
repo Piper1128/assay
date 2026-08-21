@@ -640,6 +640,10 @@ pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) 
             "skill": named,
             "hitsToKill": out.hits_to_kill,
             "timeToKill": out.time_to_kill.as_ref().map(graded),
+            // What the weapon actually does, when it does more than swing
+            // the same blow forever.
+            "chainToKill": out.chain_to_kill,
+            "chainTimeToKill": out.chain_time_to_kill.as_ref().map(graded),
             "steps": out
                 .trace
                 .iter()
@@ -713,6 +717,9 @@ fn build_situation(
     };
 
     let strike = Strike {
+        // The page hands over whatever the fields say; overriding the blow
+        // itself means the chain is no longer the question being asked.
+        pinned: fixed("strike", "scaling")?.is_some() || fixed("strike", "base")?.is_some(),
         weapon: basic.weapon.clone(),
         damage_type: match node.get("type").and_then(Value::as_str) {
             Some("magic") => DamageType::Magic,

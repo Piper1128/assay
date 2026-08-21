@@ -251,3 +251,22 @@ recorded on each swing and nothing consumes it. Whether armour resists
 these differently is exactly the sort of thing plate and cloth exist for,
 but nothing has measured it, and inventing a rule would be worse than
 leaving a field visibly waiting.
+
+### Two hit counts, and why both stay
+
+A chained weapon never lands the same blow twice running, so the tool
+prints two figures that answer different questions:
+
+- **hits to kill** — this blow, repeated. The answer when you pinned a
+  swing or named a skill, because that is what you asked about.
+- **swings to kill** — the weapon used as it is used. Shown only for a
+  plain swing of a weapon with a recorded chain.
+
+They differ often enough to matter: across the eight loadout pairings in
+`loadouts/`, three of them kill a swing sooner on the chain than the
+repeated blow suggests. Collapsing them into one heading would give two
+readers different arithmetic under the same word.
+
+Unmeasured, and it would only push the chain figure up: whether the game
+resets a chain on a miss or after a pause. An uninterrupted chain is the
+floor, not a guess.

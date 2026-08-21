@@ -131,6 +131,12 @@ pub struct Strike {
     pub scaling: Confidence<ScalingCoefficient>,
     /// Flat Buff Weapon Damage (step 4).
     pub flat_bonus: Confidence<Damage>,
+    /// Whether this attack is one specific blow rather than the weapon
+    /// simply swinging: a named skill, or a swing picked out of the chain.
+    ///
+    /// Set, the chain count stays quiet. Asking "what does the third swing
+    /// do" and being answered about a whole chain is not an answer.
+    pub pinned: bool,
     /// Which weapon this came from, when it came from one. Carried so the
     /// swing time can be looked up: damage says how hard, and the weapon
     /// says how often, and a fight is both.
@@ -159,6 +165,9 @@ impl Strike {
             // A weapon swings physically unless something says otherwise,
             // which is the same thing `DamageType::default()` says.
             damage_type: DamageType::Physical,
+            // A plain swing is the weapon doing its normal thing, so the
+            // chain applies. Anything more specific sets this.
+            pinned: false,
             weapon: Some(id.clone()),
             base: weapon.base_damage.clone().map(Damage::new),
             // 100%: an unmodified swing scales fully. Sneak Attack's 0% is a
@@ -227,6 +236,14 @@ pub struct Exchange<'a, D: DatasetSource> {
     data: &'a D,
 }
 
+/// What one swing came to: the nine steps' output, before anything asks
+/// how many of them a fight takes.
+struct Swing {
+    damage: Confidence<Damage>,
+    effective_pdr: Confidence<EffectivePdr>,
+    trace: Vec<StageNote>,
+}
+
 /// Why an exchange could not be computed. Everything it needs must be
 /// present and consistent: a missing stat is an explicit error, never a
 /// silent zero, and a dataset from another build is refused outright.
@@ -287,6 +304,17 @@ pub struct ExchangeOutcome {
     /// `None` when the attack cannot kill at all — a fully resisted hit
     /// does not kill in a very large number of swings, it does not kill.
     pub hits_to_kill: Option<i64>,
+    /// How many swings of the weapon's chain it takes, when this is the
+    /// weapon simply swinging and the chain is known.
+    ///
+    /// Kept beside `hits_to_kill` rather than replacing it, because they
+    /// answer different questions: one is "this blow, repeated", the other
+    /// is "this weapon, used". A tool that silently switched between them
+    /// depending on the weapon would give two readers different arithmetic
+    /// under the same heading.
+    pub chain_to_kill: Option<i64>,
+    /// Seconds to land the chain's swings.
+    pub chain_time_to_kill: Option<Confidence<Fixed>>,
     /// Seconds to land those hits, when the weapon's swing time is known.
     ///
     /// This is what makes two builds comparable as a race rather than as a
@@ -398,18 +426,92 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         }))
     }
 
-    /// Runs the nine steps in the locked order.
-    pub fn damage(&self) -> Result<ExchangeOutcome, ExchangeError> {
+    /// How many swings of the weapon's own chain it takes to kill.
+    ///
+    /// `None` when the weapon has no chain recorded, when this attack is
+    /// not the weapon simply swinging (a skill or a pinned swing is a
+    /// question about one blow, and answering about a different one would
+    /// be answering something nobody asked), or when the chain cannot kill
+    /// at all.
+    ///
+    /// The chain repeats: swing four is swing one again. Whether the game
+    /// resets a chain on a miss or after a pause is unmeasured and would
+    /// only ever make this number larger, so an uninterrupted chain is the
+    /// floor rather than a guess — noted in `data/README.md`.
+    fn chain_to_kill(&self, health: Fixed) -> Result<Option<i64>, ExchangeError> {
+        if self.strike.pinned {
+            return Ok(None);
+        }
+        let Some(weapon) = self
+            .strike
+            .weapon
+            .as_ref()
+            .and_then(|id| self.data.item(id))
+            .and_then(|item| item.weapon.as_ref())
+        else {
+            return Ok(None);
+        };
+        if weapon.combo.is_empty() {
+            return Ok(None);
+        }
+
+        // Each swing costs its own nine steps. They differ only in scaling,
+        // but the difference does not survive being applied at the end:
+        // the flat bonus is added after the multiply, so scaling the final
+        // damage would quietly overcharge every weapon carrying one.
+        let mut per_swing = Vec::with_capacity(weapon.combo.len());
+        for hit in &weapon.combo {
+            let mut swing = self.strike.clone();
+            swing.scaling = hit.scaling.clone().map(ScalingCoefficient::new);
+            per_swing.push(self.steps(&swing)?.damage.value().value());
+        }
+
+        // A chain that does nothing does not kill in a very large number of
+        // swings; it does not kill. Checking the whole cycle rather than
+        // one swing matters for a chain that only lands on its last blow.
+        let cycle: Fixed = per_swing.iter().fold(Fixed::ZERO, |a, b| a + *b);
+        if cycle <= Fixed::ZERO {
+            return Ok(None);
+        }
+
+        // Whole laps by division, not by walking them. A chain taking a
+        // sliver off a large pool would otherwise loop millions of times to
+        // arrive at a number arithmetic already knows, and a fight is not a
+        // good place to find that out.
+        let laps = cycle.whole_multiples_in(health).unwrap_or(0);
+        let per_lap = i64::try_from(per_swing.len()).unwrap_or(i64::MAX);
+        let mut dealt = cycle * Fixed::from_int(laps);
+        let mut swings = laps.saturating_mul(per_lap);
+
+        // `laps` is the floor, so what is left is less than one full lap and
+        // this pass always finishes it.
+        for damage in &per_swing {
+            if dealt >= health {
+                break;
+            }
+            dealt = dealt + *damage;
+            swings = swings.saturating_add(1);
+        }
+        Ok(Some(swings))
+    }
+
+    /// Runs the nine steps in the locked order for one swing.
+    ///
+    /// Takes the strike rather than reading `self.strike` so a chain can
+    /// run the same nine steps once per swing: the swings differ only in
+    /// their scaling, and every other step has to apply to each of them
+    /// identically or the chain is not the same weapon.
+    fn steps(&self, strike: &Strike) -> Result<Swing, ExchangeError> {
         self.require_same_build(self.attacker)?;
         self.require_same_build(self.defender)?;
-        let kind = self.strike.damage_type; // probe: damage-type
+        let kind = strike.damage_type; // probe: damage-type
         let attacker_power = Self::require(self.attacker, kind.power_bonus())?;
         let defender_armor = Self::require(self.defender, kind.rating())?;
         let defender_pdr = Self::require(self.defender, kind.reduction())?;
         let mut trace: Vec<StageNote> = Vec::new();
 
         // ── 1: base damage ───────────────────────────────────────────────
-        let base = self.strike.base.clone();
+        let base = strike.base.clone();
         trace.push(StageNote {
             stage: 1,
             label: "base damage",
@@ -419,15 +521,13 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         // ── 2: × scaling coefficient ─────────────────────────────────────
         // A 0% coefficient means the skill's damage does not scale at all —
         // which is exactly why Sneak Attack ignores the Hide-exit penalty.
-        let scaled = base
-            .clone()
-            .zip_with(self.strike.scaling.clone(), apply_scaling); // probe: scaling-coefficient
+        let scaled = base.clone().zip_with(strike.scaling.clone(), apply_scaling); // probe: scaling-coefficient
         trace.push(StageNote {
             stage: 2,
             label: "scaling coefficient",
             detail: format!(
                 "× {}% → {}",
-                self.strike.scaling.value().value(),
+                strike.scaling.value().value(),
                 scaled.value().value()
             ),
         });
@@ -453,13 +553,13 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         // ── 4: + flat buff weapon damage ─────────────────────────────────
         let with_flat = powered
             .clone()
-            .zip_with(self.strike.flat_bonus.clone(), |damage, flat| damage + flat);
+            .zip_with(strike.flat_bonus.clone(), |damage, flat| damage + flat);
         trace.push(StageNote {
             stage: 4,
             label: "flat weapon damage",
             detail: format!(
                 "{:+} → {}",
-                self.strike.flat_bonus.value().value(),
+                strike.flat_bonus.value().value(),
                 with_flat.value().value()
             ),
         });
@@ -514,7 +614,7 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         let armor = debuffed
             .clone()
             .map(ArmorRating::new)
-            .zip_with(self.strike.penetration.clone(), penetrate);
+            .zip_with(strike.penetration.clone(), penetrate);
         trace.push(StageNote {
             stage: 5,
             label: "penetration",
@@ -525,7 +625,7 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
                     DamageType::Magic => "magic resistance",
                 },
                 debuffed.value(),
-                self.strike.penetration.value().value(),
+                strike.penetration.value().value(),
                 armor.value().value()
             ),
         });
@@ -581,16 +681,15 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         // only once reduction is done. Feeding `with_flat` here instead is
         // what the true_damage_pre_reduction probe does.
         let post_reduction = reduced.clone(); // probe: true-damage-post-reduction
-        let with_true = post_reduction
-            .zip_with(self.strike.true_damage.clone(), |damage, true_dmg| {
-                damage + Damage::new(true_dmg.value())
-            });
+        let with_true = post_reduction.zip_with(strike.true_damage.clone(), |damage, true_dmg| {
+            damage + Damage::new(true_dmg.value())
+        });
         trace.push(StageNote {
             stage: 8,
             label: "true damage",
             detail: format!(
                 "{:+} (bypasses the reduction) → {}",
-                self.strike.true_damage.value().value(),
+                strike.true_damage.value().value(),
                 with_true.value().value()
             ),
         });
@@ -611,6 +710,22 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             ),
         });
 
+        Ok(Swing {
+            damage: final_damage,
+            effective_pdr,
+            trace,
+        })
+    }
+
+    /// Runs the nine steps, then answers the question a player is actually
+    /// asking: how many of these, and how long.
+    pub fn damage(&self) -> Result<ExchangeOutcome, ExchangeError> {
+        let Swing {
+            damage: final_damage,
+            effective_pdr,
+            mut trace,
+        } = self.steps(self.strike)?;
+
         // ── the fight, rather than the hit ───────────────────────────────
         // Damage answers "how hard"; a player is asking "how long". Both
         // come out of numbers already computed, and leaving them out was
@@ -626,6 +741,16 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             .and_then(|h| final_damage.value().value().hits_to_cover(*h.value()));
         let time_to_kill = hits_to_kill.and_then(|hits| self.time_for(hits));
 
+        // The same fight with the weapon doing what it actually does. A
+        // chained weapon never lands the same blow twice in a row, so
+        // "this swing, repeated" is a hit count nobody will ever take —
+        // it answers the question asked and not the fight fought.
+        let chain = health
+            .as_ref()
+            .and_then(|h| self.chain_to_kill(*h.value()).transpose())
+            .transpose()?;
+        let chain_time = chain.and_then(|hits| self.time_for(hits));
+
         if let (Some(hits), Some(health)) = (hits_to_kill, health.as_ref()) {
             trace.push(StageNote {
                 stage: 9,
@@ -638,11 +763,23 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
                         t.value()
                     ),
                     None => format!(
-                        "{} health ÷ {} → {hits} hit(s); no swing time for this \
-                         weapon, so how long that takes is unknown",
+                        "{} health ÷ {} → {hits} hit(s); no swing time for this weapon, so how long that takes is unknown",
                         health.value(),
                         final_damage.value().value()
                     ),
+                },
+            });
+        }
+        if let Some(hits) = chain {
+            trace.push(StageNote {
+                stage: 9,
+                label: "swings to kill",
+                detail: match &chain_time {
+                    Some(t) => format!(
+                        "running the weapon's chain: {hits} swing(s), {}s",
+                        t.value()
+                    ),
+                    None => format!("running the weapon's chain: {hits} swing(s)"),
                 },
             });
         }
@@ -652,6 +789,8 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             effective_pdr,
             hits_to_kill,
             time_to_kill,
+            chain_to_kill: chain,
+            chain_time_to_kill: chain_time,
             trace,
         })
     }
@@ -835,6 +974,7 @@ mod tests {
 
     fn strike(base: i64, scaling: i64, flat: i64, pen: i64, true_dmg: i64) -> Strike {
         Strike {
+            pinned: false,
             weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(base))),
@@ -880,6 +1020,7 @@ mod tests {
         let data = dataset();
         let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let sneak = Strike {
+            pinned: false,
             weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(10))),
@@ -1124,6 +1265,7 @@ mod tests {
             .damage()
             .expect("physical resolves");
         let magic_strike = Strike {
+            pinned: false,
             damage_type: DamageType::Magic,
             ..strike.clone()
         };
@@ -1225,6 +1367,130 @@ mod tests {
             matches!(err, ExchangeError::DatasetMismatch { .. }),
             "{err}"
         );
+    }
+
+    /// Gives the test class a flat pool of health.
+    ///
+    /// The shared fixture has none, so hit counts came back `None` there —
+    /// correct behaviour (damage does not require health) but useless for
+    /// testing the counting itself.
+    fn with_health(data: &mut InMemoryDataset, hp: i64) {
+        let mut class = data
+            .class(&ClassId::new("class.test"))
+            .expect("test class")
+            .clone();
+        class.derived.push(DerivedStatDef {
+            id: DerivedStatId::new(well_known::HEALTH),
+            // A stat with no inputs is refused outright, and rightly — a
+            // derived stat that derives from nothing is a definition
+            // someone forgot to finish. So it reads Strength through the
+            // curve that maps everything to zero, and the offset is the
+            // whole pool.
+            weights: BTreeMap::from([(
+                RatingInput::Attribute(crate::schema::AttributeKind::Strength),
+                Fixed::ONE,
+            )]),
+            curve: CurveId::new("curve.flat"),
+            offset: fx(hp),
+            floor: None,
+            cap: None,
+        });
+        data.insert_class(class);
+    }
+
+    /// A weapon that swings 100/105/110, in the dataset so the exchange can
+    /// find it the way a real one is found.
+    fn chained_weapon(data: &mut InMemoryDataset, id: &str, base: i64) -> ItemId {
+        let item = ItemId::new(id);
+        data.insert_item(ItemDef {
+            id: item.clone(),
+            name: "Chained".to_string(),
+            required_classes: Vec::new(),
+            slot: None,
+            attributes: None,
+            grants: BTreeMap::new(),
+            move_speed_add: None,
+            weapon: Some(crate::schema::WeaponProfile {
+                base_damage: Confidence::Verified(fx(base)),
+                armor_pen: Confidence::Verified(Fixed::ZERO),
+                combo: [100i64, 105, 110]
+                    .into_iter()
+                    .map(|pct| crate::schema::ComboHit {
+                        kind: "blunt".to_string(),
+                        scaling: Confidence::Unverified(fx(pct)),
+                    })
+                    .collect(),
+                swing_time: None,
+            }),
+        });
+        item
+    }
+
+    #[test]
+    fn the_chain_kills_sooner_than_the_same_blow_repeated() {
+        // The whole reason the chain is worth counting. Repeating the first
+        // swing needs five; the weapon as it is actually used needs four,
+        // because swings two and three hit harder than swing one. A tool
+        // that reported five would be describing a fight nobody has.
+        let mut data = dataset();
+        with_health(&mut data, 90);
+        let weapon = chained_weapon(&mut data, "item.chained", 24);
+        let (a, d) = (combatant(&data, 0), combatant(&data, 0));
+        let mut s = strike(24, 100, 0, 0, 0);
+        s.weapon = Some(weapon);
+
+        let out = Exchange::new(&a, &d, &s, &ExchangeContext::default(), &data)
+            .damage()
+            .unwrap();
+        // One swing lands 28.8 here — the fixture's PDR curve reads -20% at
+        // rating 0, so an unarmoured target takes more. Repeating it:
+        // 28.8, 57.6, 86.4 — three swings leave 3.6 of the 90 standing.
+        assert_eq!(out.damage.value().value(), fx(288).div_half_even(fx(10)));
+        assert_eq!(out.hits_to_kill, Some(4));
+        // The chain: 28.8, then 30.24, then 31.68 — 90.72 by the third,
+        // and the fight is over a swing earlier. This is the difference the
+        // whole feature exists to show, so it is asserted rather than
+        // assumed.
+        assert_eq!(out.chain_to_kill, Some(3));
+    }
+
+    #[test]
+    fn a_pinned_blow_is_not_asked_about_the_chain() {
+        // "What does the third swing do" is a question about one blow, and
+        // answering it with a whole chain's arithmetic answers something
+        // else. A skill is pinned for the same reason: it replaces the
+        // swing rather than joining it.
+        let mut data = dataset();
+        with_health(&mut data, 100);
+        let weapon = chained_weapon(&mut data, "item.chained", 24);
+        let (a, d) = (combatant(&data, 0), combatant(&data, 0));
+        let mut s = strike(24, 110, 0, 0, 0);
+        s.weapon = Some(weapon);
+        s.pinned = true;
+        let out = Exchange::new(&a, &d, &s, &ExchangeContext::default(), &data)
+            .damage()
+            .unwrap();
+        assert_eq!(out.chain_to_kill, None);
+        assert!(out.hits_to_kill.is_some());
+    }
+
+    #[test]
+    fn a_chain_that_takes_nothing_off_does_not_kill_eventually() {
+        // A fully resisted chain does not kill in a very large number of
+        // swings. Returning a huge number here would loop for a long time
+        // and then lie; the check is on the whole cycle, so a chain that
+        // only lands on its last swing still counts.
+        let mut data = dataset();
+        with_health(&mut data, 100);
+        let weapon = chained_weapon(&mut data, "item.chained", 0);
+        let (a, d) = (combatant(&data, 0), combatant(&data, 250));
+        let mut s = strike(0, 100, 0, 0, 0);
+        s.weapon = Some(weapon);
+        let out = Exchange::new(&a, &d, &s, &ExchangeContext::default(), &data)
+            .damage()
+            .unwrap();
+        assert_eq!(out.chain_to_kill, None);
+        assert_eq!(out.hits_to_kill, None);
     }
 
     #[test]

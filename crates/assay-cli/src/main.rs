@@ -392,6 +392,18 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
             println!("     hits to kill                  never   this attack takes nothing off")
         }
     }
+    // And what the weapon actually does, when it does more than one thing.
+    // A chained weapon never lands the same blow twice running, so the line
+    // above is arithmetic about a fight nobody has.
+    if let Some(swings) = outcome.chain_to_kill {
+        match &outcome.chain_time_to_kill {
+            Some(t) => println!(
+                "     swings to kill          {swings:>12}   in {}s, running the chain",
+                t.value()
+            ),
+            None => println!("     swings to kill          {swings:>12}   running the chain"),
+        }
+    }
     println!(
         "  {} defender effective PDR {:>11}",
         marker(outcome.effective_pdr.level()),
