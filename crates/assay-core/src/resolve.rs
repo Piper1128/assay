@@ -977,6 +977,7 @@ mod tests {
             effects: vec![StackedEffect::once(Confidence::Unverified(
                 Effect::AllAttributes(3),
             ))],
+            strike: None,
         });
 
         data

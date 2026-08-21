@@ -349,8 +349,8 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
         Some(path) => {
             let text =
                 std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-            let parsed =
-                situation::parse(&text, profile).map_err(|e| format!("{}: {e}", path.display()))?;
+            let parsed = situation::parse(&text, profile, &dataset.entities)
+                .map_err(|e| format!("{}: {e}", path.display()))?;
             (parsed.strike, parsed.context, parsed.name)
         }
         None => (

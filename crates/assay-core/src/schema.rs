@@ -161,6 +161,38 @@ pub struct WeaponProfile {
     pub armor_pen: Confidence<Fixed>,
 }
 
+/// How a skill attacks: the parts of ADR-006's first eight steps that
+/// belong to the skill rather than to the weapon or the circumstances.
+///
+/// It exists so those numbers stop living in hand-written situation files.
+/// Sneak Attack's 0% scaling is a fact about the game that a patch can
+/// change, and while it sat in a `.toml` beside the tool, a patch note
+/// changing it was invisible to `assay diff` — the same reason weapons
+/// belong in the dataset rather than in whoever asked.
+///
+/// Everything is optional and absence means "as the weapon swings". A skill
+/// that simply swings has an empty profile; Sneak Attack's zero has to be
+/// written down, because the zero is the mechanic and not a missing value.
+///
+/// The circumstances stay out. Leaving Hide is not part of Sneak Attack —
+/// you can use the skill from Hide or not — so it belongs to the situation,
+/// which is where it already is.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct StrikeProfile {
+    /// `physical` or `magic`. Absent means physical.
+    pub damage_type: Option<String>,
+    /// Base damage, if the skill has its own rather than the weapon's.
+    pub base: Option<Confidence<Fixed>>,
+    /// Scaling coefficient in percentage points (step 2).
+    pub scaling: Option<Confidence<Fixed>>,
+    /// Flat Buff Weapon Damage (step 4).
+    pub flat_bonus: Option<Confidence<Fixed>>,
+    /// Penetration, if the skill differs from the weapon (step 5).
+    pub penetration: Option<Confidence<Fixed>>,
+    /// True damage, which lands after the whole reduction chain (step 8).
+    pub true_damage: Option<Confidence<Fixed>>,
+}
+
 /// Fixed stats granted by an item. Per-rarity modifier ranges are the
 /// dataset arc's subject; explicit loadout rolls come in on top.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -293,6 +325,8 @@ pub struct SkillDef {
     pub name: String,
     /// Stat effects while active.
     pub effects: Vec<StackedEffect>,
+    /// How it attacks, if it attacks. A buff has none.
+    pub strike: Option<StrikeProfile>,
 }
 
 impl Effect {

@@ -52,8 +52,22 @@ which the tool starts answering the question it exists for.
 assay exchange attacker.toml defender.toml --situation situations/sneak-attack-from-hide.toml --explain
 ```
 
-A situation is what makes this attack different from a plain swing: the
-skill's scaling and bonuses, and the circumstances around it. It is a third
+```toml
+skill = "skill.rogue.sneak_attack"
+
+[context]
+power_bonus_adjust = "-30"
+```
+
+A situation names the skill and states the circumstances. The skill's own
+numbers live in the dataset, so a patch that changes Sneak Attack's scaling
+shows up in `assay diff` — while they lived in a file beside the tool, such a
+change was invisible. Anything written in the file still wins over the skill,
+because the file is the question being asked and a question is always more
+specific than what is generally true.
+
+The circumstances stay out of the skill. Sneak Attack can be used from Hide
+or not, so leaving Hide belongs to the attack rather than to the ability. It is a third
 file rather than a section of a loadout because it is a fact about the
 *attack* — two identical builds differ only in whether one of them is behind
 the other, and putting that in a loadout would make it a property of the

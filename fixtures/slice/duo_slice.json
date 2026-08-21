@@ -1645,6 +1645,25 @@
             "max_stacks": 3
           }
         ]
+      },
+      {
+        "id": "skill.rogue.sneak_attack",
+        "name": "Sneak Attack",
+        "effects": [],
+        "strike": {
+          "scaling": {
+            "confidence": "verified",
+            "micro": 0
+          },
+          "flat_bonus": {
+            "confidence": "unverified",
+            "micro": 15000000
+          },
+          "true_damage": {
+            "confidence": "unverified",
+            "micro": 1000000
+          }
+        }
       }
     ]
   },

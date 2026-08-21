@@ -39,7 +39,7 @@ use assay_core::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::loadout::Slot;
 use assay_core::schema::{
     AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, Effect, InMemoryDataset, ItemDef,
-    PerkDef, SkillDef, StackedEffect, WeaponProfile,
+    PerkDef, SkillDef, StackedEffect, StrikeProfile, WeaponProfile,
 };
 use serde::Deserialize;
 
@@ -350,10 +350,33 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         if let Some(from) = &dto.renamed_from {
             renames.insert(dto.id.clone(), from.clone());
         }
+        let strike = dto
+            .strike
+            .map(|s| -> Result<StrikeProfile, LoadError> {
+                if let Some(kind) = &s.damage_type
+                    && kind != "physical"
+                    && kind != "magic"
+                {
+                    return Err(LoadError::Invalid(format!(
+                        "{}: unknown damage type {kind:?}",
+                        dto.id
+                    )));
+                }
+                Ok(StrikeProfile {
+                    damage_type: s.damage_type,
+                    base: s.base.map(GradedMicro::into_fixed).transpose()?,
+                    scaling: s.scaling.map(GradedMicro::into_fixed).transpose()?,
+                    flat_bonus: s.flat_bonus.map(GradedMicro::into_fixed).transpose()?,
+                    penetration: s.penetration.map(GradedMicro::into_fixed).transpose()?,
+                    true_damage: s.true_damage.map(GradedMicro::into_fixed).transpose()?,
+                })
+            })
+            .transpose()?;
         entities.insert_skill(SkillDef {
             id: SkillId::new(&dto.id),
             name: dto.name,
             effects: effects(&dto.effects)?,
+            strike,
         });
     }
 
@@ -674,6 +697,25 @@ impl ItemAttributesDto {
     }
 }
 
+/// How a skill attacks, if it attacks. Absence of a field means "as the
+/// weapon swings", which is not the same statement as zero.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
+struct StrikeProfileDto {
+    #[serde(default, rename = "type")]
+    damage_type: Option<String>,
+    #[serde(default)]
+    base: Option<GradedMicro>,
+    #[serde(default)]
+    scaling: Option<GradedMicro>,
+    #[serde(default)]
+    flat_bonus: Option<GradedMicro>,
+    #[serde(default)]
+    penetration: Option<GradedMicro>,
+    #[serde(default)]
+    true_damage: Option<GradedMicro>,
+}
+
 /// Wielded-item stats (ADR-006 step 1). Rarity I base values; per-rarity
 /// ranges are the dataset arc's subject.
 #[derive(Debug, Clone, Deserialize)]
@@ -749,6 +791,9 @@ struct SkillDto {
     renamed_from: Option<String>,
     name: String,
     effects: Vec<EffectDto>,
+    /// How it attacks, if it attacks.
+    #[serde(default)]
+    strike: Option<StrikeProfileDto>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

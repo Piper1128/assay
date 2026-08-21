@@ -9,6 +9,9 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use assay_core::confidence::Confidence;
+use assay_core::fixed::Fixed;
+use assay_core::schema::DatasetSource;
 use assay_core::{ClassId, Loadout, PartyBuffs, SkillId, Weapons};
 use assay_diff::{Change, dataset_diff, impact_diff};
 
@@ -141,4 +144,39 @@ fn the_weapon_nerfs_show_up_too() {
 fn the_versions_are_chained_through_their_manifests() {
     let after = assay_data::load(&data_root(), HF123).expect("hotfix-123 loads");
     assert_eq!(after.manifest.previous.as_deref(), Some(HF122));
+}
+
+#[test]
+fn a_patched_skill_shows_up_in_the_diff() {
+    // The whole reason a skill's numbers moved into the dataset. While
+    // Sneak Attack's scaling lived in a hand-written situation file, a
+    // patch note changing it was invisible here — and `assay diff` exists
+    // to answer exactly "what did this patch do to my build".
+    let a = assay_data::load(&data_root(), "0.17.149.9316").expect("hf122 loads");
+    let mut b = assay_data::load(&data_root(), "0.17.150.9384").expect("hf123 loads");
+
+    // Nerf it by hand, the way a patch would.
+    let id = SkillId::new("skill.rogue.sneak_attack");
+    let mut nerfed = b.entities.skill(&id).expect("the skill is there").clone();
+    let mut strike = nerfed.strike.clone().expect("it attacks");
+    strike.flat_bonus = Some(Confidence::Verified(Fixed::from_int(12)));
+    nerfed.strike = Some(strike);
+    b.entities.insert_skill(nerfed);
+
+    let changes = dataset_diff(&a, &b);
+    let found = changes.iter().any(|c| match c {
+        Change::Modified {
+            id,
+            field,
+            from,
+            to,
+        } => {
+            id.contains("sneak_attack")
+                && field == "strike.flat_bonus"
+                && from == "15"
+                && to == "12"
+        }
+        _ => false,
+    });
+    assert!(found, "the nerf is invisible: {changes:?}");
 }

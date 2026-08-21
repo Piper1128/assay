@@ -23,7 +23,8 @@ use assay_core::AbilityId;
 use assay_core::confidence::Confidence;
 use assay_core::exchange::{DamageType, ExchangeContext, Strike};
 use assay_core::fixed::Fixed;
-use assay_core::schema::WeaponProfile;
+use assay_core::ids::SkillId;
+use assay_core::schema::{DatasetSource, WeaponProfile};
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use serde::Deserialize;
 
@@ -61,9 +62,50 @@ pub(crate) struct Situation {
 /// where they come from; a skill overrides them by saying so. Omitting a
 /// field means "as the weapon swings", not "zero" — those are different
 /// statements and only one of them is usually meant.
-pub(crate) fn parse(text: &str, weapon: &WeaponProfile) -> Result<Situation, SituationError> {
+pub(crate) fn parse(
+    text: &str,
+    weapon: &WeaponProfile,
+    data: &impl DatasetSource,
+) -> Result<Situation, SituationError> {
     let dto: SituationDto = toml::from_str(text).map_err(SituationError::Syntax)?;
-    let basic = Strike::basic_swing(weapon);
+    let mut basic = Strike::basic_swing(weapon);
+
+    // A named skill fills in what it knows, over the weapon and under the
+    // file. Three layers, and the order is the point: the weapon is what
+    // you are holding, the skill is what the game says it does, and an
+    // explicit field is what you are asking about — the most specific
+    // statement wins, and the question is always the most specific.
+    let mut named = None;
+    if let Some(id) = &dto.skill {
+        let skill = data
+            .skill(&SkillId::new(id))
+            .ok_or_else(|| SituationError::Invalid(format!("no such skill: {id}")))?;
+        let profile = skill.strike.as_ref().ok_or_else(|| {
+            SituationError::Invalid(format!(
+                "{id} is not an attack: it has no strike profile, so there is \
+                 nothing for a situation to take from it"
+            ))
+        })?;
+        if let Some(v) = &profile.base {
+            basic.base = v.clone().map(Damage::new);
+        }
+        if let Some(v) = &profile.scaling {
+            basic.scaling = v.clone().map(ScalingCoefficient::new);
+        }
+        if let Some(v) = &profile.flat_bonus {
+            basic.flat_bonus = v.clone().map(Damage::new);
+        }
+        if let Some(v) = &profile.penetration {
+            basic.penetration = v.clone().map(ArmorPen::new);
+        }
+        if let Some(v) = &profile.true_damage {
+            basic.true_damage = v.clone().map(TrueDamage::new);
+        }
+        if profile.damage_type.as_deref() == Some("magic") {
+            basic.damage_type = DamageType::Magic;
+        }
+        named = Some(skill.name.clone());
+    }
 
     let fixed = |raw: &Option<String>, what: &str| -> Result<Option<Fixed>, SituationError> {
         raw.as_deref()
@@ -77,7 +119,8 @@ pub(crate) fn parse(text: &str, weapon: &WeaponProfile) -> Result<Situation, Sit
     let strike = Strike {
         damage_type: match dto.strike.damage_type.as_deref() {
             Some("magic") => DamageType::Magic,
-            Some("physical") | None => DamageType::Physical,
+            Some("physical") => DamageType::Physical,
+            None => basic.damage_type,
             Some(other) => {
                 return Err(SituationError::Invalid(format!(
                     "unknown damage type: {other}. It is `physical` or `magic`; true damage is a field, not a type, because bypassing reduction is what it means."
@@ -134,7 +177,10 @@ pub(crate) fn parse(text: &str, weapon: &WeaponProfile) -> Result<Situation, Sit
     Ok(Situation {
         strike,
         context,
-        name: dto.name.unwrap_or_else(|| "situation".to_string()),
+        name: dto
+            .name
+            .or(named)
+            .unwrap_or_else(|| "situation".to_string()),
     })
 }
 
@@ -143,6 +189,11 @@ pub(crate) fn parse(text: &str, weapon: &WeaponProfile) -> Result<Situation, Sit
 struct SituationDto {
     #[serde(default)]
     name: Option<String>,
+    /// A skill to take the attack's numbers from, so they live in the
+    /// dataset where a patch can change them and `assay diff` can see it.
+    /// Anything written below still wins: the file is the question.
+    #[serde(default)]
+    skill: Option<String>,
     #[serde(default)]
     strike: StrikeDto,
     #[serde(default)]
@@ -205,6 +256,34 @@ mod tests {
 
     use super::*;
 
+    /// A dataset with one attacking skill, so the naming path has
+    /// something to name.
+    fn data() -> assay_core::schema::InMemoryDataset {
+        let mut data = assay_core::schema::InMemoryDataset::new("test.build");
+        data.insert_skill(assay_core::schema::SkillDef {
+            id: SkillId::new("skill.rogue.sneak_attack"),
+            name: "Sneak Attack".to_string(),
+            effects: alloc_vec(),
+            strike: Some(assay_core::schema::StrikeProfile {
+                scaling: Some(Confidence::Verified(Fixed::ZERO)),
+                flat_bonus: Some(Confidence::Verified(Fixed::from_int(15))),
+                true_damage: Some(Confidence::Verified(Fixed::from_int(1))),
+                ..Default::default()
+            }),
+        });
+        data.insert_skill(assay_core::schema::SkillDef {
+            id: SkillId::new("skill.fighter.sprint"),
+            name: "Sprint".to_string(),
+            effects: alloc_vec(),
+            strike: None,
+        });
+        data
+    }
+
+    fn alloc_vec() -> Vec<assay_core::schema::StackedEffect> {
+        Vec::new()
+    }
+
     fn weapon() -> WeaponProfile {
         WeaponProfile {
             base_damage: Confidence::Verified(Fixed::from_int(32)),
@@ -217,7 +296,7 @@ mod tests {
         // Omitting a field means "as the weapon does", not "zero". A file
         // that said nothing and produced a zero-damage attack would be
         // answering a question nobody asked.
-        let s = parse("", &weapon()).unwrap();
+        let s = parse("", &weapon(), &data()).unwrap();
         assert_eq!(s.strike.base.value().value(), Fixed::from_int(32));
         assert_eq!(s.strike.penetration.value().value(), Fixed::from_int(15));
         assert_eq!(s.strike.scaling.value().value(), Fixed::from_int(100));
@@ -233,6 +312,7 @@ mod tests {
              [strike]\nscaling = \"0\"\nflat_bonus = \"15\"\ntrue_damage = \"1\"\n\
              [context]\npower_bonus_adjust = \"-30\"\n",
             &weapon(),
+            &data(),
         )
         .unwrap();
         assert_eq!(s.strike.scaling.value().value(), Fixed::ZERO);
@@ -248,6 +328,7 @@ mod tests {
             "[context.item_armor_bonus_mods]\n\
              \"skill.rogue.weakpoint_attack\" = \"-30\"\n",
             &weapon(),
+            &data(),
         )
         .unwrap();
         assert_eq!(s.context.item_armor_bonus_mods.len(), 1);
@@ -264,11 +345,11 @@ mod tests {
         // pedantry: they are the ban holding at the one place a person
         // types a number.
         assert!(matches!(
-            parse("[strike]\nbase = 2.5\n", &weapon()),
+            parse("[strike]\nbase = 2.5\n", &weapon(), &data()),
             Err(SituationError::Syntax(_))
         ));
         assert!(matches!(
-            parse("[strike]\nbase = \"2.1234567\"\n", &weapon()),
+            parse("[strike]\nbase = \"2.1234567\"\n", &weapon(), &data()),
             Err(SituationError::Invalid(_))
         ));
     }
@@ -276,7 +357,7 @@ mod tests {
     #[test]
     fn an_unmodelled_field_is_rejected_rather_than_ignored() {
         assert!(matches!(
-            parse("[context]\nlucky = \"yes\"\n", &weapon()),
+            parse("[context]\nlucky = \"yes\"\n", &weapon(), &data()),
             Err(SituationError::Syntax(_))
         ));
     }

@@ -244,6 +244,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
                 .iter()
                 .map(|e| StackedEffect::once(effect(e)))
                 .collect(),
+            strike: None,
         });
     }
     data

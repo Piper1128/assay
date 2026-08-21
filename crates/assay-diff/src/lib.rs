@@ -337,6 +337,20 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
                 if let Some(def) = entities.skill(&SkillId::new(id)) {
                     map.insert("name".into(), def.name.clone());
                     insert_effects(&mut map, &def.effects);
+                    // The whole reason a skill's numbers moved into the
+                    // dataset: a patch that changes Sneak Attack's scaling
+                    // has to show up here. While they lived in a situation
+                    // file beside the tool, such a change was invisible.
+                    if let Some(strike) = &def.strike {
+                        if let Some(kind) = &strike.damage_type {
+                            map.insert("strike.type".into(), kind.clone());
+                        }
+                        insert_graded(&mut map, "strike.base", strike.base.as_ref());
+                        insert_graded(&mut map, "strike.scaling", strike.scaling.as_ref());
+                        insert_graded(&mut map, "strike.flat_bonus", strike.flat_bonus.as_ref());
+                        insert_graded(&mut map, "strike.penetration", strike.penetration.as_ref());
+                        insert_graded(&mut map, "strike.true_damage", strike.true_damage.as_ref());
+                    }
                 }
             }
         }

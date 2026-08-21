@@ -277,7 +277,9 @@ fn a_situation_makes_the_exchange_askable() {
         "situations/sneak-attack-from-hide.toml",
         "--explain",
     ]));
-    assert!(sneak.contains("Sneak Attack, leaving Hide"), "{sneak}");
+    // The skill names itself now: the file says which skill, and the
+    // readout takes the name from the dataset rather than repeating it.
+    assert!(sneak.contains("Sneak Attack"), "{sneak}");
     assert!(
         sneak.contains("× 0% → 0"),
         "scaling must wipe the base: {sneak}"
@@ -314,4 +316,71 @@ fn a_situation_with_a_float_is_refused() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
+}
+
+#[test]
+fn a_situation_takes_a_skill_s_numbers_from_the_dataset() {
+    // The point of the strike profile. Sneak Attack's 0% scaling and +15
+    // flat used to be typed into a situation file, where a patch that
+    // changed them would have been invisible to `assay diff`.
+    let named = submission(
+        "named-skill",
+        "skill = \"skill.rogue.sneak_attack\"
+",
+    );
+    let out = stdout(&assay(&[
+        "exchange",
+        "loadouts/rogue-armed.toml",
+        "loadouts/rogue-armored.toml",
+        "--situation",
+        named.to_str().unwrap(),
+        "--explain",
+    ]));
+    assert!(out.contains("× 0% → 0"), "the skill's scaling: {out}");
+    assert!(out.contains("+15 → 15"), "and its flat damage: {out}");
+
+    // An explicit field still wins. The file is the question being asked,
+    // and a question is always more specific than what is generally true.
+    let overridden = submission(
+        "named-and-overridden",
+        "skill = \"skill.rogue.sneak_attack\"
+[strike]
+flat_bonus = \"99\"
+",
+    );
+    let out = stdout(&assay(&[
+        "exchange",
+        "loadouts/rogue-armed.toml",
+        "loadouts/rogue-armored.toml",
+        "--situation",
+        overridden.to_str().unwrap(),
+        "--explain",
+    ]));
+    assert!(
+        out.contains("+99 → 99"),
+        "the file overrides the skill: {out}"
+    );
+    assert!(out.contains("× 0% → 0"), "and takes the rest: {out}");
+}
+
+#[test]
+fn naming_something_that_does_not_attack_says_so() {
+    // Sprint is a buff. Asking what it hits for is a question about a thing
+    // that does not exist, and the answer says which thing.
+    let path = submission(
+        "not-an-attack",
+        "skill = \"skill.fighter.sprint\"
+",
+    );
+    let out = assay(&[
+        "exchange",
+        "loadouts/rogue-armed.toml",
+        "loadouts/rogue-armored.toml",
+        "--situation",
+        path.to_str().unwrap(),
+    ]);
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("skill.fighter.sprint"), "{err}");
+    assert!(err.contains("not an attack"), "{err}");
 }

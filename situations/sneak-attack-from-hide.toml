@@ -1,12 +1,10 @@
-# The case the whole source analysis is built on. Sneak Attack scales at 0%,
-# so the -30% Hide-exit power penalty multiplies nothing and the attack is
-# immune to it — the zero is the mechanic, not a missing value.
-name = "Sneak Attack, leaving Hide"
-
-[strike]
-scaling     = "0"
-flat_bonus  = "15"
-true_damage = "1"
+# The numbers are the game's, so they live in the dataset where a patch can
+# change them and `assay diff` can see it. This file says only which skill,
+# and the one thing that is not part of the skill: where you came from.
+#
+# Sneak Attack can be used from Hide or not, so leaving Hide is a
+# circumstance and belongs here rather than in the skill.
+skill = "skill.rogue.sneak_attack"
 
 [context]
 power_bonus_adjust = "-30"
