@@ -374,8 +374,14 @@ Four spells and two perks name one:
 
 `DamageType { Physical, Magic }` cannot express it, and the character sheet
 carries an Undead/Demon axis on top — target-type modifiers we do not model
-either. This is the damage-kind amendment one level further out and it
-touches ADR-006's lock, so it needs an ADR before anything is built.
+either.
+
+Designed in `docs/adr/ADR-014-damage-schools.md`, and the finding there is
+that this is not a new mechanism: physical damage has a kind, magical damage
+has a school, and both are a tag on the strike that perks gate on. The gate
+was simply built narrower than the thing it models. The Undead/Demon axis is
+different — it is a property of who is being hit, not of the blow — and is
+deferred until there are monsters to gate on.
 
 Also worth recording: the `N(x)` notation on every spell is `base(scaling)`,
 which is exactly `StrikeProfile`'s shape. Hotfix #124's line *"Reduced the
