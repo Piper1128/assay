@@ -19,6 +19,16 @@
     --unverified: #8f8578;
     --unknown: #cf7f3c;
     --bad: #b4553f;
+    /* Rarity, as the game colours it. Its own scale again: rarity says how
+       good a copy is and says nothing about how well we know it, so it must
+       not be confusable with a grade. */
+    --r-poor: #6f6a63;
+    --r-common: #cfc6b4;
+    --r-uncommon: #5f9e58;
+    --r-rare: #4a7fc1;
+    --r-epic: #9b6dc4;
+    --r-legendary: #c98a2a;
+    --r-unique: #b4553f;
 
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -55,7 +65,7 @@
 
   main {
     display: grid;
-    grid-template-columns: minmax(320px, 380px) 1fr;
+    grid-template-columns: minmax(380px, 440px) 1fr;
     gap: 0;
     align-items: start;
     min-height: calc(100vh - 63px);
@@ -102,31 +112,6 @@
   .field { margin-bottom: 14px; }
 
   /* ── slots ─────────────────────────────────────────────────────────── */
-  .slot {
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    margin-bottom: 8px;
-    background: var(--surface);
-  }
-  .slot > summary {
-    cursor: pointer;
-    padding: 7px 10px;
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: baseline;
-    list-style: none;
-  }
-  .slot > summary::-webkit-details-marker { display: none; }
-  .slot-name {
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-dim);
-  }
-  .slot-item { font-family: var(--serif); font-size: 15px; }
-  .slot-item.empty { color: var(--ink-dim); font-style: italic; }
-  .slot-body { padding: 0 10px 10px; border-top: 1px solid var(--line); }
   .rolls { margin-top: 10px; }
   .roll-row {
     display: grid;
@@ -137,6 +122,128 @@
   .roll-row button { padding: 4px; width: 100%; }
 
   /* ── the sheet ─────────────────────────────────────────────────────── */
+  /* ── the paper doll ──────────────────────────────────────────────────
+     Gear is worn somewhere, and a list of nine dropdowns says nothing
+     about where. The figure is the map: a slot's place on the page is the
+     place on the body, so finding the boots means looking at the feet. */
+  .doll {
+    display: grid;
+    grid-template-columns: 1fr 108px 1fr;
+    gap: 7px 10px;
+    align-items: stretch;
+    margin-bottom: 16px;
+  }
+  .doll-col { display: flex; flex-direction: column; gap: 7px; }
+  .doll-figure {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* The figure is the ground the slots stand on, so it is lit from the
+       centre rather than drawn as an outline on the panel colour. */
+    background: radial-gradient(ellipse at 50% 42%,
+                #221d16 0%, var(--surface) 62%, transparent 100%);
+    border-radius: 6px;
+  }
+  .doll-figure svg { width: 100%; height: auto; display: block; }
+  /* Three depths, so plate reads as plate: the recesses behind it, the
+     plates themselves, and the lit edge along the top of each one. */
+  .fig-deep { fill: #100e0a; }
+  .fig-plate { fill: #2b251d; }
+  .fig-plate-2 { fill: #332c22; }
+  .fig-edge { fill: none; stroke: #4a4132; stroke-width: 1.1; stroke-linecap: round; }
+  .fig-glow { fill: var(--gold); opacity: .55; }
+  .doll-wide { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 7px; }
+
+  .gs {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left-width: 3px;
+    border-radius: 3px;
+    padding: 6px 9px;
+    cursor: pointer;
+    font: inherit;
+    color: var(--ink);
+    transition: border-color .12s, background .12s;
+  }
+  .gs:hover, .gs:focus-visible { background: var(--raised); }
+  .gs[aria-pressed="true"] {
+    background: var(--raised);
+    border-color: var(--gold);
+  }
+  .gs .who {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .gs .what {
+    display: block;
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .gs .what.empty { color: var(--ink-dim); font-style: italic; font-family: var(--sans); font-size: 13px; }
+  .gs.weapon .what { font-size: 15px; }
+
+  /* ── the item card ───────────────────────────────────────────────────
+     Shaped like the tooltip in the game, because the person reading it has
+     one open on the other monitor and is comparing the two. */
+  .card {
+    position: fixed;
+    z-index: 40;
+    width: 268px;
+    background: #100e0a;
+    border: 1px solid var(--line);
+    border-top-width: 2px;
+    border-radius: 3px;
+    padding: 10px 12px 11px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .55);
+    pointer-events: none;
+    font-size: 13px;
+  }
+  .card .cname { font-family: var(--serif); font-size: 16px; line-height: 1.2; }
+  .card .csub {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-top: 2px;
+  }
+  .card hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+  .card .cline { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; }
+  .card .cline .n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .card .cgroup { color: var(--ink-dim); font-size: 10px; letter-spacing: 0.1em;
+                  text-transform: uppercase; margin: 7px 0 2px; }
+  .card .chain { font-family: var(--mono); font-size: 12px; }
+  .card .cnote { color: var(--unknown); font-size: 12px; margin-top: 7px; line-height: 1.4; }
+
+  .editor {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 12px 13px 13px;
+    margin-bottom: 16px;
+  }
+  .editor h3 {
+    margin: 0 0 10px;
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: normal;
+  }
+  .editor h3 .who {
+    font-family: var(--sans);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    display: block;
+  }
+
   .sheet { max-width: 620px; }
   .stat {
     display: grid;
@@ -356,7 +463,8 @@
       <select id="class"></select>
     </div>
 
-    <div id="slots"></div>
+    <div class="doll" id="doll"></div>
+    <div id="editor"></div>
 
     <h2 style="margin-top:22px">Read a card</h2>
     <p class="hint">
@@ -380,6 +488,13 @@
     </p>
     <div class="sheet" id="sheet"></div>
     <div class="legend">
+      <b style="color:var(--r-uncommon)">uncommon</b>
+      <b style="color:var(--r-rare)">rare</b>
+      <b style="color:var(--r-epic)">epic</b>
+      <b style="color:var(--r-legendary)">legendary</b>
+      &nbsp;name an item's rarity; the grades below say how well we know its
+      numbers, and the two scales never share a colour.
+      <p style="margin:8px 0 0">
       <b style="color:var(--verified)">verified</b> measured in game &nbsp;·&nbsp;
       <b style="color:var(--unverified)">unverified</b> wiki-sourced, not confirmed &nbsp;·&nbsp;
       <b style="color:var(--unknown)">unknown</b> an assumption, with its reason
@@ -395,6 +510,8 @@
   </section>
 </main>
 
+<div class="card" id="card" role="tooltip" hidden></div>
+
 <script>__GLUE__</script>
 <script>
 (() => {
@@ -407,6 +524,22 @@
   const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 
   const $ = id => document.getElementById(id);
+
+  /// Anything that escapes lands on the page rather than in a console
+  /// nobody has open. A blank panel under a healthy-looking header is the
+  /// worst failure this page can have: it looks like an answer.
+  addEventListener("error", e => surface(e.message || String(e.error)));
+  addEventListener("unhandledrejection", e => surface(String(e.reason)));
+
+  function surface(message) {
+    const host = document.getElementById("doll") || document.body;
+    if (host.querySelector(".error")) return;
+    const box = document.createElement("div");
+    box.className = "error";
+    box.style.gridColumn = "1 / -1";
+    box.textContent = "This page broke and stopped drawing: " + message;
+    host.prepend(box);
+  }
   const el = (tag, cls, text) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -421,6 +554,10 @@
   const state = {
     builds: { A: { class: null, gear: {} }, B: { class: null, gear: {} } },
     view: "A",
+    // Which slot the editor is pointed at. It is state rather than DOM so
+    // that redrawing does not put it away: the old accordion rebuilt every
+    // slot closed, so adding a roll collapsed the slot you were in.
+    slot: null,
     // Which named circumstances are in force. A situation is a fact about
     // the attack, so it belongs to neither build and lives here.
     situation: new Set(),
@@ -499,30 +636,344 @@
   // ── building the UI ────────────────────────────────────────────────
   function slotKey(slot, n) { return n > 1 ? `${slot}#${n}` : slot; }
 
-  function buildSlots() {
-    const host = $("slots");
-    host.replaceChildren();
-    for (const slot of CATALOG.slots) {
-      for (let n = 1; n <= slot.capacity; n++) {
-        host.append(slotCard(slot.id, slotKey(slot.id, n)));
-      }
-    }
+  /// Where each slot sits on the figure. The left column reads down the
+  /// body, the right carries what hangs off it, and the weapon spans the
+  /// width because it is held rather than worn.
+  const DOLL = {
+    left: ["head", "chest", "hands", "legs", "feet"],
+    right: ["necklace", "ring", "back"],
+    wide: ["weapon"],
+  };
+
+  /// A plate-armoured figure, drawn rather than fetched.
+  ///
+  /// Nothing on this page may reach the network — it has to run from a
+  /// file:// URL with no server — so an image was never an option and an
+  /// SVG is not a compromise. Built from a helm, pauldrons, a cuirass,
+  /// tassets, greaves and boots because that is what the silhouette in the
+  /// game is; a featureless mannequin would say "a person" where this says
+  /// "a person wearing the things these slots hold".
+  ///
+  /// It stands wide: arms carried out from the body, feet apart, boots
+  /// turned outward in profile. A figure with its arms at its sides and
+  /// its feet together reads as standing to attention, and this one is
+  /// meant to read as about to be hit.
+  ///
+  /// Two things that look like bugs rather than style if they are wrong.
+  /// Every arm plate has to overlap the one above it along the same slant
+  /// — pauldron, upper plate, couter, vambrace, gauntlet — or the arm
+  /// falls into separate floating blocks. And the plates behind the arms
+  /// have to slant with them, or the backing shows through as a straight
+  /// column behind a diagonal limb.
+  const FIGURE = [
+    '<svg viewBox="0 0 104 262" xmlns="http://www.w3.org/2000/svg"',
+    ' role="img" aria-label="armoured figure showing where each slot sits">',
+
+    // ── the dark behind the plate, so the seams have somewhere to fall
+    '<path class="fig-deep" d="M33 30h38v34H33zm-3 36h44v98H30z"/>',
+    '<path class="fig-deep" d="M21 86L43 86L33 168L9 168Z"/>',
+    '<path class="fig-deep" d="M83 86L61 86L71 168L95 168Z"/>',
+    '<path class="fig-deep" d="M31 164h21v90H31zm21 0h21v90H52z"/>',
+
+    // ── great helm ────────────────────────────────────────────────────
+    '<path class="fig-plate-2" d="M52 13c-11 0-18 6-18 16v7h36v-7c0-10-7-16-18-16z"/>',
+    '<path class="fig-plate" d="M34 36h36v13c0 9-8 14-18 14s-18-5-18-14V36z"/>',
+    '<path class="fig-deep" d="M37 40h12v5H37zm18 0h12v5H55z"/>',
+    '<path class="fig-deep" d="M50 36h4v20h-4z"/>',
+    '<path class="fig-edge" d="M34 36h36M37 25q15-6 30 0"/>',
+
+    // ── gorget ────────────────────────────────────────────────────────
+    '<path class="fig-plate-2" d="M42 60h20l4 9H38z"/>',
+
+    // ── pauldrons, flared wide because the arms are carried out ───────
+    '<path class="fig-plate-2" d="M35 68c-11 1-18 7-20 17l-2 13 24 5 4-35z"/>',
+    '<path class="fig-plate-2" d="M69 68c11 1 18 7 20 17l2 13-24 5-4-35z"/>',
+    '<path class="fig-edge" d="M15 88q8-12 18-14M89 88q-8-12-18-14"/>',
+
+    // ── cuirass ───────────────────────────────────────────────────────
+    '<path class="fig-plate" d="M36 68h32l6 20-4 34c0 9-8 14-18 14s-18-5-18-14',
+    'l-4-34z"/>',
+    // the centre ridge is what makes a breastplate read as one
+    '<path class="fig-edge" d="M52 70v62M40 76q12 7 24 0"/>',
+
+    // ── arms, slanting away from the body ─────────────────────────────
+    '<path class="fig-plate" d="M23 88L41 88L35 118L17 118Z"/>',
+    '<path class="fig-plate" d="M81 88L63 88L69 118L87 118Z"/>',
+    '<path class="fig-plate-2" d="M17 115L36 115L35 129L16 129Z"/>',
+    '<path class="fig-plate-2" d="M87 115L68 115L69 129L88 129Z"/>',
+    '<path class="fig-plate" d="M17 127L33 127L29 152L13 152Z"/>',
+    '<path class="fig-plate" d="M87 127L71 127L75 152L91 152Z"/>',
+    '<path class="fig-plate-2" d="M11 150L31 150L30 168L10 168Z"/>',
+    '<path class="fig-plate-2" d="M93 150L73 150L74 168L94 168Z"/>',
+
+    // ── fauld and tassets ─────────────────────────────────────────────
+    '<path class="fig-plate-2" d="M34 132h36l-3 15H37z"/>',
+    '<path class="fig-plate" d="M35 145h16l-2 24H36zm18 0h16l1 24H55z"/>',
+
+    // ── cuisses: apart at the hip and drifting wider down the thigh ───
+    '<path class="fig-plate" d="M35 166L53 166L50 200L32 200Z"/>',
+    '<path class="fig-plate" d="M69 166L51 166L54 200L72 200Z"/>',
+
+    // ── poleyns ───────────────────────────────────────────────────────
+    '<path class="fig-plate-2" d="M32 197L50 197L49 213L31 213Z"/>',
+    '<path class="fig-plate-2" d="M72 197L54 197L55 213L73 213Z"/>',
+
+    // ── greaves ───────────────────────────────────────────────────────
+    '<path class="fig-plate" d="M32 211L49 211L48 230L31 230Z"/>',
+    '<path class="fig-plate" d="M72 211L55 211L56 230L73 230Z"/>',
+    '<path class="fig-edge" d="M40 215v14M64 215v14"/>',
+
+    // ── boots, turned outward and seen from the side ──────────────────
+    '<path class="fig-plate-2" d="M31 224L50 224L50 232L31 232Z"/>',
+    '<path class="fig-plate-2" d="M73 224L54 224L54 232L73 232Z"/>',
+    '<path class="fig-plate" d="M33 228L49 228L49 254L23 254',
+    'C19 254 18 250 21 247L33 242Z"/>',
+    '<path class="fig-plate" d="M71 228L55 228L55 254L81 254',
+    'C85 254 86 250 83 247L71 242Z"/>',
+    '<path class="fig-edge" d="M23 251h25M81 251H56"/>',
+
+    "</svg>",
+  ].join("");
+
+  /// What to call a slot on the figure.
+  ///
+  /// A slot you can fill twice needs two names, or the page shows the same
+  /// word over two different tiles and the second one looks like a bug.
+  const SECOND = { ring: ["RING I", "RING II"], weapon: ["MAIN HAND", "OFF HAND"] };
+
+  function slotLabel(slotId, key) {
+    const pair = SECOND[slotId];
+    if (!pair) return slotId.toUpperCase();
+    return key.endsWith("#2") ? pair[1] : pair[0];
   }
 
-  function slotCard(slotId, key) {
+  function buildDoll() {
+    const host = $("doll");
+    host.replaceChildren();
+    const capacity = Object.fromEntries(CATALOG.slots.map(x => [x.id, x.capacity]));
+
+    const column = ids => {
+      const col = el("div", "doll-col");
+      for (const slotId of ids) {
+        for (let n = 1; n <= (capacity[slotId] ?? 1); n++) {
+          col.append(slotTile(slotId, slotKey(slotId, n)));
+        }
+      }
+      return col;
+    };
+
+    host.append(column(DOLL.left));
+    const fig = el("div", "doll-figure");
+    fig.innerHTML = FIGURE;
+    host.append(fig);
+    host.append(column(DOLL.right));
+
+    const wide = el("div", "doll-wide");
+    for (const slotId of DOLL.wide) {
+      for (let n = 1; n <= (capacity[slotId] ?? 1); n++) {
+        const tile = slotTile(slotId, slotKey(slotId, n));
+        tile.classList.add("weapon");
+        wide.append(tile);
+      }
+    }
+    host.append(wide);
+  }
+
+  function itemOf(piece) {
+    if (!piece || piece.custom) return null;
+    return CATALOG.items.find(i => i.id === piece.id) ?? null;
+  }
+
+  function pieceLabel(piece) {
+    if (!piece) return null;
+    if (piece.custom) return piece.label;
+    return itemOf(piece)?.name ?? piece.id;
+  }
+
+  function slotTile(slotId, key) {
     const piece = editing().gear[key];
-    const box = el("details", "slot");
-    if (piece) box.open = false;
+    const item = itemOf(piece);
+    const tile = el("button", "gs");
+    tile.type = "button";
+    tile.setAttribute("aria-pressed", String(state.slot === key));
+    tile.style.borderLeftColor = item?.rarity ? "var(--r-" + item.rarity + ")" : "var(--line)";
+    tile.append(el("span", "who", slotLabel(slotId, key)));
+    const label = pieceLabel(piece);
+    const what = el("span", "what" + (label ? "" : " empty"), label ?? "empty");
+    if (item?.rarity) what.style.color = "var(--r-" + item.rarity + ")";
+    tile.append(what);
 
-    const head = el("summary");
-    head.append(el("span", "slot-name", slotId.toUpperCase()));
-    const label = piece
-      ? (piece.custom ? piece.label : CATALOG.items.find(i => i.id === piece.id)?.name ?? piece.id)
-      : "empty";
-    head.append(el("span", "slot-item" + (piece ? "" : " empty"), label));
-    box.append(head);
+    tile.onclick = () => {
+      // Clicking the open slot closes it. Without that, the editor is a
+      // thing you can open and never put away.
+      state.slot = state.slot === key ? null : key;
+      redraw();
+    };
+    if (piece) {
+      tile.onmouseenter = () => showItemCard(tile, slotId, piece);
+      tile.onmouseleave = hideItemCard;
+      tile.onfocus = () => showItemCard(tile, slotId, piece);
+      tile.onblur = hideItemCard;
+    }
+    return tile;
+  }
 
-    const body = el("div", "slot-body");
+  // ── the item card ──────────────────────────────────────────────────
+  const CARD_NAMES = {
+    "derived.armor_rating": "Armor Rating",
+    "derived.magic_resistance": "Magic Resistance",
+    "derived.physical_power_bonus": "Physical Power",
+    "derived.magic_power_bonus": "Magic Power",
+    "derived.physical_damage_bonus": "Physical Damage",
+    "derived.magic_damage_bonus": "Magic Damage",
+    "derived.armor_penetration": "Armor Penetration",
+    "derived.magic_penetration": "Magic Penetration",
+  };
+  const statName = id => CARD_NAMES[id] ?? id.replace(/^derived\./, "").replace(/_/g, " ");
+  const signed = v => (String(v).startsWith("-") ? String(v) : "+" + v);
+
+  function cardLine(label, value, grade) {
+    const row = el("div", "cline");
+    row.append(el("span", null, label));
+    const n = el("span", "n", value);
+    // The grade travels onto the card. A tooltip that showed a number
+    // without saying how well known it is would undo the point of grading.
+    if (grade) n.style.color = "var(--" + grade + ")";
+    row.append(n);
+    return row;
+  }
+
+  function showItemCard(anchor, slotId, piece) {
+    const card = $("card");
+    card.replaceChildren();
+    const item = itemOf(piece);
+    const rarity = item?.rarity;
+    card.style.borderTopColor = rarity ? "var(--r-" + rarity + ")" : "var(--gold)";
+
+    const name = el("div", "cname", pieceLabel(piece));
+    if (rarity) name.style.color = "var(--r-" + rarity + ")";
+    card.append(name);
+    card.append(el("div", "csub", [rarity, slotId].filter(Boolean).join(" · ")));
+
+    const only = item?.requiredClasses ?? [];
+    if (only.length) {
+      card.append(el("div", "csub", "only " + only.map(c => c.replace("class.", "")).join(", ")));
+    }
+
+    let ruled = false;
+    const rule = () => { if (!ruled) { card.append(el("hr")); ruled = true; } };
+
+    if (item?.weapon) {
+      rule();
+      card.append(cardLine("Weapon Damage", item.weapon.baseDamage.value,
+                           item.weapon.baseDamage.confidence));
+      if (item.weapon.armorPen.value !== "0") {
+        card.append(cardLine("Armor Penetration", item.weapon.armorPen.value + "%",
+                             item.weapon.armorPen.confidence));
+      }
+      if (item.weapon.combo.length) {
+        card.append(el("div", "cgroup", "attack chain"));
+        const chain = el("div", "chain",
+          item.weapon.combo.map(h => h.kind).join(" / ") + "   " +
+          item.weapon.combo.map(h => h.scaling.value + "%").join(" / "));
+        chain.style.color = "var(--" + item.weapon.combo[0].scaling.confidence + ")";
+        card.append(chain);
+      }
+    }
+
+    const attrs = Object.entries(item?.attributes ?? {});
+    if (attrs.length) {
+      rule();
+      for (const [kind, points] of attrs) {
+        card.append(cardLine(kind[0].toUpperCase() + kind.slice(1), signed(points),
+                             item.attributesGrade));
+      }
+    }
+    const grants = Object.entries(item?.grants ?? {});
+    if (grants.length) {
+      rule();
+      for (const [id, g] of grants) {
+        card.append(cardLine(statName(id), signed(g.value), g.confidence));
+      }
+    }
+    if (item?.moveSpeedAdd) {
+      rule();
+      card.append(cardLine("Move Speed", signed(item.moveSpeedAdd.value),
+                           item.moveSpeedAdd.confidence));
+    }
+
+    // What was rolled onto this copy — the half of an item card the dataset
+    // can never know, because it is a fact about one drop.
+    const rolled = piece.rolls.filter(r => {
+      const a = (r.amount || "0").trim();
+      return a && a !== "-" && a !== "0";
+    });
+    if (rolled.length) {
+      card.append(el("div", "cgroup", "rolled on this copy"));
+      for (const roll of rolled) {
+        card.append(cardLine(rollName(roll.what), signed(roll.amount.trim()), null));
+      }
+    }
+    if (piece.custom) {
+      card.append(el("div", "cnote",
+        "Described by hand — nothing on this card comes from the dataset."));
+    }
+
+    card.hidden = false;
+    place(card, anchor);
+  }
+
+  function rollName(what) {
+    const kind = what.split(":")[0];
+    const rest = what.slice(what.indexOf(":") + 1);
+    if (kind === "attr") return rest[0].toUpperCase() + rest.slice(1);
+    if (kind === "move") return "Move Speed";
+    return statName(rest);
+  }
+
+  /// Puts the card beside its tile and inside the window. A tooltip that
+  /// leaves the viewport is worse than none, because it moves the page.
+  function place(card, anchor) {
+    const a = anchor.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    let x = a.right + 10;
+    if (x + c.width > innerWidth - 8) x = a.left - c.width - 10;
+    if (x < 8) x = 8;
+    let y = a.top;
+    if (y + c.height > innerHeight - 8) y = innerHeight - c.height - 8;
+    if (y < 8) y = 8;
+    card.style.left = x + "px";
+    card.style.top = y + "px";
+  }
+
+  function hideItemCard() { $("card").hidden = true; }
+
+  // A card pinned by keyboard focus needs a way out that is not a mouse.
+  addEventListener("keydown", e => { if (e.key === "Escape") hideItemCard(); });
+  // And one anchored to a tile has to leave when the tile does.
+  addEventListener("scroll", hideItemCard, true);
+
+  // ── the editor for the chosen slot ─────────────────────────────────
+  function buildEditor() {
+    const host = $("editor");
+    host.replaceChildren();
+    const key = state.slot;
+    if (!key) {
+      const worn = Object.keys(editing().gear).length;
+      host.append(el("p", "hint", worn
+        ? "Click a slot to change what is in it, or hover one to read its card."
+        : "Click a slot on the figure to put something in it. Nothing is worn yet, "
+          + "so the sheet on the right is this class with no gear at all."));
+      return;
+    }
+    const slotId = key.split("#")[0];
+    const piece = editing().gear[key];
+
+    const box = el("div", "editor");
+    const title = el("h3");
+    title.append(el("span", "who", slotLabel(slotId, key)));
+    title.append(document.createTextNode(pieceLabel(piece) ?? "empty"));
+    box.append(title);
 
     const pick = el("select");
     pick.append(new Option("— empty —", ""));
@@ -534,7 +985,8 @@
       // then refuses, which is a worse way to learn the same thing.
       const only = item.requiredClasses ?? [];
       if (only.length && !only.includes(editing().class)) continue;
-      pick.append(new Option(item.name, item.id));
+      pick.append(new Option(
+        item.rarity ? item.name + " · " + item.rarity : item.name, item.id));
     }
     if (piece && !piece.custom) pick.value = piece.id;
     pick.onchange = () => {
@@ -544,13 +996,22 @@
     };
     const f = el("div", "field");
     f.append(el("label", null, "Item"), pick);
-    body.append(f);
+    box.append(f);
 
     if (piece) {
-      body.append(rollEditor(key, piece));
+      box.append(rollEditor(key, piece));
+      const clear = el("button", null, "Take it off");
+      clear.style.marginTop = "10px";
+      clear.onclick = () => { delete editing().gear[key]; redraw(); };
+      box.append(clear);
     }
-    box.append(body);
-    return box;
+    host.append(box);
+  }
+
+  /// Rebuilds one roll list in place and keeps the rest of the page.
+  function refreshRolls(wrap, key, piece) {
+    wrap.replaceWith(rollEditor(key, piece));
+    resolveNow();
   }
 
   function rollEditor(key, piece) {
@@ -573,7 +1034,10 @@
 
       const drop = el("button", null, "×");
       drop.title = "remove";
-      drop.onclick = () => { piece.rolls.splice(i, 1); redraw(); };
+      drop.onclick = () => {
+        piece.rolls.splice(i, 1);
+        refreshRolls(wrap, key, piece);
+      };
 
       row.append(what, amount, drop);
       wrap.append(row);
@@ -581,7 +1045,10 @@
     const add = el("button", null, "+ roll");
     add.onclick = () => {
       piece.rolls.push({ what: "attr:" + ATTRS[0], amount: "0" });
-      redraw();
+      // Only this editor is rebuilt. Redrawing the page here is what used
+      // to close the slot out from under the person adding the roll, and it
+      // would still cost them their scroll position and their focus.
+      refreshRolls(wrap, key, piece);
     };
     wrap.append(add);
     return wrap;
@@ -910,7 +1377,13 @@
       const tab = el("button", null, label);
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", String(state.view === view));
-      tab.onclick = () => { state.view = view; redraw(); };
+      tab.onclick = () => {
+        // The editor points at a slot of whichever build is being edited,
+        // so switching which build that is has to let go of it.
+        if (view !== state.view) state.slot = null;
+        state.view = view;
+        redraw();
+      };
       host.append(tab);
     }
     host.append(el("div", "spacer"));
@@ -955,7 +1428,9 @@
       state.view === "A" ? "Build A" : state.view === "B" ? "Build B" : "Build A";
     document.querySelectorAll(".panel")[1].querySelectorAll("h2")[0].textContent =
       state.view === "hit" ? "A hits B" : "Character sheet";
-    buildSlots();
+    buildDoll();
+    buildEditor();
+    hideItemCard();
     resolveNow();
   }
 
@@ -1088,6 +1563,9 @@
         slot: key.split("#")[0],
         rolls: card.taken.map(t => ({ what: t.what, amount: t.amount })),
       };
+      // Point the editor at what just arrived, so the answer to "where did
+      // it go" is on screen rather than something to go looking for.
+      state.slot = key;
       host.replaceChildren();
       redraw();
     };
