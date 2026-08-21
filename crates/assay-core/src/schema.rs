@@ -22,7 +22,8 @@ use crate::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use alloc::collections::BTreeMap;
 
 use crate::loadout::Slot;
-use crate::stats::{Attribute, DamageTag, Rarity};
+use crate::stats::{Attribute, DamageTag, DamageType, Rarity};
+use alloc::collections::BTreeSet;
 
 /// A sparse set of attribute contributions: what a piece of gear adds,
 /// not a whole character's block. Absence means "grants none", which is
@@ -212,7 +213,14 @@ pub struct ComboHit {
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct StrikeProfile {
     /// `physical` or `magic`. Absent means physical.
-    pub damage_type: Option<String>,
+    pub damage_type: Option<DamageType>,
+    /// What the blow is made of: a kind if physical, one or more schools if
+    /// magical (ADR-014).
+    ///
+    /// Empty means the skill says nothing and the weapon's own tags stand.
+    /// A spell that named its school and had nowhere to put it would be one
+    /// more value that arrives and does nothing.
+    pub tags: BTreeSet<DamageTag>,
     /// Base damage, if the skill has its own rather than the weapon's.
     pub base: Option<Confidence<Fixed>>,
     /// Scaling coefficient in percentage points (step 2).
@@ -378,6 +386,12 @@ pub struct SkillDef {
     pub id: SkillId,
     /// Display name.
     pub name: String,
+    /// The classes that may slot it.
+    ///
+    /// Empty means anyone, the same convention items and perks use. Skills
+    /// are class-locked in the game and were not here, which is the same
+    /// asymmetry perks carried until a Cleric perk turned up.
+    pub required_classes: Vec<ClassId>,
     /// Stat effects while active.
     pub effects: Vec<StackedEffect>,
     /// How it attacks, if it attacks. A buff has none.

@@ -75,6 +75,13 @@ pub enum ResolveError {
         /// The classes it belongs to.
         allowed: Vec<ClassId>,
     },
+    /// A skill slotted by a class that cannot take it.
+    WrongClassSkill {
+        /// The skill in question.
+        skill: SkillId,
+        /// The classes it belongs to.
+        allowed: Vec<ClassId>,
+    },
     /// A piece is worn in a slot its own card does not name: the item,
     /// where the loadout put it, and where it belongs.
     WrongSlot {
@@ -104,6 +111,10 @@ impl fmt::Display for ResolveError {
             ResolveError::UnknownPerk(id) => write!(f, "perk not in dataset: {id}"),
             ResolveError::UnknownSkill(id) => write!(f, "skill not in dataset: {id}"),
             ResolveError::Derived(e) => write!(f, "derived stats: {e}"),
+            ResolveError::WrongClassSkill { skill, allowed } => {
+                let names: Vec<&str> = allowed.iter().map(ClassId::as_str).collect();
+                write!(f, "{skill} may only be slotted by {}", names.join(", "))
+            }
             ResolveError::WrongClassPerk { perk, allowed } => {
                 let names: Vec<&str> = allowed.iter().map(ClassId::as_str).collect();
                 write!(f, "{perk} may only be slotted by {}", names.join(", "))
@@ -749,6 +760,17 @@ fn collect_effects(
         } else {
             skill.name.clone()
         };
+        // A party member's skill is theirs to have, so only what this
+        // character slots is checked against this character's class.
+        if !party
+            && !skill.required_classes.is_empty()
+            && !skill.required_classes.contains(&loadout.class)
+        {
+            return Err(ResolveError::WrongClassSkill {
+                skill: id.clone(),
+                allowed: skill.required_classes.clone(),
+            });
+        }
         let first_holder = seen.insert(id.as_str().to_string()); // probe: ability-dedupe
         if !first_holder {
             ignored.push(name);
@@ -1036,6 +1058,7 @@ mod tests {
         data.insert_skill(SkillDef {
             id: SkillId::new("skill.fighter.fortified_ground"),
             name: "Fortified Ground".to_string(),
+            required_classes: Vec::new(),
             effects: vec![StackedEffect::once(Confidence::Unverified(
                 Effect::AllAttributes(3),
             ))],

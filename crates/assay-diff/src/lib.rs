@@ -360,7 +360,12 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
                     // file beside the tool, such a change was invisible.
                     if let Some(strike) = &def.strike {
                         if let Some(kind) = &strike.damage_type {
-                            map.insert("strike.type".into(), kind.clone());
+                            map.insert("strike.type".into(), kind.as_str().to_string());
+                        }
+                        // A patch that re-schools a spell is a patch note, so
+                        // it has to surface here too.
+                        for (n, tag) in strike.tags.iter().enumerate() {
+                            map.insert(format!("strike.tags.{n}"), tag.as_str().to_string());
                         }
                         insert_graded(&mut map, "strike.base", strike.base.as_ref());
                         insert_graded(&mut map, "strike.scaling", strike.scaling.as_ref());

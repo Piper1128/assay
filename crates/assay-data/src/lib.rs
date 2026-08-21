@@ -42,7 +42,7 @@ use assay_core::schema::{
     AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, ComboHit, Effect,
     InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect, StrikeProfile, WeaponProfile,
 };
-use assay_core::stats::{DamageTag, Rarity};
+use assay_core::stats::{DamageTag, DamageType, Rarity};
 use serde::Deserialize;
 
 /// Provenance for one dataset file (ADR-004): where it came from, when, and
@@ -384,17 +384,55 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         let strike = dto
             .strike
             .map(|s| -> Result<StrikeProfile, LoadError> {
-                if let Some(kind) = &s.damage_type
-                    && kind != "physical"
-                    && kind != "magic"
-                {
-                    return Err(LoadError::Invalid(format!(
-                        "{}: unknown damage type {kind:?}",
-                        dto.id
-                    )));
-                }
+                // Parsed rather than string-matched. `"magick"` used to mean
+                // physical, silently, because anything that was not exactly
+                // "magic" fell through — and a spell filed as physical would
+                // read the wrong stats at three of the nine steps.
+                let damage_type = s
+                    .damage_type
+                    .as_deref()
+                    .map(|text| match text {
+                        "physical" => Ok(DamageType::Physical),
+                        "magic" => Ok(DamageType::Magic),
+                        other => Err(LoadError::Invalid(format!(
+                            "{}: unknown damage type {other:?}. It is `physical` \
+                                 or `magic`; a school is a tag, not a type.",
+                            dto.id
+                        ))),
+                    })
+                    .transpose()?;
+                let tags = s
+                    .tags
+                    .iter()
+                    .map(|text| {
+                        let tag = DamageTag::parse(text).ok_or_else(|| {
+                            LoadError::Invalid(format!(
+                                "{}: unknown damage tag {text:?}. It is one of: {}.",
+                                dto.id,
+                                DamageTag::ALL.map(DamageTag::as_str).join(", ")
+                            ))
+                        })?;
+                        // The same side rule the gates carry: a blunt spell
+                        // and a fiery sword-swing are both nonsense, and a
+                        // strike filed under the wrong one would be immune to
+                        // every gate written for it (ADR-014).
+                        if let Some(declared) = damage_type
+                            && tag.damage_type() != declared
+                        {
+                            return Err(LoadError::Invalid(format!(
+                                "{}: {} is a {} tag on a {} strike.",
+                                dto.id,
+                                tag.as_str(),
+                                tag.damage_type().as_str(),
+                                declared.as_str()
+                            )));
+                        }
+                        Ok(tag)
+                    })
+                    .collect::<Result<_, LoadError>>()?;
                 Ok(StrikeProfile {
-                    damage_type: s.damage_type,
+                    damage_type,
+                    tags,
                     base: s.base.map(GradedMicro::into_fixed).transpose()?,
                     scaling: s.scaling.map(GradedMicro::into_fixed).transpose()?,
                     flat_bonus: s.flat_bonus.map(GradedMicro::into_fixed).transpose()?,
@@ -406,6 +444,7 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         entities.insert_skill(SkillDef {
             id: SkillId::new(&dto.id),
             name: dto.name,
+            required_classes: dto.required_classes.iter().map(ClassId::new).collect(),
             effects: effects(&dto.effects)?,
             strike,
         });
@@ -806,6 +845,10 @@ struct ComboHitDto {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
 struct StrikeProfileDto {
+    /// What the blow is made of: a kind if physical, one or more schools if
+    /// magical.
+    #[serde(default)]
+    tags: Vec<String>,
     #[serde(default, rename = "type")]
     damage_type: Option<String>,
     #[serde(default)]
@@ -909,6 +952,9 @@ struct SkillDto {
     #[serde(default)]
     renamed_from: Option<String>,
     name: String,
+    /// The classes that may slot it. Empty means anyone.
+    #[serde(default)]
+    required_classes: Vec<String>,
     effects: Vec<EffectDto>,
     /// How it attacks, if it attacks.
     #[serde(default)]

@@ -124,6 +124,30 @@ impl Strike {
     /// building it here means a weapon in the dataset reaches the damage
     /// model instead of sitting inert next to it.
     #[must_use]
+    pub fn cast() -> Strike {
+        Strike {
+            damage_type: DamageType::Physical,
+            pinned: true,
+            tags: BTreeSet::new(),
+            // Nothing is held, so nothing supplies a swing time and the
+            // chain has no meaning: a spell is one blow, and `pinned` says
+            // so rather than leaving a chain count to be computed from a
+            // weapon that is not there.
+            weapon: None,
+            // Zero, and it stays zero unless something says otherwise. A
+            // caster with nothing behind the strike deals nothing, which is
+            // the honest answer — inventing a base would be the tool
+            // guessing at the one number it exists to look up.
+            base: Confidence::Verified(Damage::new(Fixed::ZERO)),
+            scaling: Confidence::Verified(ScalingCoefficient::new(Fixed::from_int(100))),
+            flat_bonus: Confidence::Verified(Damage::new(Fixed::ZERO)),
+            penetration: Confidence::Verified(ArmorPen::new(Fixed::ZERO)),
+            true_damage: Confidence::Verified(TrueDamage::new(Fixed::ZERO)),
+        }
+    }
+
+    /// The blow a weapon makes, unmodified.
+    #[must_use]
     pub fn basic_swing(id: &ItemId, weapon: &WeaponProfile) -> Strike {
         Strike {
             // A weapon swings physically unless something says otherwise,

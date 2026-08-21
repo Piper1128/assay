@@ -417,3 +417,52 @@ next person does not go looking for a diff that has nothing to show.
 
 The build id is not printed in the patch notes, so a `0.17.151.x` directory
 cannot be created from them; it has to be read off the game client.
+
+## Four spells, and what was left out of each
+
+`N(x)` is `base(scaling)`, so a spell is a `StrikeProfile` and nothing new
+was needed to hold one:
+
+| | base | scaling | school | on a naked Rogue |
+| --- | --- | --- | --- | --- |
+| Holy Strike | 20 | 1.0 | divine | 21.276 |
+| Locust Swarm | 13 | 1.0 | earth | 13.8294 |
+| Fireball | 30 | 1.0 | fire | 31.0275 |
+| Ice Bolt | 20 | 1.0 | ice | 20.685 |
+
+The numbers are read off the cards, so they are verified. **What is missing
+is listed here rather than left for someone to notice**, because a card holds
+more than a blow and the exchange model answers only "what does this blow
+do":
+
+- **Fireball's splash.** The `10(1.0)` to nearby targets is a second strike
+  from one cast, and a skill yields one profile. Only the direct hit is in.
+- **Locust Swarm's duration.** `13(1.0)` is *per second, over six*. One tick
+  is one blow, which is what is recorded; six of them is a different question.
+- **Burn.** `3(0.5)` fire magical damage over two seconds, from Fireball.
+- **Blind** (Holy Strike, 4s), **knockback** (Fireball), **frostbite**
+  (Ice Bolt: −20% move speed bonus, −20% action speed, 1s), and Locust
+  Swarm's **−50% incoming healing**, both kinds.
+
+Every one of those carries a duration, and ADR-014 defers duration for the
+reason that pulling it into the nine steps would be the first thing to bend
+ADR-006's lock.
+
+**Three gaps the spells found on the way in**, each the same shape as one
+found before it:
+
+`StrikeProfile` had no `tags`, so a spell's school would have been read and
+then dropped — the fourth time that pattern has turned up. `SkillDef` had no
+`required_classes`, so nothing stopped a Fighter casting Fireball, exactly as
+nothing stopped one slotting a Cleric perk until a Cleric perk existed. And
+`StrikeProfile.damage_type` was still a loose `String` compared against
+`"magic"`, so `"magick"` meant physical, silently — and a spell filed as
+physical reads the wrong stats at three of the nine steps.
+
+**And one the data forced open.** `assay exchange` required a weapon in hand.
+That is right for a swing — a basic attack with nothing held has no base
+damage, and inventing one would be the tool guessing at the number it exists
+to look up — but a spell carries its own. A caster is now a complete strike
+with empty hands, and what is required is that *something* says what the blow
+is: a weapon, a named skill, or an explicit base. With none of them the answer
+is an error, because a zero would look like an answer.

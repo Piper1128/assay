@@ -64,20 +64,34 @@ pub(crate) struct Situation {
 /// where they come from; a skill overrides them by saying so. Omitting a
 /// field means "as the weapon swings", not "zero" — those are different
 /// statements and only one of them is usually meant.
+///
+/// `held` is what is in the attacker's hand, and there may be nothing: a
+/// spell carries its own base damage, so a caster needs no weapon. What is
+/// required is that *something* supplies the blow — a weapon or a named
+/// skill — and saying which is missing is the whole of the error below.
 pub(crate) fn parse(
     text: &str,
-    weapon_id: &ItemId,
-    weapon: &WeaponProfile,
+    held: Option<(&ItemId, &WeaponProfile)>,
     data: &impl DatasetSource,
 ) -> Result<Situation, SituationError> {
     let dto: SituationDto = toml::from_str(text).map_err(SituationError::Syntax)?;
-    let mut basic = Strike::basic_swing(weapon_id, weapon);
+    let mut basic = match held {
+        Some((id, weapon)) => Strike::basic_swing(id, weapon),
+        None => Strike::cast(),
+    };
 
     // Which swing in the chain, if the weapon has one. A weapon is a
     // sequence — an Arming Sword runs 100/105/110 — so "what does it hit
     // for" has as many answers as the chain is long, and asking for the
     // third is a different question from asking for the first.
     if let Some(n) = dto.combo_hit {
+        let Some((_, weapon)) = held else {
+            return Err(SituationError::Invalid(
+                "combo_hit asks about a swing in a weapon's chain, and there is \
+                 nothing in hand to swing"
+                    .into(),
+            ));
+        };
         if n == 0 {
             return Err(SituationError::Invalid(
                 "combo_hit counts from 1: the first swing is 1, not 0".into(),
@@ -131,10 +145,27 @@ pub(crate) fn parse(
         if let Some(v) = &profile.true_damage {
             basic.true_damage = v.clone().map(TrueDamage::new);
         }
-        if profile.damage_type.as_deref() == Some("magic") {
-            basic.damage_type = DamageType::Magic;
+        if let Some(declared) = profile.damage_type {
+            basic.damage_type = declared;
+        }
+        // A spell says what school it is, and the school has to reach the
+        // strike or a gate written for it can never fire.
+        if !profile.tags.is_empty() {
+            basic.tags = profile.tags.clone();
         }
         named = Some(skill.name.clone());
+    }
+
+    // Something has to say what the blow is. A weapon does, a named skill
+    // does, and an explicit `base` does; with none of them there is nothing
+    // to compute and a zero would look like an answer.
+    if held.is_none() && named.is_none() && dto.strike.base.is_none() {
+        return Err(SituationError::Invalid(
+            "nothing here says what the blow is: there is no weapon in hand, no \
+             skill named, and no explicit base. A spell carries its own damage \
+             — name it with `skill = \"...\"`."
+                .into(),
+        ));
     }
 
     let fixed = |raw: &Option<String>, what: &str| -> Result<Option<Fixed>, SituationError> {
@@ -311,8 +342,10 @@ mod tests {
         data.insert_skill(assay_core::schema::SkillDef {
             id: SkillId::new("skill.rogue.sneak_attack"),
             name: "Sneak Attack".to_string(),
+            required_classes: Vec::new(),
             effects: alloc_vec(),
             strike: Some(assay_core::schema::StrikeProfile {
+                tags: Default::default(),
                 scaling: Some(Confidence::Verified(Fixed::ZERO)),
                 flat_bonus: Some(Confidence::Verified(Fixed::from_int(15))),
                 true_damage: Some(Confidence::Verified(Fixed::from_int(1))),
@@ -322,6 +355,7 @@ mod tests {
         data.insert_skill(assay_core::schema::SkillDef {
             id: SkillId::new("skill.fighter.sprint"),
             name: "Sprint".to_string(),
+            required_classes: Vec::new(),
             effects: alloc_vec(),
             strike: None,
         });
@@ -366,8 +400,8 @@ mod tests {
         // smallest of them to every question.
         let d = data();
         let id = ItemId::new("item.test");
-        let first = parse("combo_hit = 1", &id, &chained(), &d).unwrap();
-        let third = parse("combo_hit = 3", &id, &chained(), &d).unwrap();
+        let first = parse("combo_hit = 1", Some((&id, &chained())), &d).unwrap();
+        let third = parse("combo_hit = 3", Some((&id, &chained())), &d).unwrap();
         assert_eq!(first.strike.scaling.value().value(), Fixed::from_int(100));
         assert_eq!(third.strike.scaling.value().value(), Fixed::from_int(110));
         // And the grade travels with it: nobody has measured these, so an
@@ -384,8 +418,7 @@ mod tests {
         let s = parse(
             "combo_hit = 3
 skill = \"skill.rogue.sneak_attack\"",
-            &ItemId::new("item.test"),
-            &chained(),
+            Some((&ItemId::new("item.test"), &chained())),
             &data(),
         )
         .unwrap();
@@ -397,15 +430,21 @@ skill = \"skill.rogue.sneak_attack\"",
         let d = data();
         let id = ItemId::new("item.test");
         // Off the end of a known chain.
-        let err = parse("combo_hit = 4", &id, &chained(), &d).err().unwrap();
+        let err = parse("combo_hit = 4", Some((&id, &chained())), &d)
+            .err()
+            .unwrap();
         assert!(format!("{err}").contains("3 swings long"), "{err}");
         // Counting from zero: an easy mistake, and silently reading swing
         // one would answer a question the file did not ask.
-        let err = parse("combo_hit = 0", &id, &chained(), &d).err().unwrap();
+        let err = parse("combo_hit = 0", Some((&id, &chained())), &d)
+            .err()
+            .unwrap();
         assert!(format!("{err}").contains("counts from 1"), "{err}");
         // No chain recorded at all is a different problem and gets a
         // different sentence — one says "look it up", the other "count".
-        let err = parse("combo_hit = 1", &id, &weapon(), &d).err().unwrap();
+        let err = parse("combo_hit = 1", Some((&id, &weapon())), &d)
+            .err()
+            .unwrap();
         assert!(format!("{err}").contains("no chain recorded"), "{err}");
     }
 
@@ -414,7 +453,7 @@ skill = \"skill.rogue.sneak_attack\"",
         // Omitting a field means "as the weapon does", not "zero". A file
         // that said nothing and produced a zero-damage attack would be
         // answering a question nobody asked.
-        let s = parse("", &ItemId::new("item.test"), &weapon(), &data()).unwrap();
+        let s = parse("", Some((&ItemId::new("item.test"), &weapon())), &data()).unwrap();
         assert_eq!(s.strike.base.value().value(), Fixed::from_int(32));
         assert_eq!(s.strike.penetration.value().value(), Fixed::from_int(15));
         assert_eq!(s.strike.scaling.value().value(), Fixed::from_int(100));
@@ -429,8 +468,7 @@ skill = \"skill.rogue.sneak_attack\"",
             "name = \"sneak-attack\"\n\
              [strike]\nscaling = \"0\"\nflat_bonus = \"15\"\ntrue_damage = \"1\"\n\
              [context]\npower_bonus_adjust = \"-30\"\n",
-            &ItemId::new("item.test"),
-            &weapon(),
+            Some((&ItemId::new("item.test"), &weapon())),
             &data(),
         )
         .unwrap();
@@ -446,8 +484,7 @@ skill = \"skill.rogue.sneak_attack\"",
         let s = parse(
             "[context.item_armor_bonus_mods]\n\
              \"skill.rogue.weakpoint_attack\" = \"-30\"\n",
-            &ItemId::new("item.test"),
-            &weapon(),
+            Some((&ItemId::new("item.test"), &weapon())),
             &data(),
         )
         .unwrap();
@@ -467,8 +504,7 @@ skill = \"skill.rogue.sneak_attack\"",
         assert!(matches!(
             parse(
                 "[strike]\nbase = 2.5\n",
-                &ItemId::new("item.test"),
-                &weapon(),
+                Some((&ItemId::new("item.test"), &weapon())),
                 &data()
             ),
             Err(SituationError::Syntax(_))
@@ -476,8 +512,7 @@ skill = \"skill.rogue.sneak_attack\"",
         assert!(matches!(
             parse(
                 "[strike]\nbase = \"2.1234567\"\n",
-                &ItemId::new("item.test"),
-                &weapon(),
+                Some((&ItemId::new("item.test"), &weapon())),
                 &data()
             ),
             Err(SituationError::Invalid(_))
@@ -485,12 +520,42 @@ skill = \"skill.rogue.sneak_attack\"",
     }
 
     #[test]
+    fn a_spell_needs_no_weapon() {
+        // A Wizard casts with empty hands, and the spell carries its own
+        // base. Requiring a weapon here was right for a swing and wrong for
+        // everything the dataset gained when the spells went in.
+        let s = parse("skill = \"skill.rogue.sneak_attack\"", None, &data()).unwrap();
+        assert_eq!(s.strike.flat_bonus.value().value(), Fixed::from_int(15));
+        // Nothing in hand, so nothing supplies a base and the skill's own
+        // zero scaling stands — the weapon is absent, not assumed.
+        assert_eq!(s.strike.base.value().value(), Fixed::ZERO);
+        assert_eq!(s.strike.weapon, None);
+    }
+
+    #[test]
+    fn empty_hands_and_no_skill_is_refused_rather_than_answered() {
+        // Zero damage would look like an answer. Nothing here says what the
+        // blow is, and saying so is the only honest output.
+        let err = parse("", None, &data()).err().unwrap();
+        let text = format!("{err}");
+        assert!(
+            text.contains("nothing here says what the blow is"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_chain_cannot_be_asked_about_with_empty_hands() {
+        let err = parse("combo_hit = 2", None, &data()).err().unwrap();
+        assert!(format!("{err}").contains("nothing in hand"), "{err}");
+    }
+
+    #[test]
     fn an_unmodelled_field_is_rejected_rather_than_ignored() {
         assert!(matches!(
             parse(
                 "[context]\nlucky = \"yes\"\n",
-                &ItemId::new("item.test"),
-                &weapon(),
+                Some((&ItemId::new("item.test"), &weapon())),
                 &data()
             ),
             Err(SituationError::Syntax(_))

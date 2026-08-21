@@ -265,6 +265,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
         data.insert_skill(SkillDef {
             id: SkillId::new(skill["id"].as_str().expect("skill id")),
             name: skill["name"].as_str().expect("skill name").to_string(),
+            required_classes: Vec::new(),
             effects: skill["effects"]
                 .as_array()
                 .expect("effects")

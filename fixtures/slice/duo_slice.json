@@ -2273,8 +2273,55 @@
     ],
     "skills": [
       {
+        "id": "skill.cleric.holy_strike",
+        "name": "Holy Strike",
+        "required_classes": [
+          "class.cleric"
+        ],
+        "effects": [],
+        "strike": {
+          "type": "magic",
+          "tags": [
+            "divine"
+          ],
+          "base": {
+            "confidence": "verified",
+            "micro": 20000000
+          },
+          "scaling": {
+            "confidence": "verified",
+            "micro": 100000000
+          }
+        }
+      },
+      {
+        "id": "skill.cleric.locust_swarm",
+        "name": "Locust Swarm",
+        "required_classes": [
+          "class.cleric"
+        ],
+        "effects": [],
+        "strike": {
+          "type": "magic",
+          "tags": [
+            "earth"
+          ],
+          "base": {
+            "confidence": "verified",
+            "micro": 13000000
+          },
+          "scaling": {
+            "confidence": "verified",
+            "micro": 100000000
+          }
+        }
+      },
+      {
         "id": "skill.fighter.fortified_ground",
         "name": "Fortified Ground",
+        "required_classes": [
+          "class.fighter"
+        ],
         "effects": [
           {
             "confidence": "unverified",
@@ -2286,6 +2333,9 @@
       {
         "id": "skill.fighter.sprint",
         "name": "Sprint",
+        "required_classes": [
+          "class.fighter"
+        ],
         "effects": [
           {
             "confidence": "verified",
@@ -2298,6 +2348,9 @@
       {
         "id": "skill.rogue.sneak_attack",
         "name": "Sneak Attack",
+        "required_classes": [
+          "class.rogue"
+        ],
         "effects": [],
         "strike": {
           "scaling": {
@@ -2311,6 +2364,50 @@
           "true_damage": {
             "confidence": "unverified",
             "micro": 1000000
+          }
+        }
+      },
+      {
+        "id": "skill.wizard.fireball",
+        "name": "Fireball",
+        "required_classes": [
+          "class.wizard"
+        ],
+        "effects": [],
+        "strike": {
+          "type": "magic",
+          "tags": [
+            "fire"
+          ],
+          "base": {
+            "confidence": "verified",
+            "micro": 30000000
+          },
+          "scaling": {
+            "confidence": "verified",
+            "micro": 100000000
+          }
+        }
+      },
+      {
+        "id": "skill.wizard.ice_bolt",
+        "name": "Ice Bolt",
+        "required_classes": [
+          "class.wizard"
+        ],
+        "effects": [],
+        "strike": {
+          "type": "magic",
+          "tags": [
+            "ice"
+          ],
+          "base": {
+            "confidence": "verified",
+            "micro": 20000000
+          },
+          "scaling": {
+            "confidence": "verified",
+            "micro": 100000000
           }
         }
       }

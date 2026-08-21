@@ -325,22 +325,24 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
     let attacker = resolve(&attacker_loadout, &dataset.entities).map_err(|e| e.to_string())?;
     let defender = resolve(&defender_loadout, &dataset.entities).map_err(|e| e.to_string())?;
 
-    // A weapon is required: a "basic attack" with no weapon has no base
-    // damage, and inventing one would be the tool guessing.
-    let weapon_id = attacker_loadout.weapons.main_hand.as_ref().ok_or_else(|| {
-        format!(
-            "{} has no [weapons] main_hand, so there is nothing to swing",
-            attacker_loadout.name
-        )
-    })?;
-    let item = dataset
-        .entities
-        .item(weapon_id)
-        .ok_or_else(|| format!("item not in dataset: {weapon_id}"))?;
-    let profile = item
-        .weapon
-        .as_ref()
-        .ok_or_else(|| format!("{} is not a weapon", item.name))?;
+    // A weapon is not required. A swing needs one — a basic attack with
+    // nothing in hand has no base damage, and inventing one would be the
+    // tool guessing at the number it exists to look up — but a spell carries
+    // its own, so a caster is a complete strike with empty hands.
+    let held = match attacker_loadout.weapons.main_hand.as_ref() {
+        Some(weapon_id) => {
+            let item = dataset
+                .entities
+                .item(weapon_id)
+                .ok_or_else(|| format!("item not in dataset: {weapon_id}"))?;
+            let profile = item
+                .weapon
+                .as_ref()
+                .ok_or_else(|| format!("{} is not a weapon", item.name))?;
+            Some((weapon_id, profile))
+        }
+        None => None,
+    };
 
     // A situation is a fact about this attack, not about either character,
     // which is why it arrives as its own file. Without one the answer is an
@@ -349,23 +351,44 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
         Some(path) => {
             let text =
                 std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-            let parsed = situation::parse(&text, weapon_id, profile, &dataset.entities)
+            let parsed = situation::parse(&text, held, &dataset.entities)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
             (parsed.strike, parsed.context, parsed.name)
         }
-        None => (
-            Strike::basic_swing(weapon_id, profile),
-            ExchangeContext::default(),
-            "an unmodified swing".to_string(),
-        ),
+        None => {
+            let (weapon_id, profile) = held.ok_or_else(|| {
+                format!(
+                    "{} has no [weapons] main_hand and no situation naming a \
+                     skill, so there is nothing to swing and nothing to cast",
+                    attacker_loadout.name
+                )
+            })?;
+            (
+                Strike::basic_swing(weapon_id, profile),
+                ExchangeContext::default(),
+                "an unmodified swing".to_string(),
+            )
+        }
     };
     let outcome = Exchange::new(&attacker, &defender, &strike, &context, &dataset.entities)
         .damage()
         .map_err(|e| e.to_string())?;
 
+    // "swinging a mace" or "casting at", because a caster holds nothing and
+    // a header that said otherwise would be describing a different fight.
+    let doing = match held {
+        Some((id, _)) => {
+            let name = dataset
+                .entities
+                .item(id)
+                .map_or_else(|| id.as_str().to_string(), |i| i.name.clone());
+            format!("swinging {name} at")
+        }
+        None => "casting at".to_string(),
+    };
     println!(
-        "{} swinging {} at {}   {} ({build})",
-        attacker_loadout.name, item.name, defender_loadout.name, dataset.manifest.label
+        "{} {doing} {}   {} ({build})",
+        attacker_loadout.name, defender_loadout.name, dataset.manifest.label
     );
     // Which attack this was. Two runs that differ only by a situation file
     // would otherwise print identical headers and different numbers.

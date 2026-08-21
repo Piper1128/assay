@@ -716,8 +716,13 @@ fn build_situation(
         if let Some(v) = &profile.true_damage {
             basic.true_damage = v.clone().map(assay_core::stats::TrueDamage::new);
         }
-        if profile.damage_type.as_deref() == Some("magic") {
-            basic.damage_type = DamageType::Magic;
+        if let Some(declared) = profile.damage_type {
+            basic.damage_type = declared;
+        }
+        // A spell says what school it is, and the school has to reach the
+        // strike or a gate written for it can never fire.
+        if !profile.tags.is_empty() {
+            basic.tags = profile.tags.clone();
         }
         named = Some(skill.name.clone());
     }
