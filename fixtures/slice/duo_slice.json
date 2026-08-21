@@ -4,6 +4,250 @@
   "dataset": {
     "classes": [
       {
+        "id": "class.cleric",
+        "name": "Cleric",
+        "base_attributes": {
+          "confidence": "verified",
+          "points": {
+            "strength": 11,
+            "vigor": 13,
+            "agility": 12,
+            "dexterity": 14,
+            "will": 23,
+            "knowledge": 20,
+            "resourcefulness": 12
+          }
+        },
+        "derived": [
+          {
+            "id": "derived.action_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 250000
+              },
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 750000
+              }
+            ],
+            "curve": "curve.action_speed"
+          },
+          {
+            "id": "derived.buff_duration_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.buff_duration_bonus"
+          },
+          {
+            "id": "derived.cooldown_reduction_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.cooldown_reduction_bonus"
+          },
+          {
+            "id": "derived.equip_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.equip_speed"
+          },
+          {
+            "id": "derived.health",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 250000
+              },
+              {
+                "kind": "attribute",
+                "ref": "vigor",
+                "weight": 750000
+              }
+            ],
+            "curve": "curve.health",
+            "offset": 25000000
+          },
+          {
+            "id": "derived.health_recovery_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "vigor",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.health_recovery_bonus"
+          },
+          {
+            "id": "derived.magic_power_bonus",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.magical_power",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magic_power_bonus",
+            "floor": -100000000
+          },
+          {
+            "id": "derived.magic_resistance",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.will_to_magic_resistance"
+          },
+          {
+            "id": "derived.magical_damage_reduction",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.magic_resistance",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magic_resistance_to_mdr",
+            "cap": 65000000
+          },
+          {
+            "id": "derived.magical_interaction_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magical_interaction_speed"
+          },
+          {
+            "id": "derived.magical_power",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.identity"
+          },
+          {
+            "id": "derived.manual_dexterity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.manual_dexterity"
+          },
+          {
+            "id": "derived.memory_capacity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.memory_capacity"
+          },
+          {
+            "id": "derived.move_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.move_speed",
+            "offset": 300000000,
+            "cap": 330000000
+          },
+          {
+            "id": "derived.pdr",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.armor_rating",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.pdr",
+            "cap": 60000000
+          },
+          {
+            "id": "derived.persuasiveness",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.persuasiveness"
+          },
+          {
+            "id": "derived.physical_power",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.identity"
+          },
+          {
+            "id": "derived.physical_power_bonus",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.physical_power",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.physical_power_bonus",
+            "floor": -100000000
+          },
+          {
+            "id": "derived.spell_casting_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.spell_casting_speed"
+          }
+        ]
+      },
+      {
         "id": "class.fighter",
         "name": "Fighter",
         "base_attributes": {
@@ -260,6 +504,250 @@
             "will": 10,
             "knowledge": 10,
             "resourcefulness": 25
+          }
+        },
+        "derived": [
+          {
+            "id": "derived.action_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 250000
+              },
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 750000
+              }
+            ],
+            "curve": "curve.action_speed"
+          },
+          {
+            "id": "derived.buff_duration_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.buff_duration_bonus"
+          },
+          {
+            "id": "derived.cooldown_reduction_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.cooldown_reduction_bonus"
+          },
+          {
+            "id": "derived.equip_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.equip_speed"
+          },
+          {
+            "id": "derived.health",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 250000
+              },
+              {
+                "kind": "attribute",
+                "ref": "vigor",
+                "weight": 750000
+              }
+            ],
+            "curve": "curve.health",
+            "offset": 25000000
+          },
+          {
+            "id": "derived.health_recovery_bonus",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "vigor",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.health_recovery_bonus"
+          },
+          {
+            "id": "derived.magic_power_bonus",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.magical_power",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magic_power_bonus",
+            "floor": -100000000
+          },
+          {
+            "id": "derived.magic_resistance",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.will_to_magic_resistance"
+          },
+          {
+            "id": "derived.magical_damage_reduction",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.magic_resistance",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magic_resistance_to_mdr",
+            "cap": 65000000
+          },
+          {
+            "id": "derived.magical_interaction_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.magical_interaction_speed"
+          },
+          {
+            "id": "derived.magical_power",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "will",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.identity"
+          },
+          {
+            "id": "derived.manual_dexterity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "dexterity",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.manual_dexterity"
+          },
+          {
+            "id": "derived.memory_capacity",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.memory_capacity"
+          },
+          {
+            "id": "derived.move_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "agility",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.move_speed",
+            "offset": 300000000,
+            "cap": 330000000
+          },
+          {
+            "id": "derived.pdr",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.armor_rating",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.pdr",
+            "cap": 60000000
+          },
+          {
+            "id": "derived.persuasiveness",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "resourcefulness",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.persuasiveness"
+          },
+          {
+            "id": "derived.physical_power",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "strength",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.identity"
+          },
+          {
+            "id": "derived.physical_power_bonus",
+            "weights": [
+              {
+                "kind": "derived",
+                "ref": "derived.physical_power",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.physical_power_bonus",
+            "floor": -100000000
+          },
+          {
+            "id": "derived.spell_casting_speed",
+            "weights": [
+              {
+                "kind": "attribute",
+                "ref": "knowledge",
+                "weight": 1000000
+              }
+            ],
+            "curve": "curve.spell_casting_speed"
+          }
+        ]
+      },
+      {
+        "id": "class.wizard",
+        "name": "Wizard",
+        "base_attributes": {
+          "confidence": "verified",
+          "points": {
+            "strength": 6,
+            "vigor": 7,
+            "agility": 15,
+            "dexterity": 17,
+            "will": 20,
+            "knowledge": 25,
+            "resourcefulness": 15
           }
         },
         "derived": [
@@ -1774,10 +2262,10 @@
         "effects": [
           {
             "confidence": "unknown",
-            "note": "Card reads 'Increases physical attack power by 5% when attacking with a blunt weapon'. Community reports say it applies only to Maces rather than to all Blunt damage; the card is what is modelled and the contradiction is recorded in data/README.md.",
+            "note": "Card reads 'While using a blunt weapon, gain 10% physical damage bonus.' Modelled as a bonus to Physical Power Bonus, which is the sheet row an item's Physical Damage Bonus is believed to land in — that belief is still unmeasured and is recorded in data/README.md. Community reports also say it applies only to Maces rather than to all Blunt damage.",
             "kind": "derived_bonus",
             "target": "derived.physical_power_bonus",
-            "micro": 5000000,
+            "micro": 10000000,
             "when_kind": "blunt"
           }
         ]
@@ -1840,6 +2328,20 @@
         "skills": []
       },
       "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":25000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-27000000},\"derived.magic_power_bonus\":{\"confidence\":\"unknown\",\"micro\":-11000000,\"note\":\"assumed to be the Physical Power Bonus curve. The character sheet reads -11% for Physical Power 10 and -11% for Magic Power 10 on the same character, which is one point of agreement and not a proof that the curves are identical\"},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":-25000000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":4000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":305400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":20000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":-15000000}}"
+    },
+    {
+      "name": "cleric-mastery",
+      "class": "class.cleric",
+      "perks": [
+        "perk.cleric.blunt_weapon_mastery"
+      ],
+      "skills": [],
+      "gear": [],
+      "party": {
+        "perks": [],
+        "skills": []
+      },
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":12,\"dexterity\":14,\"knowledge\":20,\"resourcefulness\":12,\"strength\":11,\"vigor\":13,\"will\":23}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":-1500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":8000000},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":-6000000},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":-7000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":120000000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-6000000},\"derived.magic_power_bonus\":{\"confidence\":\"unknown\",\"micro\":8000000,\"note\":\"assumed to be the Physical Power Bonus curve. The character sheet reads -11% for Physical Power 10 and -11% for Magic Power 10 on the same character, which is one point of agreement and not a proof that the curves are identical\"},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":62000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":17250000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":56000000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":23000000},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":-1000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":14000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":297000000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":12000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":11000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-8000000},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":10500000}}"
     },
     {
       "name": "rogue-duo-buffed",
@@ -1982,6 +2484,92 @@
         }
       },
       "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":21716000},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000}}"
+    },
+    {
+      "name": "gated-blunt-swing",
+      "attacker": "cleric-mastery",
+      "defender": "naked-rogue",
+      "strike": {
+        "base": {
+          "confidence": "verified",
+          "micro": 20000000
+        },
+        "scaling": {
+          "confidence": "verified",
+          "micro": 100000000
+        },
+        "flat_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "armor_pen": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "true_damage": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "kind": "blunt"
+      },
+      "context": {
+        "power_bonus_adjust": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "pdr_mod": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "hit_location_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        }
+      },
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unknown\",\"micro\":24888000,\"note\":\"Card reads 'While using a blunt weapon, gain 10% physical damage bonus.' Modelled as a bonus to Physical Power Bonus, which is the sheet row an item's Physical Damage Bonus is believed to land in — that belief is still unmeasured and is recorded in data/README.md. Community reports also say it applies only to Maces rather than to all Blunt damage.\"},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000}}"
+    },
+    {
+      "name": "gated-slash-swing",
+      "attacker": "cleric-mastery",
+      "defender": "naked-rogue",
+      "strike": {
+        "base": {
+          "confidence": "verified",
+          "micro": 20000000
+        },
+        "scaling": {
+          "confidence": "verified",
+          "micro": 100000000
+        },
+        "flat_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "armor_pen": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "true_damage": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "kind": "slash"
+      },
+      "context": {
+        "power_bonus_adjust": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "pdr_mod": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "hit_location_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        }
+      },
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":22448000},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000}}"
     },
     {
       "name": "sneak-attack-from-hide",

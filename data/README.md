@@ -269,7 +269,12 @@ While adding it: perks were **not** class-locked. `ItemDef` has
 `required_classes` and `PerkDef` did not, so a Fighter could slot a Cleric
 perk and resolve a stat block nobody in the game can have. Now they match.
 
-**Not exercised by any committed fixture.** The Rust and the Python mirror
+**Now exercised.** `fixtures/slice/` carries a Cleric holding the perk and
+swinging twice — once blunt, once slash. The pair matters: either case alone
+would pass with the gate wired to nothing. It found a bug the moment it
+existed, which is the point of the entry this replaces.
+
+**Was not exercised by any committed fixture, and that mattered.** The Rust and the Python mirror
 both implement the gate and both were checked by hand, but nothing in
 `fixtures/slice/` swings a gated blow — the only gated perk is Cleric-only
 and there is no Cleric class, so no loadout can take it. The cross-check
@@ -299,3 +304,90 @@ readers different arithmetic under the same word.
 Unmeasured, and it would only push the chain figure up: whether the game
 resets a chain on a miss or after a pause. An uninterrupted chain is the
 floor, not a guess.
+
+## Two more classes, and forty numbers that came back
+
+Cleric and Wizard were read off naked character sheets and added. The derived
+block is identical across classes — checked, not assumed — so a class is its
+base attributes and nothing else.
+
+Both sum to **105**, as the Rogue's does. One sheet was Lv. 12 and the other
+Lv. 1, which answers a question nobody had asked out loud: **character level
+does not move the attribute total**. These are class constants and not a
+snapshot of one character.
+
+The curves were built from a single Rogue sheet. Two new classes, at two
+levels, with very different spreads, now reproduce them:
+
+| | Cleric (sheet → ours) | Wizard (sheet → ours) |
+| --- | --- | --- |
+| Physical Power → bonus | 11 → −8% ✓ | 6 → −25% ✓ |
+| Magic Power → bonus | 23 → 8% ✓ | 20 → 5% ✓ |
+| Magic Resistance → MDR | 62 → 17.2% ✓ | 50 → 14.1% ✓ |
+| Health | 120 ✓ | 109 → 108.5 ⚠ |
+| Move Speed | 297 ✓ | 300 ✓ |
+| Memory Capacity | 14 ✓ | 19 ✓ |
+| Action Speed | −1.5% ✓ | 1.9% → 1.875 ✓ |
+| Spell Casting Speed | 10.5% ✓ | 21% ✓ |
+
+**Forty values, thirty-nine exact.** The one that is not is Wizard health:
+we compute 108.5 and the sheet prints 109, which is consistent with the game
+rounding a half up for display where we round half to even. That is a display
+question, not a curve question, and it is the only thing these two sheets did
+not settle.
+
+**What this does to a flagged assumption.** `derived.magic_power_bonus`
+carried a note saying it was *assumed* to share the Physical Power Bonus
+curve on the strength of one point of agreement. There are now four points
+across two independent characters — 6 → −25, 11 → −8, 20 → 5, 23 → 8 — and
+they sit on one monotonic curve with a decreasing slope. Still an assumption,
+and a far better supported one; the note stays until someone measures a case
+where the two would have to differ.
+
+## Blunt Weapon Mastery, corrected from the card
+
+It was entered from a wiki mirror as *"Increases physical attack power by
+5%"*. The card itself reads:
+
+> While using a blunt weapon, gain **10% physical damage bonus**.
+
+Both the number and the wording were wrong, and the source was `documented` —
+the one method ADR-013 had just locked as attesting but never corroborating.
+The rule met its first real case in the hour it was written.
+
+It is modelled as a bonus to Physical Power Bonus, because that is the sheet
+row an item's Physical Damage Bonus is believed to land in. **That belief is
+still unmeasured**, and two perks now depend on the answer.
+
+## Damage has a school, and there is no room for it
+
+Four spells and two perks name one:
+
+| | |
+| --- | --- |
+| Holy Strike | `20(1.0)` **divine** magical damage |
+| Locust Swarm | `13(1.0)` **earth** magical damage |
+| Fireball | `30(1.0)` direct **fire** magical damage, `10(1.0)` splash |
+| Ice Bolt | `20(1.0)` **ice** magical damage |
+| Faithfulness | 15% **divine** magical damage bonus |
+| Fire Mastery | 5% **fire** magical damage bonus |
+
+`DamageType { Physical, Magic }` cannot express it, and the character sheet
+carries an Undead/Demon axis on top — target-type modifiers we do not model
+either. This is the damage-kind amendment one level further out and it
+touches ADR-006's lock, so it needs an ADR before anything is built.
+
+Also worth recording: the `N(x)` notation on every spell is `base(scaling)`,
+which is exactly `StrikeProfile`'s shape. Hotfix #124's line *"Reduced the
+Burn Multiplier of Meteor Strike from 1.0 to 0.5"* confirms the reading —
+the parenthesised number is the multiplier.
+
+## Hotfix #124 (21 August 2026)
+
+Nothing in it touches this dataset. Every balance line is Ranger, Wizard,
+Warlock or Sorcerer — the classes affected are ones we have no entities for
+yet, and the two monster changes are not modelled at all. Recorded so the
+next person does not go looking for a diff that has nothing to show.
+
+The build id is not printed in the patch notes, so a `0.17.151.x` directory
+cannot be created from them; it has to be read off the game client.

@@ -43,10 +43,10 @@
       "effects": [
         {
           "confidence": "unknown",
-          "note": "Card reads 'Increases physical attack power by 5% when attacking with a blunt weapon'. Community reports say it applies only to Maces rather than to all Blunt damage; the card is what is modelled and the contradiction is recorded in data/README.md.",
+          "note": "Card reads 'While using a blunt weapon, gain 10% physical damage bonus.' Modelled as a bonus to Physical Power Bonus, which is the sheet row an item's Physical Damage Bonus is believed to land in \u2014 that belief is still unmeasured and is recorded in data/README.md. Community reports also say it applies only to Maces rather than to all Blunt damage.",
           "kind": "derived_bonus",
           "target": "derived.physical_power_bonus",
-          "micro": 5000000,
+          "micro": 10000000,
           "when_kind": "blunt"
         }
       ]

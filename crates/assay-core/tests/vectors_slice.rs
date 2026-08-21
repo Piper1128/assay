@@ -350,7 +350,15 @@ fn loadout(node: &Value) -> Loadout {
 fn strike(node: &Value) -> Strike {
     Strike {
         pinned: false,
-        kind: None,
+        // Hard-coded `None` here once, which meant the Rust side of every
+        // vector case swung a blow of unknown kind while the mirror read the
+        // kind the case names. Nothing caught it until a case existed that
+        // gates on one — the third field this reader has quietly stopped
+        // checking, and the reason it must be kept level with `Strike`.
+        kind: node
+            .get("kind")
+            .and_then(Value::as_str)
+            .map(|k| DamageKind::parse(k).expect("known damage kind")),
         // The vector's exchanges name no weapon, so nothing looks up a
         // swing time and time-to-kill stays absent — which is what the
         // mirror computes too.

@@ -85,6 +85,18 @@ LOADOUTS = [
         "party": {"perks": [], "skills": []},
     },
     {
+        # The gated perk (ADR-006 damage-kind amendment). Blunt Weapon
+        # Mastery's bonus must stay OFF this sheet — it depends on the swing,
+        # not the character — so this loadout pins the divert, and the
+        # exchange below pins the apply.
+        "name": "cleric-mastery",
+        "class": "class.cleric",
+        "perks": ["perk.cleric.blunt_weapon_mastery"],
+        "skills": [],
+        "gear": [],
+        "party": {"perks": [], "skills": []},
+    },
+    {
         # ADR-005 stage 3 coverage: Jokester (own) + Fortified Ground (party)
         # land on the attribute sum BEFORE the curves.
         "name": "rogue-duo-buffed",
@@ -178,6 +190,48 @@ EXCHANGES = [
             "flat_bonus": graded_micro("0"),
             "armor_pen": graded_micro("0"),
             "true_damage": graded_micro("0"),
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("0"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+        },
+    },
+    {
+        # A blunt swing by the holder of a blunt-gated perk: the bonus is
+        # absent from the sheet and present in the damage, which is the whole
+        # of the damage-kind amendment in one case.
+        "name": "gated-blunt-swing",
+        "attacker": "cleric-mastery",
+        "defender": "naked-rogue",
+        "strike": {
+            "base": graded_micro("20"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("0"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("0"),
+            "kind": "blunt",
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("0"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+        },
+    },
+    {
+        # The same swing by the same character, with a sword. The gate must
+        # stay shut, and the two damages must differ — a pair, because either
+        # one alone would pass with the gate wired to nothing.
+        "name": "gated-slash-swing",
+        "attacker": "cleric-mastery",
+        "defender": "naked-rogue",
+        "strike": {
+            "base": graded_micro("20"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("0"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("0"),
+            "kind": "slash",
         },
         "context": {
             "power_bonus_adjust": graded_micro("0"),
@@ -285,8 +339,11 @@ def build_vector() -> str:
 
     exchanges = []
     for case in EXCHANGES:
+        # `type` and `kind` are names, not graded numbers: the damage type
+        # chooses which stats the steps read, and the kind is what a perk
+        # gates on. Everything else in a strike is a value with a grade.
         strike = {
-            k: (v if k == "type" else graded_from(v))
+            k: (v if k in ("type", "kind") else graded_from(v))
             for k, v in case["strike"].items()
         }
         context = {
