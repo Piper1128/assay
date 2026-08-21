@@ -709,7 +709,15 @@
     const back = JSON.parse(wasm_bindgen.exchange(
       loadoutJson(state.builds.B), loadoutJson(state.builds.A),
       JSON.stringify({ strike: {}, context: {}, type: "physical" })));
-    if (back.ok) {
+    if (!back.ok) {
+      // A race needs two runners. Rendering nothing here left the reader
+      // looking at a damage figure with no idea a comparison was even
+      // meant to be there — the same silent-absence failure the trace
+      // rows exist to prevent.
+      host.append(el("p", "hint",
+        "No race: build B cannot swing back — " + (back.error || "unknown") +
+        ". Give B a weapon and both directions get timed."));
+    } else {
       const race = el("div", "race");
       // Chained weapons never land the same blow twice running, so the
       // realistic count is the chain's when there is one.
