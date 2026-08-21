@@ -1,8 +1,9 @@
 # ADR-013: corroboration
 
-Status: Proposed
+Status: Accepted
 Relates to: ADR-003 (trust boundary), ADR-007 (grades and assumptions)
 Date: 2026-08-21
+Locked: 2026-08-21
 
 ## The defect
 

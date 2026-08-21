@@ -113,6 +113,20 @@ of evidence about the schema, discarded one at a time.
 The method decides what grade a value is *offered* at. Nothing promotes
 itself, and review may still lower it.
 
+Applying a submission also records **who saw what**, in
+`data/<build>/attestations.json`. That is what makes a second contributor a
+second witness rather than an extra pair of hands: two people who
+independently read the same value are stronger evidence than one insisting,
+and `assay submit --apply` now says which fields have two behind them and
+could be raised to `verified`. It says *could* — a person edits the grade and
+merges, because ADR-003 does not move for this.
+
+Two attestations count as two only if the observers differ and neither is
+`documented`. A hundred people reading one wiki page is one source, and a
+grade that rose because a number was popular would launder repetition into
+verification. That is the whole of ADR-013's independence rule, and the
+failure it exists to prevent.
+
 A submission that disagrees with the dataset is refused whole rather than
 applied in part, and exits 2 so a script can tell disagreement from failure.
 Two people reading one card differently means something is wrong — a rarity

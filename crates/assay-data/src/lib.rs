@@ -29,6 +29,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod attestations;
 pub mod submission;
 
 use assay_core::confidence::Confidence;

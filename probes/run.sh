@@ -52,7 +52,8 @@ verdict() {
 
 require_clean crates/assay-core/src/lib.rs crates/assay-core/src/confidence.rs \n    crates/assay-core/src/derived.rs \
     crates/assay-core/src/resolve.rs crates/assay-core/src/exchange.rs \
-    crates/assay-core/src/stats.rs crates/assay-diff/src/lib.rs \n    crates/assay-data/Cargo.toml crates/assay-cli/src/situation.rs
+    crates/assay-core/src/stats.rs crates/assay-diff/src/lib.rs \n    crates/assay-data/Cargo.toml crates/assay-cli/src/situation.rs \
+    crates/assay-data/src/attestations.rs
 
 # ── no_std_violation ─────────────────────────────────────────────────────────
 # `use std::fs` in assay-core must fail the bare-metal build (E0433).
@@ -257,6 +258,20 @@ else
 fi
 git checkout --quiet -- crates/assay-core/src/exchange.rs
 verdict gate_ignores_kind "$gate_rejected"
+
+# ── wiki_corroborates ────────────────────────────────────────────────────────
+# Letting `documented` count toward corroboration (ADR-013 independence rule)
+# must fail: a hundred people quoting one wiki page would promote an
+# unverified number to verified through sheer repetition, which is worse than
+# no grade because it would look like one.
+mutate crates/assay-data/src/attestations.rs '/probe: wiki-never-corroborates/ s/self.method != Method::Documented;/true;/'
+if cargo test --quiet -p assay-data >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-data/src/attestations.rs
+verdict wiki_corroborates "$gate_rejected"
 
 # ── final tree check ─────────────────────────────────────────────────────────
 if ! git diff --quiet -- crates/; then

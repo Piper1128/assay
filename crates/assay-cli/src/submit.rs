@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use assay_core::schema::ItemDef;
+use assay_data::attestations::{Attestation, Ledger};
 use assay_data::submission::{ItemObservation, Method, Submission};
 use serde_json::{Map, Value};
 
@@ -111,8 +112,17 @@ pub(crate) fn cmd_submit(args: &[String]) -> Result<ExitCode, String> {
         }
         return Ok(ExitCode::SUCCESS);
     }
+    // A submission that changes nothing used to stop here. That threw away
+    // the corroboration ADR-013 is about: someone independently reading a
+    // value the dataset already has is the strongest thing that can happen
+    // to it, and reporting it as "nothing to apply" discarded it one
+    // submission at a time.
+    let build_dir = data.join(&build);
+    let promotions = attest(&submission, &review, &build_dir)?;
+
     if review.fresh.is_empty() {
-        println!("\n  nothing to apply.");
+        println!("\n  nothing new to write; the readings are recorded.");
+        report_promotions(&promotions);
         return Ok(ExitCode::SUCCESS);
     }
 
@@ -136,7 +146,130 @@ pub(crate) fn cmd_submit(args: &[String]) -> Result<ExitCode, String> {
         review.fresh.len(),
         items_path.display()
     );
+    report_promotions(&promotions);
     Ok(ExitCode::SUCCESS)
+}
+
+/// A field the evidence would now support raising, and what it says today.
+struct Promotion {
+    item: String,
+    field: String,
+    observers: usize,
+}
+
+/// Records who saw what, and returns the fields the ledger now supports
+/// raising (ADR-013).
+///
+/// Called only on `--apply`. A review has to stay read-only, or looking at a
+/// submission would change the thing being looked at.
+fn attest(
+    submission: &Submission,
+    review: &Review,
+    build_dir: &std::path::Path,
+) -> Result<Vec<Promotion>, String> {
+    let mut ledger = Ledger::load(build_dir).map_err(|e| format!("{e:?}"))?;
+    let mut proposals = Vec::new();
+
+    for observed in &submission.items {
+        let def = observed
+            .to_item(submission.method)
+            .map_err(|e| e.to_string())?;
+        let rendered = to_json(observed, submission.method, &def);
+        let mut fields = Vec::new();
+        graded_groups(&rendered, "", &mut fields);
+
+        for field in fields {
+            ledger.record(
+                &observed.id,
+                &field,
+                Attestation {
+                    observer: submission.observer.clone(),
+                    at: submission.observed_at.clone(),
+                    method: submission.method,
+                },
+            );
+            // A promotion is only interesting where the dataset is actually
+            // below what the evidence supports. A field already verified has
+            // nowhere to go, and one this submission is adding for the first
+            // time cannot have two observers behind it.
+            if !ledger.supports_verified(&observed.id, &field) {
+                continue;
+            }
+            if grade_at(&rendered, &field) != Some("unverified") {
+                continue;
+            }
+            proposals.push(Promotion {
+                item: observed.id.clone(),
+                field: field.clone(),
+                observers: ledger.independent(&observed.id, &field),
+            });
+        }
+    }
+    let _ = review;
+    ledger.save(build_dir).map_err(|e| format!("{e:?}"))?;
+    Ok(proposals)
+}
+
+/// The paths a grade attaches to, inside one rendered item.
+///
+/// A graded group is an object carrying a `confidence`, and the grade covers
+/// the whole group — so the evidence has to be about the group rather than a
+/// leaf inside it, or a promotion would be reasoning from attestations of a
+/// different field. Scalars outside any group get a path of their own: they
+/// are observations too, they simply have no grade to raise.
+fn graded_groups(value: &Value, prefix: &str, out: &mut Vec<String>) {
+    match value {
+        Value::Object(map) => {
+            if map.contains_key("confidence") {
+                if !prefix.is_empty() {
+                    out.push(prefix.to_string());
+                }
+                return;
+            }
+            for (key, child) in map {
+                let path = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                graded_groups(child, &path, out);
+            }
+        }
+        _ => {
+            if !prefix.is_empty() {
+                out.push(prefix.to_string());
+            }
+        }
+    }
+}
+
+/// The grade a rendered item carries at a graded-group path.
+fn grade_at<'a>(item: &'a Value, field: &str) -> Option<&'a str> {
+    let mut node = item;
+    for step in field.split('.') {
+        node = node.get(step)?;
+    }
+    node.get("confidence")?.as_str()
+}
+
+fn report_promotions(promotions: &[Promotion]) {
+    if promotions.is_empty() {
+        return;
+    }
+    println!(
+        "\n  {} field(s) now have two independent readings behind them:",
+        promotions.len()
+    );
+    for p in promotions {
+        println!(
+            "  RAISE?    {} {} — {} observers",
+            p.item, p.field, p.observers
+        );
+    }
+    println!(
+        "  Edit the grade to `verified` if you agree. Nothing was promoted: \
+         the machine assembles the evidence and a person decides what it is worth."
+    );
 }
 
 /// Compares each observation against what the dataset already says.
