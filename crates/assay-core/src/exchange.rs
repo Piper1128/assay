@@ -902,6 +902,7 @@ mod tests {
             data.insert_item(ItemDef {
                 id: ItemId::new(alloc::format!("item.armor_{rating}")),
                 name: alloc::format!("Armor {rating}"),
+                rarity: None,
                 required_classes: Vec::new(),
                 slot: None,
                 attributes: None,
@@ -1414,6 +1415,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: item.clone(),
             name: "Chained".to_string(),
+            rarity: None,
             required_classes: Vec::new(),
             slot: None,
             attributes: None,

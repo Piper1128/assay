@@ -23,6 +23,7 @@ use assay_core::ids::{AbilityId, ClassId, DerivedStatId, ItemId, PerkId, SkillId
 use assay_core::loadout::{GearPiece, Loadout, PartyBuffs, Roll, Slot, Weapons};
 use assay_core::resolve::{Resolved, resolve};
 use assay_core::schema::{AttributeKind, DatasetSource};
+use assay_core::stats::Rarity;
 use assay_data::submission::{ItemObservation, Method, Submission};
 use assay_data::{Dataset, DatasetText, decode};
 use serde_json::{Map, Value, json};
@@ -96,15 +97,32 @@ pub fn catalog() -> String {
                             printed.insert(kind.as_str().to_string(), json!(points));
                         }
                     }
+                    // Everything an item card prints, so a tooltip can be
+                    // the card rather than a summary of it. The grade travels
+                    // with each line: a tooltip that showed a number without
+                    // saying how well known it is would undo the whole point
+                    // of grading them.
                     items.push(json!({
                         "id": id,
                         "name": def.name,
+                        "rarity": def.rarity.map(Rarity::as_str),
                         "slot": def.slot.map(Slot::as_str),
                         "requiredClasses": def.required_classes.iter()
                             .map(|c| c.as_str()).collect::<Vec<_>>(),
                         "grants": grants,
                         "attributes": printed,
-                        "isWeapon": def.weapon.is_some(),
+                        "attributesGrade": def.attributes.as_ref()
+                            .map(|a| level(a.level())),
+                        "moveSpeedAdd": def.move_speed_add.as_ref().map(graded),
+                        "weapon": def.weapon.as_ref().map(|w| json!({
+                            "baseDamage": graded(&w.base_damage),
+                            "armorPen": graded(&w.armor_pen),
+                            "swingTime": w.swing_time.as_ref().map(graded),
+                            "combo": w.combo.iter().map(|hit| json!({
+                                "kind": hit.kind.as_str(),
+                                "scaling": graded(&hit.scaling),
+                            })).collect::<Vec<_>>(),
+                        })),
                     }));
                 }
             }
@@ -515,6 +533,9 @@ pub fn submission_json(card_json: &str, observer: &str, observed_at: &str, metho
 
     let observation = ItemObservation {
         id: text("id").to_string(),
+        rarity: Some(text("rarity"))
+            .filter(|t| !t.is_empty())
+            .map(str::to_string),
         required_classes: node
             .get("requiredClasses")
             .and_then(Value::as_array)

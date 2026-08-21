@@ -41,7 +41,7 @@ use assay_core::schema::{
     AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, ComboHit, Effect,
     InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect, StrikeProfile, WeaponProfile,
 };
-use assay_core::stats::DamageKind;
+use assay_core::stats::{DamageKind, Rarity};
 use serde::Deserialize;
 
 /// Provenance for one dataset file (ADR-004): where it came from, when, and
@@ -276,6 +276,18 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         entities.insert_item(ItemDef {
             id: ItemId::new(&dto.id),
             name: dto.name,
+                        rarity: dto
+                            .rarity
+                            .as_deref()
+                            .map(|text| {
+                                Rarity::parse(text).ok_or_else(|| {
+                                    LoadError::Invalid(format!(
+                                        "{}: unknown rarity {text:?}",
+                                        dto.id
+                                    ))
+                                })
+                            })
+                            .transpose()?,
             required_classes: dto.required_classes.iter().map(ClassId::new).collect(),
             slot: dto
                 .slot
@@ -683,6 +695,10 @@ struct ItemDto {
     #[serde(default)]
     renamed_from: Option<String>,
     name: String,
+    /// `poor`, `common`, `uncommon`, `rare`, `epic`, `legendary` or
+    /// `unique`. Absent means nobody recorded it.
+    #[serde(default)]
+    rarity: Option<String>,
     /// Classes the card restricts it to, if any.
     #[serde(default)]
     required_classes: Vec<String>,

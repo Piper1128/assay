@@ -377,3 +377,61 @@ impl DamageType {
         }
     }
 }
+
+/// How good a copy of an item is.
+///
+/// A property of the copy rather than of the kind of thing — two Great
+/// Helms of different rarity roll different numbers — but every dataset
+/// entry is one specific copy, so it belongs on the entry.
+///
+/// It had been living inside the display name as a `(Epic)` suffix, which
+/// meant the only way to know an item's rarity was to parse a string
+/// written for a human to read.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Rarity {
+    /// Grey.
+    Poor,
+    /// White.
+    Common,
+    /// Green.
+    Uncommon,
+    /// Blue.
+    Rare,
+    /// Purple.
+    Epic,
+    /// Orange.
+    Legendary,
+    /// Red.
+    Unique,
+}
+
+impl Rarity {
+    /// The name used in files and readouts.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Rarity::Poor => "poor",
+            Rarity::Common => "common",
+            Rarity::Uncommon => "uncommon",
+            Rarity::Rare => "rare",
+            Rarity::Epic => "epic",
+            Rarity::Legendary => "legendary",
+            Rarity::Unique => "unique",
+        }
+    }
+
+    /// Reads the name a data file writes.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "poor" => Some(Rarity::Poor),
+            "common" => Some(Rarity::Common),
+            "uncommon" => Some(Rarity::Uncommon),
+            "rare" => Some(Rarity::Rare),
+            "epic" => Some(Rarity::Epic),
+            "legendary" => Some(Rarity::Legendary),
+            "unique" => Some(Rarity::Unique),
+            _ => None,
+        }
+    }
+}

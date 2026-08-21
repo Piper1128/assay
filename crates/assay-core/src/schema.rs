@@ -22,7 +22,7 @@ use crate::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use alloc::collections::BTreeMap;
 
 use crate::loadout::Slot;
-use crate::stats::{Attribute, DamageKind};
+use crate::stats::{Attribute, DamageKind, Rarity};
 
 /// A sparse set of attribute contributions: what a piece of gear adds,
 /// not a whole character's block. Absence means "grants none", which is
@@ -233,6 +233,14 @@ pub struct ItemDef {
     pub id: ItemId,
     /// Display name.
     pub name: String,
+    /// How good this copy is, when the card says.
+    ///
+    /// `None` for an item whose rarity nobody recorded — which is not the
+    /// same statement as Common, a rarity someone actually read off a card.
+    /// It had been living inside `name` as an `(Epic)` suffix, so the only
+    /// way to know an item's rarity was to parse a string written to be
+    /// looked at.
+    pub rarity: Option<Rarity>,
     /// Classes allowed to equip it, if the card restricts it. Empty means
     /// anyone: most items say nothing, and an absent restriction is not the
     /// same statement as a restriction to nobody.

@@ -2,7 +2,8 @@
   "items": [
     {
       "id": "item.adventurer_boots",
-      "name": "Adventurer Boots (Epic)",
+      "name": "Adventurer Boots",
+      "rarity": "epic",
       "slot": "feet",
       "attributes": {
         "confidence": "verified",
@@ -23,7 +24,8 @@
     },
     {
       "id": "item.arming_sword",
-      "name": "Arming Sword (Legendary)",
+      "name": "Arming Sword",
+      "rarity": "legendary",
       "required_classes": [
         "class.fighter",
         "class.ranger",
@@ -118,7 +120,8 @@
     },
     {
       "id": "item.dark_cuirass",
-      "name": "Dark Cuirass (Rare)",
+      "name": "Dark Cuirass",
+      "rarity": "rare",
       "required_classes": [
         "class.fighter"
       ],
@@ -209,7 +212,8 @@
     },
     {
       "id": "item.frost_amulet",
-      "name": "Frost Amulet (Uncommon)",
+      "name": "Frost Amulet",
+      "rarity": "uncommon",
       "slot": "necklace",
       "grants": {
         "derived.physical_power": {
@@ -224,7 +228,8 @@
     },
     {
       "id": "item.great_helm",
-      "name": "Great Helm (Epic)",
+      "name": "Great Helm",
+      "rarity": "epic",
       "required_classes": [
         "class.fighter",
         "class.cleric"
@@ -257,7 +262,8 @@
     },
     {
       "id": "item.heavy_gauntlets",
-      "name": "Heavy Gauntlets (Rare)",
+      "name": "Heavy Gauntlets",
+      "rarity": "rare",
       "required_classes": [
         "class.fighter",
         "class.cleric"
@@ -291,7 +297,8 @@
     },
     {
       "id": "item.leather_cap",
-      "name": "Leather Cap (Uncommon)",
+      "name": "Leather Cap",
+      "rarity": "uncommon",
       "slot": "head",
       "attributes": {
         "confidence": "verified",
@@ -316,7 +323,8 @@
     },
     {
       "id": "item.lightfoot_boots",
-      "name": "Lightfoot Boots (Rare)",
+      "name": "Lightfoot Boots",
+      "rarity": "rare",
       "slot": "feet",
       "grants": {
         "derived.armor_rating": {
@@ -331,7 +339,8 @@
     },
     {
       "id": "item.loose_trousers",
-      "name": "Loose Trousers (Epic)",
+      "name": "Loose Trousers",
+      "rarity": "epic",
       "slot": "legs",
       "attributes": {
         "confidence": "verified",
@@ -394,7 +403,8 @@
     },
     {
       "id": "item.phoenix_choker",
-      "name": "Phoenix Choker (Uncommon)",
+      "name": "Phoenix Choker",
+      "rarity": "uncommon",
       "slot": "necklace",
       "grants": {
         "derived.magical_power": {
@@ -409,7 +419,8 @@
     },
     {
       "id": "item.ring_of_courage",
-      "name": "Ring of Courage (Uncommon)",
+      "name": "Ring of Courage",
+      "rarity": "uncommon",
       "slot": "ring",
       "attributes": {
         "confidence": "verified",
@@ -421,7 +432,8 @@
     },
     {
       "id": "item.riveted_gloves",
-      "name": "Riveted Gloves (Rare)",
+      "name": "Riveted Gloves",
+      "rarity": "rare",
       "slot": "hands",
       "attributes": {
         "confidence": "verified",
@@ -438,7 +450,8 @@
     },
     {
       "id": "item.shadow_mask",
-      "name": "Shadow Mask (Rare)",
+      "name": "Shadow Mask",
+      "rarity": "rare",
       "required_classes": [
         "class.rogue",
         "class.warlock"
@@ -465,7 +478,8 @@
     },
     {
       "id": "item.tattered_cloak",
-      "name": "Tattered Cloak (Rare)",
+      "name": "Tattered Cloak",
+      "rarity": "rare",
       "slot": "back",
       "attributes": {
         "confidence": "verified",
@@ -482,7 +496,8 @@
     },
     {
       "id": "item.vigilant_cloak",
-      "name": "Vigilant Cloak (Epic)",
+      "name": "Vigilant Cloak",
+      "rarity": "epic",
       "slot": "back",
       "attributes": {
         "confidence": "verified",
@@ -499,7 +514,8 @@
     },
     {
       "id": "item.wanderer_attire",
-      "name": "Wanderer Attire (Rare)",
+      "name": "Wanderer Attire",
+      "rarity": "rare",
       "required_classes": [
         "class.bard",
         "class.ranger",

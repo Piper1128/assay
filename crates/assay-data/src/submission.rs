@@ -69,6 +69,9 @@ pub struct ItemObservation {
     pub id: String,
     /// Name as the card prints it, rarity included.
     pub name: String,
+    /// The rarity read off the card, if it printed one.
+    #[serde(default)]
+    pub rarity: Option<String>,
     /// Classes the card restricts it to, if any.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub required_classes: Vec<String>,
@@ -230,6 +233,15 @@ impl ItemObservation {
         Ok(ItemDef {
             id: ItemId::new(&self.id),
             name: self.name.clone(),
+            rarity: self
+                .rarity
+                .as_deref()
+                .map(|text| {
+                    assay_core::stats::Rarity::parse(text).ok_or_else(|| {
+                        LoadError::Invalid(format!("{}: unknown rarity {text:?}", self.id))
+                    })
+                })
+                .transpose()?,
             required_classes: self
                 .required_classes
                 .iter()
@@ -279,7 +291,8 @@ mod tests {
           "method": "in-game",
           "items": [{
             "id": "item.leather_cap",
-            "name": "Leather Cap (Uncommon)",
+            "name": "Leather Cap",
+            "rarity": "uncommon",
             "slot": "head",
             "grants": {"derived.armor_rating": "33"},
             "attributes": {"vigor": 2},

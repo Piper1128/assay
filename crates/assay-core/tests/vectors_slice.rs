@@ -191,6 +191,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
         data.insert_item(ItemDef {
             id: ItemId::new(item["id"].as_str().expect("item id")),
             name: item["name"].as_str().expect("item name").to_string(),
+            rarity: None,
             required_classes: Vec::new(),
             slot: item
                 .get("slot")

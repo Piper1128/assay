@@ -1000,6 +1000,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.dark_leather_leggings"),
             name: "Dark Leather Leggings".to_string(),
+            rarity: None,
             required_classes: Vec::new(),
             slot: None,
             attributes: None,
@@ -1184,6 +1185,7 @@ mod tests {
         let heavy = ItemDef {
             id: ItemId::new("item.test_plate"),
             name: "Test Plate".to_string(),
+            rarity: None,
             required_classes: Vec::new(),
             slot: None,
             attributes: None,
@@ -1221,6 +1223,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
+            rarity: None,
             required_classes: Vec::new(),
             slot: None,
             attributes: None,
@@ -1264,6 +1267,7 @@ mod tests {
         data.insert_item(ItemDef {
             id: ItemId::new("item.test_cuirass"),
             name: "Test Cuirass".to_string(),
+            rarity: None,
             required_classes: Vec::new(),
             slot: None,
             attributes: None,
@@ -1318,6 +1322,7 @@ mod tests {
             data.insert_item(ItemDef {
                 id: ItemId::new("item.prop_plate"),
                 name: "Prop Plate".to_string(),
+                rarity: None,
                 required_classes: Vec::new(),
                 slot: None,
                 attributes: None,

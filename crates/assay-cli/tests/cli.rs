@@ -182,7 +182,7 @@ fn a_disagreement_stops_everything_and_says_which_field() {
         "conflict",
         r#"{"submission":1,"observer":"tester","observedAt":"2026-08-20",
             "build":"0.17.150.9384","method":"in-game",
-            "items":[{"id":"item.leather_cap","name":"Leather Cap (Uncommon)",
+            "items":[{"id":"item.leather_cap","name":"Leather Cap","rarity":"uncommon",
                       "slot":"head","grants":{"derived.armor_rating":"38"}}]}"#,
     );
     let out = assay(&["submit", path.to_str().unwrap()]);
@@ -207,7 +207,7 @@ fn a_grade_is_not_a_disagreement() {
         "corroborate",
         r#"{"submission":1,"observer":"tester","observedAt":"2026-08-20",
             "build":"0.17.150.9384","method":"screenshot-ocr",
-            "items":[{"id":"item.leather_cap","name":"Leather Cap (Uncommon)",
+            "items":[{"id":"item.leather_cap","name":"Leather Cap","rarity":"uncommon",
                       "slot":"head",
                       "grants":{"derived.armor_rating":"33",
                                 "derived.headshot_damage_reduction":"14"},

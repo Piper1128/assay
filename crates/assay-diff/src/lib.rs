@@ -321,6 +321,9 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
                         );
                     }
                     insert_graded(&mut map, "move_speed_add", def.move_speed_add.as_ref());
+                    if let Some(rarity) = def.rarity {
+                        map.insert("rarity".to_string(), rarity.as_str().to_string());
+                    }
                     if let Some(weapon) = &def.weapon {
                         // A patch that reweights a combo is a patch note, so
                         // it has to surface here. `fields()` is written by
