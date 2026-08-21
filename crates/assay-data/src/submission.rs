@@ -67,7 +67,9 @@ impl Method {
 pub struct ItemObservation {
     /// Proposed id (`item.leather_cap`).
     pub id: String,
-    /// Name as the card prints it, rarity included.
+    /// Name as the card prints it, without the rarity — that has its own
+    /// field now, because a rarity inside a display name can only be got at
+    /// by parsing a string written to be looked at.
     pub name: String,
     /// The rarity read off the card, if it printed one.
     #[serde(default)]
