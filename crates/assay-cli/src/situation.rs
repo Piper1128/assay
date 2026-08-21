@@ -80,7 +80,7 @@ pub(crate) fn parse(text: &str, weapon: &WeaponProfile) -> Result<Situation, Sit
             Some("physical") | None => DamageType::Physical,
             Some(other) => {
                 return Err(SituationError::Invalid(format!(
-                    "unknown damage type: {other}. It is `physical` or `magic`;                      true damage is a field, not a type, because bypassing                      reduction is what it means."
+                    "unknown damage type: {other}. It is `physical` or `magic`; true damage is a field, not a type, because bypassing reduction is what it means."
                 )));
             }
         },
