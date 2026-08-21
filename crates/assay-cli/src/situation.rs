@@ -23,7 +23,7 @@ use assay_core::AbilityId;
 use assay_core::confidence::Confidence;
 use assay_core::exchange::{DamageType, ExchangeContext, Strike};
 use assay_core::fixed::Fixed;
-use assay_core::ids::SkillId;
+use assay_core::ids::{ItemId, SkillId};
 use assay_core::schema::{DatasetSource, WeaponProfile};
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use serde::Deserialize;
@@ -64,11 +64,12 @@ pub(crate) struct Situation {
 /// statements and only one of them is usually meant.
 pub(crate) fn parse(
     text: &str,
+    weapon_id: &ItemId,
     weapon: &WeaponProfile,
     data: &impl DatasetSource,
 ) -> Result<Situation, SituationError> {
     let dto: SituationDto = toml::from_str(text).map_err(SituationError::Syntax)?;
-    let mut basic = Strike::basic_swing(weapon);
+    let mut basic = Strike::basic_swing(weapon_id, weapon);
 
     // A named skill fills in what it knows, over the weapon and under the
     // file. Three layers, and the order is the point: the weapon is what
@@ -117,6 +118,7 @@ pub(crate) fn parse(
     };
 
     let strike = Strike {
+        weapon: basic.weapon.clone(),
         damage_type: match dto.strike.damage_type.as_deref() {
             Some("magic") => DamageType::Magic,
             Some("physical") => DamageType::Physical,
@@ -288,6 +290,7 @@ mod tests {
         WeaponProfile {
             base_damage: Confidence::Verified(Fixed::from_int(32)),
             armor_pen: Confidence::Verified(Fixed::from_int(15)),
+            swing_time: None,
         }
     }
 
@@ -296,7 +299,7 @@ mod tests {
         // Omitting a field means "as the weapon does", not "zero". A file
         // that said nothing and produced a zero-damage attack would be
         // answering a question nobody asked.
-        let s = parse("", &weapon(), &data()).unwrap();
+        let s = parse("", &ItemId::new("item.test"), &weapon(), &data()).unwrap();
         assert_eq!(s.strike.base.value().value(), Fixed::from_int(32));
         assert_eq!(s.strike.penetration.value().value(), Fixed::from_int(15));
         assert_eq!(s.strike.scaling.value().value(), Fixed::from_int(100));
@@ -311,6 +314,7 @@ mod tests {
             "name = \"sneak-attack\"\n\
              [strike]\nscaling = \"0\"\nflat_bonus = \"15\"\ntrue_damage = \"1\"\n\
              [context]\npower_bonus_adjust = \"-30\"\n",
+            &ItemId::new("item.test"),
             &weapon(),
             &data(),
         )
@@ -327,6 +331,7 @@ mod tests {
         let s = parse(
             "[context.item_armor_bonus_mods]\n\
              \"skill.rogue.weakpoint_attack\" = \"-30\"\n",
+            &ItemId::new("item.test"),
             &weapon(),
             &data(),
         )
@@ -345,11 +350,21 @@ mod tests {
         // pedantry: they are the ban holding at the one place a person
         // types a number.
         assert!(matches!(
-            parse("[strike]\nbase = 2.5\n", &weapon(), &data()),
+            parse(
+                "[strike]\nbase = 2.5\n",
+                &ItemId::new("item.test"),
+                &weapon(),
+                &data()
+            ),
             Err(SituationError::Syntax(_))
         ));
         assert!(matches!(
-            parse("[strike]\nbase = \"2.1234567\"\n", &weapon(), &data()),
+            parse(
+                "[strike]\nbase = \"2.1234567\"\n",
+                &ItemId::new("item.test"),
+                &weapon(),
+                &data()
+            ),
             Err(SituationError::Invalid(_))
         ));
     }
@@ -357,7 +372,12 @@ mod tests {
     #[test]
     fn an_unmodelled_field_is_rejected_rather_than_ignored() {
         assert!(matches!(
-            parse("[context]\nlucky = \"yes\"\n", &weapon(), &data()),
+            parse(
+                "[context]\nlucky = \"yes\"\n",
+                &ItemId::new("item.test"),
+                &weapon(),
+                &data()
+            ),
             Err(SituationError::Syntax(_))
         ));
     }

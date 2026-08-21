@@ -349,12 +349,12 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
         Some(path) => {
             let text =
                 std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-            let parsed = situation::parse(&text, profile, &dataset.entities)
+            let parsed = situation::parse(&text, weapon_id, profile, &dataset.entities)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
             (parsed.strike, parsed.context, parsed.name)
         }
         None => (
-            Strike::basic_swing(profile),
+            Strike::basic_swing(weapon_id, profile),
             ExchangeContext::default(),
             "an unmodified swing".to_string(),
         ),
@@ -376,6 +376,22 @@ fn cmd_exchange(args: &[String]) -> Result<ExitCode, String> {
         marker(outcome.damage.level()),
         outcome.damage.value().value()
     );
+    // What a fight is, rather than what one hit is. A reader given 27.374
+    // and 109 is being asked to do arithmetic the tool exists to do.
+    match outcome.hits_to_kill {
+        Some(hits) => match &outcome.time_to_kill {
+            Some(t) => println!(
+                "     hits to kill            {hits:>12}   in {}s",
+                t.value()
+            ),
+            None => println!(
+                "     hits to kill            {hits:>12}   (no swing time measured for this weapon)"
+            ),
+        },
+        None => {
+            println!("     hits to kill                  never   this attack takes nothing off")
+        }
+    }
     println!(
         "  {} defender effective PDR {:>11}",
         marker(outcome.effective_pdr.level()),

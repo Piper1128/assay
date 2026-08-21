@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 74e18bf7d6fda7bab3c8cfcdac04a2fb46d66e51576d6ae1d9c23d855c3d598b # shrinks to enchant = 0, small = 0, extra = 0, mastery = false
+cc 717e4f675cbe0abdf8c42b935413d5f3566950dffb6f05f11d693ee02aca9a02 # shrinks to enchant = 0, small = 0, extra = 0, mastery = false

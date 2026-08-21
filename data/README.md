@@ -168,6 +168,27 @@ asserted, so nothing built on them can be mistaken for measured:
   reduces Armor Rating.** Both print as percentages on item cards and both
   sit opposite a rating. That is symmetry rather than evidence.
 
+**No weapon has a swing time, so no fight has a duration.** The model
+computes hits-to-kill from damage and health, which is arithmetic on numbers
+it already has. Turning that into seconds needs one number per weapon that no
+item card prints: the interval between swings at 0% Action Speed.
+
+The field exists on `WeaponProfile` and is empty everywhere. That is
+deliberate — three times in this project a measured value arrived with no
+place to put it and sat doing nothing, and a tool that cannot record what you
+measured asks you to measure it twice. Measure one weapon and time-to-kill
+works for it immediately.
+
+Two assumptions in how the seconds are computed, recorded rather than hidden:
+
+- **Action Speed divides.** At +100% a swing takes half the time. Multiplying
+  by `(100 - speed)` would make +100% take no time at all, which is the kind
+  of formula that looks right until someone reaches the number that breaks
+  it.
+- **Every swing costs its own time**, so `n` hits take `n × t`. Whether the
+  first blow lands at zero or after one interval decides a close race by one
+  swing, and nothing has measured which.
+
 **Other gaps**
 
 - Hotfix 122's build id `0.17.149.9316` comes from ADR-004's example, not from

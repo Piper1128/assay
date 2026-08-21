@@ -321,6 +321,10 @@ fn loadout(node: &Value) -> Loadout {
 
 fn strike(node: &Value) -> Strike {
     Strike {
+        // The vector's exchanges name no weapon, so nothing looks up a
+        // swing time and time-to-kill stays absent — which is what the
+        // mirror computes too.
+        weapon: None,
         base: graded_micro(&node["base"]).map(Damage::new),
         scaling: graded_micro(&node["scaling"]).map(ScalingCoefficient::new),
         flat_bonus: graded_micro(&node["flat_bonus"]).map(Damage::new),

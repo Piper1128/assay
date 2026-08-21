@@ -297,6 +297,34 @@
     color: var(--gold);
   }
 
+  /* The race. Two rows, and the one that finishes first is the answer —
+     which is not always the one that hits harder, and that is the whole
+     reason for showing them together. */
+  .race {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 0 16px;
+    align-items: baseline;
+    margin-bottom: 20px;
+    max-width: 620px;
+  }
+  .race > * { padding: 7px 0 6px; border-bottom: 1px solid var(--line); }
+  .race .head {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border-bottom-color: var(--gold);
+  }
+  .race .who { font-family: var(--serif); font-size: 15px; }
+  .race .n {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .race .wins { color: var(--verified); }
+  .race .unknown { color: var(--ink-dim); }
+
   details.trace { margin-top: 18px; }
   details.trace summary { cursor: pointer; color: var(--ink-dim); font-size: 13px; }
   details.trace pre {
@@ -673,6 +701,47 @@
       host.append(el("div", "error", out.error));
       $("trace").textContent = "";
       return;
+    }
+
+    // Both directions. "Two more hits" is not worse if the hits come
+    // faster, and a single number cannot say that — which is the whole
+    // reason a fight is a race and not a comparison of damage.
+    const back = JSON.parse(wasm_bindgen.exchange(
+      loadoutJson(state.builds.B), loadoutJson(state.builds.A),
+      JSON.stringify({ strike: {}, context: {}, type: "physical" })));
+    if (back.ok) {
+      const race = el("div", "race");
+      for (const h of ["", "damage", "hits", "seconds"]) {
+        race.append(el("div", "head" + (h ? " n" : ""), h));
+      }
+      const rows = [
+        ["A hits B" + (out.skill ? ` (${out.skill})` : ""), out],
+        ["B hits A (a plain swing)", back],
+      ];
+      // Only a race if both sides finish and both were timed. Comparing a
+      // time to a blank is not a comparison, and colouring one green would
+      // be an answer nobody computed.
+      const timed = rows.every(([, r]) => r.timeToKill && r.hitsToKill);
+      const faster = timed
+        ? rows.reduce((a, b) =>
+            Number(a[1].timeToKill.value) <= Number(b[1].timeToKill.value) ? a : b)
+        : null;
+      for (const row of rows) {
+        const [label, r] = row;
+        race.append(el("div", "who", label));
+        race.append(el("div", "n", r.damage.value));
+        race.append(el("div", "n", r.hitsToKill ?? "never"));
+        const t = el("div", "n " + (r.timeToKill ? (row === faster ? "wins" : "") : "unknown"),
+                     r.timeToKill ? r.timeToKill.value + "s" : "—");
+        race.append(t);
+      }
+      host.append(race);
+      if (!timed) {
+        host.append(el("p", "hint",
+          "Seconds need a weapon's swing time, and nothing has measured one " +
+          "yet. Until something does, this says how many hits and not how " +
+          "long — which is half the question and says which half."));
+      }
     }
 
     const head = el("div", "headline");

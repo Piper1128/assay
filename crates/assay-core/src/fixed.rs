@@ -78,6 +78,31 @@ impl Fixed {
         Fixed(narrow(div_round_half_even(product, divisor)))
     }
 
+    /// How many whole `self` it takes to cover `total`, rounded **up**.
+    ///
+    /// Not `div_half_even`. Three point nine swings is four swings: you
+    /// cannot land a fraction of a hit, and rounding a kill down would
+    /// report a fight won that was still going. This is the one place in
+    /// the project where rounding to nearest is the wrong answer, so it
+    /// gets its own named operation rather than a call site remembering.
+    ///
+    /// `None` when `self` is zero or negative: an attack that takes nothing
+    /// off never finishes, and reporting some number of hits would be worse
+    /// than saying so.
+    // No `#[must_use]`: `Option` already carries it, and saying so twice
+    // is a warning rather than emphasis.
+    pub fn hits_to_cover(self, total: Fixed) -> Option<i64> {
+        if self.0 <= 0 {
+            return None;
+        }
+        if total.0 <= 0 {
+            return Some(0);
+        }
+        // Both sides carry the same scale, so it divides out and the answer
+        // is a plain count.
+        Some(total.0.div_euclid(self.0) + i64::from(total.0.rem_euclid(self.0) != 0))
+    }
+
     /// Division rounding half to even (banker's rounding), per the ADR-001
     /// rev 2 rule that division is only available through named functions.
     /// Panics if `rhs` is zero.
@@ -266,6 +291,44 @@ fn digit_value(b: u8) -> Result<u8, ParseFixedError> {
         Ok(b - b'0')
     } else {
         Err(ParseFixedError::Malformed)
+    }
+}
+
+#[cfg(test)]
+mod hits_tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    #[test]
+    fn a_fraction_of_a_hit_is_a_whole_hit() {
+        let damage = Fixed::from_micro(27_374_116);
+        // 109 health at 27.374116 is 3.98 swings, which is four swings.
+        assert_eq!(damage.hits_to_cover(Fixed::from_int(109)), Some(4));
+        // Exactly three is three, not four: the ceiling only rounds a
+        // remainder, and inventing a swing nobody needs is as wrong as
+        // dropping one they do.
+        assert_eq!(
+            Fixed::from_int(10).hits_to_cover(Fixed::from_int(30)),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn an_attack_that_takes_nothing_off_never_finishes() {
+        // Reporting a number here would be worse than saying so: a fully
+        // resisted attack does not kill in a very large number of hits, it
+        // does not kill.
+        assert_eq!(Fixed::ZERO.hits_to_cover(Fixed::from_int(100)), None);
+        assert_eq!(
+            Fixed::from_int(-5).hits_to_cover(Fixed::from_int(100)),
+            None
+        );
+    }
+
+    #[test]
+    fn nothing_to_take_off_is_no_hits() {
+        assert_eq!(Fixed::from_int(10).hits_to_cover(Fixed::ZERO), Some(0));
     }
 }
 

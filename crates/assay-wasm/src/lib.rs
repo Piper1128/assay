@@ -625,10 +625,11 @@ pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) 
         Ok(v) => v,
         Err(e) => return json!({ "ok": false, "error": e.to_string() }).to_string(),
     };
-    let (strike, context, named) = match build_situation(&situation, profile, &data.entities) {
-        Ok(parts) => parts,
-        Err(e) => return json!({ "ok": false, "error": e }).to_string(),
-    };
+    let (strike, context, named) =
+        match build_situation(&situation, weapon_id, profile, &data.entities) {
+            Ok(parts) => parts,
+            Err(e) => return json!({ "ok": false, "error": e }).to_string(),
+        };
 
     match Exchange::new(&attacker, &defender, &strike, &context, &data.entities).damage() {
         Ok(out) => json!({
@@ -637,6 +638,8 @@ pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) 
             "effectivePdr": graded(&out.effective_pdr.clone().map(|p| p.value())),
             "weapon": data.entities.item(weapon_id).map(|i| i.name.clone()),
             "skill": named,
+            "hitsToKill": out.hits_to_kill,
+            "timeToKill": out.time_to_kill.as_ref().map(graded),
             "steps": out
                 .trace
                 .iter()
@@ -650,10 +653,11 @@ pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) 
 
 fn build_situation(
     node: &Value,
+    weapon_id: &ItemId,
     weapon: &assay_core::schema::WeaponProfile,
     data: &impl DatasetSource,
 ) -> Result<(Strike, ExchangeContext, Option<String>), String> {
-    let mut basic = Strike::basic_swing(weapon);
+    let mut basic = Strike::basic_swing(weapon_id, weapon);
 
     // Three layers, same as the CLI: the weapon is what you hold, the skill
     // is what the game says it does, an explicit field is what you asked.
@@ -709,6 +713,7 @@ fn build_situation(
     };
 
     let strike = Strike {
+        weapon: basic.weapon.clone(),
         damage_type: match node.get("type").and_then(Value::as_str) {
             Some("magic") => DamageType::Magic,
             Some("physical") => DamageType::Physical,

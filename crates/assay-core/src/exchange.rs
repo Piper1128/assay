@@ -53,7 +53,7 @@ use core::fmt;
 use crate::confidence::Confidence;
 use crate::derived::well_known;
 use crate::fixed::Fixed;
-use crate::ids::{AbilityId, ClassId, CurveId, DerivedStatId};
+use crate::ids::{AbilityId, ClassId, CurveId, DerivedStatId, ItemId};
 use crate::resolve::{Resolved, StageNote};
 use crate::schema::{DatasetSource, WeaponProfile};
 use crate::stats::{
@@ -131,6 +131,10 @@ pub struct Strike {
     pub scaling: Confidence<ScalingCoefficient>,
     /// Flat Buff Weapon Damage (step 4).
     pub flat_bonus: Confidence<Damage>,
+    /// Which weapon this came from, when it came from one. Carried so the
+    /// swing time can be looked up: damage says how hard, and the weapon
+    /// says how often, and a fight is both.
+    pub weapon: Option<ItemId>,
     /// Penetration carried by the strike (step 5). Which defence it
     /// reduces follows from the damage type: armour rating for a physical
     /// strike, magic resistance for a magic one. Keeping `armor_pen` as the
@@ -150,11 +154,12 @@ impl Strike {
     /// building it here means a weapon in the dataset reaches the damage
     /// model instead of sitting inert next to it.
     #[must_use]
-    pub fn basic_swing(weapon: &WeaponProfile) -> Strike {
+    pub fn basic_swing(id: &ItemId, weapon: &WeaponProfile) -> Strike {
         Strike {
             // A weapon swings physically unless something says otherwise,
             // which is the same thing `DamageType::default()` says.
             damage_type: DamageType::Physical,
+            weapon: Some(id.clone()),
             base: weapon.base_damage.clone().map(Damage::new),
             // 100%: an unmodified swing scales fully. Sneak Attack's 0% is a
             // property of the skill, never a default (ADR-006 step 2).
@@ -277,6 +282,17 @@ pub struct ExchangeOutcome {
     pub damage: Confidence<Damage>,
     /// The defender's effective PDR for this exchange, after the mod layer.
     pub effective_pdr: Confidence<EffectivePdr>,
+    /// How many of this strike the defender takes before dying.
+    ///
+    /// `None` when the attack cannot kill at all — a fully resisted hit
+    /// does not kill in a very large number of swings, it does not kill.
+    pub hits_to_kill: Option<i64>,
+    /// Seconds to land those hits, when the weapon's swing time is known.
+    ///
+    /// This is what makes two builds comparable as a race rather than as a
+    /// pair of numbers: needing two more hits is not worse if the hits come
+    /// faster. `None` when nothing has measured the weapon.
+    pub time_to_kill: Option<Confidence<Fixed>>,
     /// The `--explain` trail, in step order.
     pub trace: Vec<StageNote>,
 }
@@ -353,6 +369,32 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
                 value = value.min(cap);
             }
             value
+        }))
+    }
+
+    /// How long `hits` swings take, if anything has measured the weapon.
+    ///
+    /// Action Speed makes you faster, so it divides: at +100% a swing takes
+    /// half the time. Multiplying by `(100 - speed)` would make +100% take
+    /// no time at all, which is the kind of formula that looks right until
+    /// someone reaches the number that breaks it.
+    ///
+    /// Every swing costs its own time, so `hits` swings cost `hits × t`.
+    /// Whether the first blow lands at zero or after one swing decides a
+    /// close race by one interval, and nothing here has measured which —
+    /// recorded in `data/README.md` rather than settled by preference.
+    fn time_for(&self, hits: i64) -> Option<Confidence<Fixed>> {
+        let weapon = self
+            .data
+            .item(self.strike.weapon.as_ref()?)?
+            .weapon
+            .as_ref()?;
+        let swing = weapon.swing_time.clone()?;
+        let speed = self.attacker.stat(well_known::ACTION_SPEED)?.clone();
+        let count = Fixed::from_int(hits);
+        Some(swing.zip_with(speed, move |t, percent| {
+            let hundred = Fixed::from_int(100);
+            (t * count).mul_div_half_even(hundred, hundred + percent)
         }))
     }
 
@@ -569,9 +611,47 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
             ),
         });
 
+        // ── the fight, rather than the hit ───────────────────────────────
+        // Damage answers "how hard"; a player is asking "how long". Both
+        // come out of numbers already computed, and leaving them out was
+        // asking a reader to do arithmetic the tool exists to do.
+        // Health is not required to compute damage, so a class that does not
+        // define it still gets an answer to the question that was asked.
+        // Demanding it here turned "how hard does this hit" into "how hard
+        // does this hit, and also how long is the fight" — a different
+        // question, and not always askable.
+        let health = self.defender.stat(well_known::HEALTH).cloned();
+        let hits_to_kill = health
+            .as_ref()
+            .and_then(|h| final_damage.value().value().hits_to_cover(*h.value()));
+        let time_to_kill = hits_to_kill.and_then(|hits| self.time_for(hits));
+
+        if let (Some(hits), Some(health)) = (hits_to_kill, health.as_ref()) {
+            trace.push(StageNote {
+                stage: 9,
+                label: "hits to kill",
+                detail: match &time_to_kill {
+                    Some(t) => format!(
+                        "{} health ÷ {} → {hits} hit(s), {}s",
+                        health.value(),
+                        final_damage.value().value(),
+                        t.value()
+                    ),
+                    None => format!(
+                        "{} health ÷ {} → {hits} hit(s); no swing time for this \
+                         weapon, so how long that takes is unknown",
+                        health.value(),
+                        final_damage.value().value()
+                    ),
+                },
+            });
+        }
+
         Ok(ExchangeOutcome {
             damage: final_damage,
             effective_pdr,
+            hits_to_kill,
+            time_to_kill,
             trace,
         })
     }
@@ -755,6 +835,7 @@ mod tests {
 
     fn strike(base: i64, scaling: i64, flat: i64, pen: i64, true_dmg: i64) -> Strike {
         Strike {
+            weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(base))),
             scaling: Confidence::Verified(ScalingCoefficient::new(fx(scaling))),
@@ -799,6 +880,7 @@ mod tests {
         let data = dataset();
         let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let sneak = Strike {
+            weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(10))),
             scaling: Confidence::Verified(ScalingCoefficient::new(Fixed::ZERO)),
@@ -1080,6 +1162,52 @@ mod tests {
         assert!(five.detail.starts_with("armor "), "{}", five.detail);
         let three = out.trace.iter().find(|n| n.stage == 3).expect("step 3");
         assert_eq!(three.label, "physical power bonus");
+    }
+
+    #[test]
+    fn a_fight_is_a_race_and_not_a_damage_comparison() {
+        // The reason both directions are shown. A weaker attack that needs
+        // one more hit still wins if the hits come faster, and no single
+        // number says that — which is the illusion a build tool has to
+        // puncture rather than reproduce.
+        let data = dataset();
+        let attacker = combatant(&data, 0);
+        let defender = combatant(&data, 0);
+        let out = Exchange::new(
+            &attacker,
+            &defender,
+            &strike(20, 100, 0, 0, 0),
+            &ExchangeContext::default(),
+            &data,
+        )
+        .damage()
+        .expect("resolves");
+
+        // The test class defines no health, so the fight is not askable and
+        // says so rather than answering with a zero.
+        assert_eq!(out.hits_to_kill, None);
+        assert_eq!(out.time_to_kill, None);
+        // ...and the damage is still there, because that was the question.
+        assert!(out.damage.value().value() > Fixed::ZERO);
+    }
+
+    #[test]
+    fn an_attack_that_takes_nothing_off_never_finishes() {
+        // Reporting a very large number of hits would be worse than saying
+        // it does not kill: one is an answer and the other is the truth.
+        let data = dataset();
+        let attacker = combatant(&data, 0);
+        let defender = combatant(&data, 250);
+        let out = Exchange::new(
+            &attacker,
+            &defender,
+            &strike(0, 100, 0, 0, 0),
+            &ExchangeContext::default(),
+            &data,
+        )
+        .damage()
+        .expect("resolves");
+        assert_eq!(out.hits_to_kill, None);
     }
 
     #[test]

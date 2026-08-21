@@ -327,6 +327,7 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
                     Ok(WeaponProfile {
                         base_damage: w.base_damage.into_fixed()?,
                         armor_pen: w.armor_pen.into_fixed()?,
+                        swing_time: w.swing_time.map(GradedMicro::into_fixed).transpose()?,
                     })
                 })
                 .transpose()?,
@@ -723,6 +724,11 @@ struct StrikeProfileDto {
 struct WeaponDto {
     base_damage: GradedMicro,
     armor_pen: GradedMicro,
+    /// Seconds between swings at 0% Action Speed. No card prints it, so
+    /// nothing has one yet — the field is here so a measurement has
+    /// somewhere to land.
+    #[serde(default)]
+    swing_time: Option<GradedMicro>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

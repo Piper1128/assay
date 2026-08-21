@@ -159,6 +159,17 @@ pub struct WeaponProfile {
     pub base_damage: Confidence<Fixed>,
     /// Armor penetration in percentage points (ADR-006 step 5).
     pub armor_pen: Confidence<Fixed>,
+    /// Seconds between swings at 0% Action Speed.
+    ///
+    /// Optional because no item card prints it and nothing in the dataset
+    /// has one yet. The field exists so a measurement has somewhere to
+    /// land: three times in this project a number arrived with no home and
+    /// sat doing nothing, and a tool that cannot record what you measured
+    /// is a tool that asks you to measure it twice.
+    ///
+    /// Absent means time-to-kill is unavailable and says so, rather than
+    /// being guessed from a plausible-looking constant.
+    pub swing_time: Option<Confidence<Fixed>>,
 }
 
 /// How a skill attacks: the parts of ADR-006's first eight steps that
