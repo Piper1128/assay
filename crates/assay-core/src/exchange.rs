@@ -56,69 +56,18 @@ use crate::fixed::Fixed;
 use crate::ids::{AbilityId, ClassId, CurveId, DerivedStatId, ItemId};
 use crate::resolve::{Resolved, StageNote};
 use crate::schema::{DatasetSource, WeaponProfile};
+pub use crate::stats::{DamageKind, DamageType};
+
 use crate::stats::{
     ArmorPen, ArmorRating, Damage, EffectivePdr, PdrMod, PdrPercent, ScalingCoefficient,
     TrueDamage, apply_item_armor_bonus, apply_pdr_mod, apply_percent, apply_scaling, penetrate,
     reduce_by_pdr,
 };
 
-/// What the attacker brings to one exchange: the strike being made, as
-/// opposed to the attacker's standing stat block.
-/// What kind of damage a strike deals.
-///
-/// The type does not add a step or reorder one: it chooses which stats the
-/// nine already have read (ADR-006 amendment: damage type). Physical Power
-/// Bonus or Magic Power Bonus at step 3; Armor Rating or Magic Resistance at
-/// step 5; the reduction each of those converts into at 6 and 7.
-///
-/// True damage is not a third type. It has its own field and lands after the
-/// whole reduction chain, because bypassing reduction is what it means.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
-pub enum DamageType {
-    /// Reduced by armour.
-    #[default]
-    Physical,
-    /// Reduced by magic resistance.
-    Magic,
-}
-
-impl DamageType {
-    /// The name used in files and readouts.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            DamageType::Physical => "physical",
-            DamageType::Magic => "magic",
-        }
-    }
-
-    /// The attacker's power bonus for this type: step 3.
-    fn power_bonus(self) -> &'static str {
-        match self {
-            DamageType::Physical => well_known::PHYSICAL_POWER_BONUS,
-            DamageType::Magic => well_known::MAGIC_POWER_BONUS,
-        }
-    }
-
-    /// The defender's rating for this type: step 5.
-    fn rating(self) -> &'static str {
-        match self {
-            DamageType::Physical => well_known::ARMOR_RATING,
-            DamageType::Magic => well_known::MAGIC_RESISTANCE,
-        }
-    }
-
-    /// The reduction that rating converts into: steps 6 and 7.
-    fn reduction(self) -> &'static str {
-        match self {
-            DamageType::Physical => well_known::PDR,
-            DamageType::Magic => well_known::MAGICAL_DAMAGE_REDUCTION,
-        }
-    }
-}
-
 /// One attack, as ADR-006 step 1 through 4 describe it: what is being
 /// swung and with what modifiers.
+/// What the attacker brings to one exchange: the strike being made, as
+/// opposed to the attacker's standing stat block.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Strike {
     /// What kind of damage this is, which decides the stats steps 3 and
@@ -131,6 +80,13 @@ pub struct Strike {
     pub scaling: Confidence<ScalingCoefficient>,
     /// Flat Buff Weapon Damage (step 4).
     pub flat_bonus: Confidence<Damage>,
+    /// Which kind of physical blow this is, when it is known.
+    ///
+    /// `None` for an unarmed strike, a spell, or a weapon whose chain
+    /// nobody has transcribed. A gated effect never applies to a strike of
+    /// unknown kind: a bonus that fires because we did not know is worse
+    /// than one that does not fire.
+    pub kind: Option<DamageKind>,
     /// Whether this attack is one specific blow rather than the weapon
     /// simply swinging: a named skill, or a swing picked out of the chain.
     ///
@@ -168,6 +124,11 @@ impl Strike {
             // A plain swing is the weapon doing its normal thing, so the
             // chain applies. Anything more specific sets this.
             pinned: false,
+            // A plain swing is the chain's first swing, so it is whatever
+            // kind that swing is. Leaving this None would mean a mace's
+            // ordinary blow was not Blunt, and every gate keyed on Blunt
+            // would sit silent for the weapon it was written for.
+            kind: weapon.combo.first().map(|hit| hit.kind),
             weapon: Some(id.clone()),
             base: weapon.base_damage.clone().map(Damage::new),
             // 100%: an unmodified swing scales fully. Sneak Attack's 0% is a
@@ -346,6 +307,47 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
     }
 
     /// Reads one required stat from a resolved block.
+    /// Reads a stat and adds whatever gated bonuses this swing switches on.
+    ///
+    /// The gates live on `Resolved` rather than in its numbers because they
+    /// depend on the swing, not the character. This is the moment the swing
+    /// is finally known, so this is where they are worth anything.
+    ///
+    /// A strike of unknown kind switches nothing on. Firing a gate because
+    /// we could not tell would put a bonus in a number nobody can check.
+    fn gated(
+        &self,
+        who: &Resolved,
+        id: &str,
+        trace: &mut Vec<StageNote>,
+        stage: u8,
+    ) -> Result<Confidence<Fixed>, ExchangeError> {
+        let mut value = Self::require(who, id)?;
+        let Some(kind) = self.strike.kind else {
+            return Ok(value);
+        };
+        for bonus in &who.conditional {
+            let fires = bonus.kind == kind; // probe: gate-checks-kind
+            if !fires || bonus.stat.as_str() != id {
+                continue;
+            }
+            let before = *value.value();
+            value = value.zip_with(bonus.value.clone(), |a, b| a + b);
+            trace.push(StageNote {
+                stage,
+                label: "gated bonus",
+                detail: format!(
+                    "{} applies to a {} swing: {id} {before} +{} → {}",
+                    bonus.source,
+                    kind.as_str(),
+                    bonus.value.value(),
+                    value.value()
+                ),
+            });
+        }
+        Ok(value)
+    }
+
     fn require(resolved: &Resolved, id: &str) -> Result<Confidence<Fixed>, ExchangeError> {
         resolved
             .stat(id)
@@ -505,10 +507,13 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         self.require_same_build(self.attacker)?;
         self.require_same_build(self.defender)?;
         let kind = strike.damage_type; // probe: damage-type
-        let attacker_power = Self::require(self.attacker, kind.power_bonus())?;
-        let defender_armor = Self::require(self.defender, kind.rating())?;
-        let defender_pdr = Self::require(self.defender, kind.reduction())?;
         let mut trace: Vec<StageNote> = Vec::new();
+        // Each read picks up the gates that fire for this swing, at the step
+        // that uses it — so the trace shows the gate next to the number it
+        // moved rather than in a preamble nobody reads.
+        let attacker_power = self.gated(self.attacker, kind.power_bonus(), &mut trace, 3)?;
+        let defender_armor = self.gated(self.defender, kind.rating(), &mut trace, 5)?;
+        let defender_pdr = self.gated(self.defender, kind.reduction(), &mut trace, 6)?;
 
         // ── 1: base damage ───────────────────────────────────────────────
         let base = strike.base.clone();
@@ -888,6 +893,7 @@ mod tests {
         data.insert_perk(crate::schema::PerkDef {
             id: crate::ids::PerkId::new("perk.test.mastery"),
             name: "Test Mastery".to_string(),
+            required_classes: Vec::new(),
             effects: vec![crate::schema::StackedEffect::once(Confidence::Verified(
                 crate::schema::Effect::ItemArmorBonus(fx(15)),
             ))],
@@ -975,6 +981,7 @@ mod tests {
     fn strike(base: i64, scaling: i64, flat: i64, pen: i64, true_dmg: i64) -> Strike {
         Strike {
             pinned: false,
+            kind: None,
             weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(base))),
@@ -1021,6 +1028,7 @@ mod tests {
         let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let sneak = Strike {
             pinned: false,
+            kind: None,
             weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(10))),
@@ -1266,6 +1274,7 @@ mod tests {
             .expect("physical resolves");
         let magic_strike = Strike {
             pinned: false,
+            kind: None,
             damage_type: DamageType::Magic,
             ..strike.clone()
         };
@@ -1416,7 +1425,7 @@ mod tests {
                 combo: [100i64, 105, 110]
                     .into_iter()
                     .map(|pct| crate::schema::ComboHit {
-                        kind: "blunt".to_string(),
+                        kind: DamageKind::Blunt,
                         scaling: Confidence::Unverified(fx(pct)),
                     })
                     .collect(),
@@ -1491,6 +1500,98 @@ mod tests {
             .unwrap();
         assert_eq!(out.chain_to_kill, None);
         assert_eq!(out.hits_to_kill, None);
+    }
+
+    /// Adds a perk that grants +5 physical power, but only on the named
+    /// kind of swing — Blunt Weapon Mastery's shape.
+    fn gated_perk(data: &mut InMemoryDataset, kind: DamageKind) {
+        data.insert_perk(crate::schema::PerkDef {
+            id: crate::ids::PerkId::new("perk.test.mastery"),
+            name: "Test Mastery".to_string(),
+            required_classes: Vec::new(),
+            effects: vec![crate::schema::StackedEffect {
+                effect: Confidence::Verified(crate::schema::Effect::DerivedBonus(
+                    DerivedStatId::new(well_known::PHYSICAL_POWER_BONUS),
+                    fx(5),
+                )),
+                max_stacks: None,
+                when_kind: Some(kind),
+            }],
+        });
+    }
+
+    /// A combatant holding the gated perk.
+    fn gated_attacker(data: &InMemoryDataset) -> Resolved {
+        let loadout = Loadout {
+            name: "gated".to_string(),
+            class: ClassId::new("class.test"),
+            perks: vec![crate::ids::PerkId::new("perk.test.mastery")],
+            skills: vec![],
+            gear: vec![],
+            weapons: Weapons::default(),
+            stacks: BTreeMap::new(),
+            party: PartyBuffs::default(),
+        };
+        resolve(&loadout, data).expect("gated loadout resolves")
+    }
+
+    #[test]
+    fn a_gate_fires_on_its_kind_and_stays_shut_on_the_others() {
+        let mut data = dataset();
+        gated_perk(&mut data, DamageKind::Blunt);
+        let (a, d) = (gated_attacker(&data), combatant(&data, 0));
+
+        let mut blunt = strike(20, 100, 0, 0, 0);
+        blunt.kind = Some(DamageKind::Blunt);
+        let hit = Exchange::new(&a, &d, &blunt, &ExchangeContext::default(), &data)
+            .damage()
+            .unwrap();
+
+        let mut slash = strike(20, 100, 0, 0, 0);
+        slash.kind = Some(DamageKind::Slash);
+        let miss = Exchange::new(&a, &d, &slash, &ExchangeContext::default(), &data)
+            .damage()
+            .unwrap();
+
+        assert!(
+            hit.damage.value().value() > miss.damage.value().value(),
+            "the gate did not move the number: {} vs {}",
+            hit.damage.value().value(),
+            miss.damage.value().value()
+        );
+        assert!(explain(&hit).contains("Test Mastery applies to a blunt swing"));
+        assert!(!explain(&miss).contains("gated bonus"));
+    }
+
+    #[test]
+    fn a_swing_of_unknown_kind_switches_nothing_on() {
+        // Firing because we could not tell would put a bonus into a number
+        // nobody can check — an unarmed strike is not secretly blunt.
+        let mut data = dataset();
+        gated_perk(&mut data, DamageKind::Blunt);
+        let (a, d) = (gated_attacker(&data), combatant(&data, 0));
+        let unknown = strike(20, 100, 0, 0, 0);
+        assert_eq!(unknown.kind, None);
+        let out = Exchange::new(&a, &d, &unknown, &ExchangeContext::default(), &data)
+            .damage()
+            .unwrap();
+        assert!(!explain(&out).contains("gated bonus"));
+    }
+
+    #[test]
+    fn a_gated_bonus_never_reaches_the_character_sheet() {
+        // The sheet has no swing, so it cannot hold a term that depends on
+        // one. Folding it in would make the sheet lie for every weapon the
+        // character is not currently holding.
+        let mut data = dataset();
+        gated_perk(&mut data, DamageKind::Blunt);
+        let a = gated_attacker(&data);
+        assert_eq!(
+            a.stat(well_known::PHYSICAL_POWER_BONUS).map(|v| *v.value()),
+            Some(Fixed::ZERO)
+        );
+        assert_eq!(a.conditional.len(), 1);
+        assert_eq!(a.conditional[0].kind, DamageKind::Blunt);
     }
 
     #[test]

@@ -22,7 +22,7 @@ use crate::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use alloc::collections::BTreeMap;
 
 use crate::loadout::Slot;
-use crate::stats::Attribute;
+use crate::stats::{Attribute, DamageKind};
 
 /// A sparse set of attribute contributions: what a piece of gear adds,
 /// not a whole character's block. Absence means "grants none", which is
@@ -184,13 +184,11 @@ pub struct WeaponProfile {
 /// however much the chain climbs.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ComboHit {
-    /// `slash`, `pierce` or `blunt`, as the weapon page names it.
+    /// What kind of blow this swing is.
     ///
-    /// Recorded and not consumed. Armour types plausibly resist these
-    /// differently — that is what plate and cloth are for — but nothing
-    /// has measured how, and a kind that silently did nothing would be
-    /// worse than one that visibly waits.
-    pub kind: String,
+    /// It does not change the damage — the weapon's number does that. It
+    /// is what perks and skills gate on.
+    pub kind: DamageKind,
     /// This swing's share of base damage, in percentage points.
     pub scaling: Confidence<Fixed>,
 }
@@ -324,6 +322,14 @@ pub struct StackedEffect {
     /// Present when the effect stacks, carrying the maximum stack count.
     /// `None` means it applies once.
     pub max_stacks: Option<u32>,
+    /// The kind of swing this effect is gated on, if it is gated.
+    ///
+    /// `None` is the ordinary case and behaves exactly as before. `Some`
+    /// means the effect is not a property of the character at all — Blunt
+    /// Weapon Mastery's 5% is worth nothing while its holder is swinging a
+    /// sword — so it is held out of the resolved sheet and applied at the
+    /// strike instead (ADR-006 damage-kind amendment).
+    pub when_kind: Option<DamageKind>,
 }
 
 impl StackedEffect {
@@ -333,6 +339,7 @@ impl StackedEffect {
         StackedEffect {
             effect,
             max_stacks: None,
+            when_kind: None,
         }
     }
 }
@@ -344,6 +351,12 @@ pub struct PerkDef {
     pub id: PerkId,
     /// Display name.
     pub name: String,
+    /// The classes that may slot it.
+    ///
+    /// Empty means anyone, the same convention `ItemDef` uses. Perks are
+    /// class-locked in the game and were not here, so a Fighter could hold
+    /// a Cleric perk and resolve a stat block nobody can have.
+    pub required_classes: Vec<ClassId>,
     /// Effects granted while slotted.
     pub effects: Vec<StackedEffect>,
 }
@@ -523,6 +536,7 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.rogue.jokester"),
             name: "Jokester".to_string(),
+            required_classes: Vec::new(),
             effects: vec![StackedEffect::once(Confidence::Unverified(
                 Effect::AllAttributes(2),
             ))],

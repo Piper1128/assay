@@ -42,7 +42,7 @@ use crate::fixed::Fixed;
 use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::loadout::{Loadout, Roll, Slot};
 use crate::schema::{AttributeBlock, AttributeKind, DatasetSource, Effect, StackedEffect};
-use crate::stats::apply_item_armor_bonus;
+use crate::stats::{DamageKind, apply_item_armor_bonus};
 
 /// Why a loadout could not be resolved against a dataset. An unknown entity
 /// is useful information in itself (ADR-009: an id can vanish in a later
@@ -65,6 +65,14 @@ pub enum ResolveError {
         /// The item in question.
         item: ItemId,
         /// The classes its card allows.
+        allowed: Vec<ClassId>,
+    },
+    /// A perk slotted by a class that cannot take it: the perk and the
+    /// classes that can.
+    WrongClassPerk {
+        /// The perk in question.
+        perk: PerkId,
+        /// The classes it belongs to.
         allowed: Vec<ClassId>,
     },
     /// A piece is worn in a slot its own card does not name: the item,
@@ -96,6 +104,10 @@ impl fmt::Display for ResolveError {
             ResolveError::UnknownPerk(id) => write!(f, "perk not in dataset: {id}"),
             ResolveError::UnknownSkill(id) => write!(f, "skill not in dataset: {id}"),
             ResolveError::Derived(e) => write!(f, "derived stats: {e}"),
+            ResolveError::WrongClassPerk { perk, allowed } => {
+                let names: Vec<&str> = allowed.iter().map(ClassId::as_str).collect();
+                write!(f, "{perk} may only be slotted by {}", names.join(", "))
+            }
             ResolveError::WrongClass { item, allowed } => {
                 let names: Vec<&str> = allowed.iter().map(ClassId::as_str).collect();
                 write!(f, "{item} may only be carried by {}", names.join(", "))
@@ -187,6 +199,14 @@ pub struct Resolved {
     /// our numbers checkable against one of its numbers rather than merely
     /// comparable (ADR-012).
     pub breakdown: BTreeMap<DerivedStatId, StatBreakdown>,
+    /// Bonuses that depend on the swing rather than on the character.
+    ///
+    /// Blunt Weapon Mastery's 5% attack power is worth nothing while its
+    /// holder is swinging a sword, so folding it into `derived` would make
+    /// the sheet lie for every weapon they are not currently holding. It
+    /// waits here and the exchange applies the matching ones at the moment
+    /// it reads the stat (ADR-006 damage-kind amendment).
+    pub conditional: Vec<ConditionalBonus>,
     /// The `--explain` trail, in stage order.
     pub trace: Vec<StageNote>,
 }
@@ -371,9 +391,21 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
     }
     // Abilities contribute to the same `From Bonuses` row gear does, so
     // they join the other bucket rather than getting a path of their own.
+    let mut conditional: Vec<ConditionalBonus> = Vec::new();
     for sourced in &effects {
         if let Effect::DerivedBonus(id, value) = sourced.effect.value() {
             let value = *value;
+            // A gated bonus is not a property of the character, so it must
+            // not reach the curve or the clamp. It waits for a strike.
+            if let Some(kind) = sourced.when_kind {
+                conditional.push(ConditionalBonus {
+                    source: sourced.name.clone(),
+                    stat: id.clone(),
+                    kind,
+                    value: sourced.effect.clone().map(|_| value),
+                });
+                continue;
+            }
             other_parts
                 .entry(id.clone())
                 .or_default()
@@ -562,6 +594,7 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
             bonus: item_bonus,
             other: other_ar,
         },
+        conditional,
         trace,
     })
 }
@@ -571,6 +604,9 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
 struct SourcedEffect {
     name: String,
     effect: Confidence<Effect>,
+    /// Carried through from the dataset entry, because the gate travels
+    /// with the effect and not with the ability.
+    when_kind: Option<DamageKind>,
 }
 
 /// Resolves one dataset effect against the loadout's stack counts.
@@ -618,6 +654,20 @@ fn apply_stacks(
     }
 }
 
+/// A derived-stat bonus that only applies to one kind of swing.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ConditionalBonus {
+    /// The ability it came from, so a trace can name it. A gate that fires
+    /// unattributed is as hard to check as one that never fires.
+    pub source: String,
+    /// The stat it adds to.
+    pub stat: DerivedStatId,
+    /// The kind of swing that switches it on.
+    pub kind: DamageKind,
+    /// How much, at the stack count already resolved.
+    pub value: Confidence<Fixed>,
+}
+
 /// Everything the loadout's abilities contribute, and what was left out.
 struct CollectedEffects {
     effects: Vec<SourcedEffect>,
@@ -661,6 +711,12 @@ fn collect_effects(
         } else {
             perk.name.clone()
         };
+        if !perk.required_classes.is_empty() && !perk.required_classes.contains(&loadout.class) {
+            return Err(ResolveError::WrongClassPerk {
+                perk: id.clone(),
+                allowed: perk.required_classes.clone(),
+            });
+        }
         let first_holder = seen.insert(id.as_str().to_string()); // probe: ability-dedupe
         if !first_holder {
             ignored.push(name);
@@ -671,6 +727,7 @@ fn collect_effects(
             out.push(SourcedEffect {
                 name: name.clone(),
                 effect,
+                when_kind: entry.when_kind,
             });
         }
         Ok::<(), ResolveError>(())
@@ -701,6 +758,7 @@ fn collect_effects(
             out.push(SourcedEffect {
                 name: name.clone(),
                 effect,
+                when_kind: entry.when_kind,
             });
         }
         Ok::<(), ResolveError>(())
@@ -956,6 +1014,7 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.rogue.jokester"),
             name: "Jokester".to_string(),
+            required_classes: Vec::new(),
             effects: vec![StackedEffect::once(Confidence::Unverified(
                 Effect::AllAttributes(2),
             ))],
@@ -963,6 +1022,7 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.fighter.defense_mastery"),
             name: "Defense Mastery".to_string(),
+            required_classes: Vec::new(),
             effects: vec![
                 StackedEffect::once(Confidence::Verified(Effect::RaiseCap(
                     DerivedStatId::new(well_known::PDR),
@@ -1174,6 +1234,7 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.test.armor_bonus"),
             name: "Test Armor Bonus".to_string(),
+            required_classes: Vec::new(),
             effects: vec![StackedEffect::once(Confidence::Verified(
                 Effect::ItemArmorBonus(fx(50)),
             ))],
@@ -1269,6 +1330,7 @@ mod tests {
                 data.insert_perk(PerkDef {
                     id: PerkId::new("perk.prop.bonus"),
                     name: "Prop Bonus".to_string(),
+                    required_classes: Vec::new(),
                     effects: vec![StackedEffect::once(Confidence::Verified(
                         Effect::ItemArmorBonus(fx(bonus)),
                     ))],
@@ -1368,6 +1430,7 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.test.tough"),
             name: "Tough".to_string(),
+            required_classes: Vec::new(),
             effects: vec![StackedEffect::once(Confidence::Verified(
                 Effect::DerivedBonus(DerivedStatId::new(well_known::PDR), fx(7)),
             ))],
@@ -1396,6 +1459,7 @@ mod tests {
         data.insert_perk(PerkDef {
             id: PerkId::new("perk.test.enormous"),
             name: "Enormous".to_string(),
+            required_classes: Vec::new(),
             effects: vec![StackedEffect::once(Confidence::Verified(
                 Effect::DerivedBonus(DerivedStatId::new(well_known::PDR), fx(500)),
             ))],

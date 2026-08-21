@@ -273,3 +273,107 @@ mod tests {
         assert_eq!(rating.value(), pen.value());
     }
 }
+
+/// What kind of damage a strike deals.
+///
+/// The type does not add a step or reorder one: it chooses which stats the
+/// nine already have read (ADR-006 amendment: damage type). Physical Power
+/// Bonus or Magic Power Bonus at step 3; Armor Rating or Magic Resistance at
+/// step 5; the reduction each of those converts into at 6 and 7.
+///
+/// True damage is not a third type. It has its own field and lands after the
+/// whole reduction chain, because bypassing reduction is what it means.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum DamageType {
+    /// Reduced by armour.
+    #[default]
+    Physical,
+    /// Reduced by magic resistance.
+    Magic,
+}
+
+/// What kind of physical damage a swing deals.
+///
+/// Underneath the Physical/Magic type, and it does **not** change the
+/// number: the weapon decides that, and the same weapon at the same combo
+/// position hits for the same amount whichever kind it is. Armour does not
+/// resist the kinds differently.
+///
+/// The kind exists so perks and skills can condition on it — Cleric's Blunt
+/// Weapon Mastery adds 5% attack power "when attacking with a blunt
+/// weapon". See the ADR-006 damage-kind amendment.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum DamageKind {
+    /// A cut.
+    Slash,
+    /// A thrust.
+    Pierce,
+    /// An impact.
+    Blunt,
+}
+
+impl DamageKind {
+    /// The name used in files and readouts.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DamageKind::Slash => "slash",
+            DamageKind::Pierce => "pierce",
+            DamageKind::Blunt => "blunt",
+        }
+    }
+
+    /// Reads the name a data file writes.
+    ///
+    /// `None` for anything else, and the caller names the offender: a kind
+    /// nobody recognises must not become a swing that quietly matches no
+    /// gate, because a gate that never fires looks exactly like a perk that
+    /// does nothing.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "slash" => Some(DamageKind::Slash),
+            "pierce" => Some(DamageKind::Pierce),
+            "blunt" => Some(DamageKind::Blunt),
+            _ => None,
+        }
+    }
+}
+
+impl DamageType {
+    /// The name used in files and readouts.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DamageType::Physical => "physical",
+            DamageType::Magic => "magic",
+        }
+    }
+
+    /// The attacker's power bonus for this type: step 3.
+    #[must_use]
+    pub fn power_bonus(self) -> &'static str {
+        match self {
+            DamageType::Physical => crate::derived::well_known::PHYSICAL_POWER_BONUS,
+            DamageType::Magic => crate::derived::well_known::MAGIC_POWER_BONUS,
+        }
+    }
+
+    /// The defender's rating for this type: step 5.
+    #[must_use]
+    pub fn rating(self) -> &'static str {
+        match self {
+            DamageType::Physical => crate::derived::well_known::ARMOR_RATING,
+            DamageType::Magic => crate::derived::well_known::MAGIC_RESISTANCE,
+        }
+    }
+
+    /// The reduction that rating converts into: steps 6 and 7.
+    #[must_use]
+    pub fn reduction(self) -> &'static str {
+        match self {
+            DamageType::Physical => crate::derived::well_known::PDR,
+            DamageType::Magic => crate::derived::well_known::MAGICAL_DAMAGE_REDUCTION,
+        }
+    }
+}

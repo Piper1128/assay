@@ -41,6 +41,7 @@ use assay_core::schema::{
     AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, ComboHit, Effect,
     InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect, StrikeProfile, WeaponProfile,
 };
+use assay_core::stats::DamageKind;
 use serde::Deserialize;
 
 /// Provenance for one dataset file (ADR-004): where it came from, when, and
@@ -332,17 +333,13 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
                             .combo
                             .into_iter()
                             .map(|hit| -> Result<ComboHit, LoadError> {
-                                match hit.kind.as_str() {
-                                    "slash" | "pierce" | "blunt" => {}
-                                    other => {
-                                        return Err(LoadError::Invalid(format!(
-                                            "{}: unknown damage kind {other:?}",
-                                            dto.id
-                                        )));
-                                    }
-                                }
                                 Ok(ComboHit {
-                                    kind: hit.kind,
+                                    kind: DamageKind::parse(&hit.kind).ok_or_else(|| {
+                                        LoadError::Invalid(format!(
+                                            "{}: unknown damage kind {:?}. It is                                              `slash`, `pierce` or `blunt` — a kind                                              nobody recognises would match no gate,                                              which reads exactly like a perk that                                              does nothing.",
+                                            dto.id, hit.kind
+                                        ))
+                                    })?,
                                     scaling: hit.scaling.into_fixed()?,
                                 })
                             })
@@ -361,6 +358,7 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
         entities.insert_perk(PerkDef {
             id: PerkId::new(&dto.id),
             name: dto.name,
+            required_classes: dto.required_classes.iter().map(ClassId::new).collect(),
             effects: effects(&dto.effects)?,
         });
     }
@@ -498,9 +496,31 @@ fn effects(dtos: &[EffectDto]) -> Result<Vec<StackedEffect>, LoadError> {
                     )));
                 }
             }
+            let when_kind = dto
+                .when_kind
+                .as_deref()
+                .map(|text| {
+                    DamageKind::parse(text).ok_or_else(|| {
+                        LoadError::Invalid(format!(
+                            "unknown when_kind {text:?}. It is `slash`, `pierce`                              or `blunt` — a gate on a kind nobody recognises                              would never fire, which reads exactly like a perk                              that does nothing."
+                        ))
+                    })
+                })
+                .transpose()?;
+            // Only a bonus to a derived stat can be gated, because only that
+            // one is applied where the strike is known. Accepting a gate the
+            // pipeline would then ignore is how a perk ends up doing nothing
+            // while looking configured.
+            if when_kind.is_some() && !matches!(effect, Effect::DerivedBonus(..)) {
+                return Err(LoadError::Invalid(format!(
+                    "{:?} cannot be gated on a damage kind: only derived_bonus                      is applied at the strike, where the kind is known. A gate                      here would be read and never used.",
+                    dto.kind
+                )));
+            }
             Ok(StackedEffect {
                 effect: dto.confidence.wrap_with_note(effect, dto.note.as_deref())?,
                 max_stacks: dto.max_stacks,
+                when_kind,
             })
         })
         .collect()
@@ -795,6 +815,10 @@ struct EffectDto {
     /// Present when the effect stacks; the value above is then per stack.
     #[serde(default)]
     max_stacks: Option<u32>,
+    /// `slash`, `pierce` or `blunt` when the effect only applies to that
+    /// kind of swing.
+    #[serde(default)]
+    when_kind: Option<String>,
     #[serde(default)]
     note: Option<String>,
 }
@@ -808,6 +832,9 @@ struct PerkDto {
     #[serde(default)]
     renamed_from: Option<String>,
     name: String,
+    /// The classes that may slot it. Empty means anyone.
+    #[serde(default)]
+    required_classes: Vec<String>,
     effects: Vec<EffectDto>,
 }
 
@@ -846,6 +873,47 @@ mod tests {
 
     fn data_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
+    }
+
+    fn parse_effects(json: &str) -> Result<Vec<StackedEffect>, LoadError> {
+        let dtos: Vec<EffectDto> = serde_json::from_str(json).expect("valid dto json");
+        effects(&dtos)
+    }
+
+    #[test]
+    fn a_gate_on_a_kind_nobody_recognises_is_refused() {
+        // A gate that can never fire reads exactly like a perk that does
+        // nothing, and a reviewer cannot tell the two apart by looking.
+        let err = parse_effects(
+            r#"[{"confidence":"verified","kind":"derived_bonus",
+                 "target":"derived.physical_power_bonus","micro":5000000,
+                 "when_kind":"bludgeon"}]"#,
+        )
+        .unwrap_err();
+        let text = format!("{err:?}");
+        assert!(text.contains("bludgeon"), "{text}");
+        assert!(text.contains("slash"), "{text}");
+    }
+
+    #[test]
+    fn a_gate_on_an_effect_that_cannot_use_one_is_refused() {
+        // Only derived_bonus is applied where the swing is known. Accepting
+        // a gate the pipeline then ignores is how a perk ends up looking
+        // configured and doing nothing.
+        let err = parse_effects(
+            r#"[{"confidence":"verified","kind":"move_speed_add","micro":5000000,
+                 "when_kind":"blunt"}]"#,
+        )
+        .unwrap_err();
+        assert!(format!("{err:?}").contains("cannot be gated"), "{err:?}");
+    }
+
+    #[test]
+    fn an_ungated_effect_is_unchanged() {
+        let ok =
+            parse_effects(r#"[{"confidence":"verified","kind":"move_speed_add","micro":5000000}]"#)
+                .unwrap();
+        assert_eq!(ok[0].when_kind, None);
     }
 
     #[test]

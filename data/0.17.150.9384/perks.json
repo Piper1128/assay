@@ -3,6 +3,9 @@
     {
       "id": "perk.rogue.jokester",
       "name": "Jokester",
+      "required_classes": [
+        "class.rogue"
+      ],
       "effects": [
         {
           "confidence": "unverified",
@@ -14,6 +17,9 @@
     {
       "id": "perk.fighter.defense_mastery",
       "name": "Defense Mastery",
+      "required_classes": [
+        "class.fighter"
+      ],
       "effects": [
         {
           "confidence": "verified",
@@ -25,6 +31,23 @@
           "confidence": "unverified",
           "kind": "item_armor_bonus",
           "micro": 15000000
+        }
+      ]
+    },
+    {
+      "id": "perk.cleric.blunt_weapon_mastery",
+      "name": "Blunt Weapon Mastery",
+      "required_classes": [
+        "class.cleric"
+      ],
+      "effects": [
+        {
+          "confidence": "unknown",
+          "note": "Card reads 'Increases physical attack power by 5% when attacking with a blunt weapon'. Community reports say it applies only to Maces rather than to all Blunt damage; the card is what is modelled and the contradiction is recorded in data/README.md.",
+          "kind": "derived_bonus",
+          "target": "derived.physical_power_bonus",
+          "micro": 5000000,
+          "when_kind": "blunt"
         }
       ]
     }

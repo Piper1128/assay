@@ -25,6 +25,8 @@ use assay_core::exchange::{DamageType, ExchangeContext, Strike};
 use assay_core::fixed::Fixed;
 use assay_core::ids::{ItemId, SkillId};
 use assay_core::schema::{DatasetSource, WeaponProfile};
+#[cfg(test)]
+use assay_core::stats::DamageKind;
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use serde::Deserialize;
 
@@ -93,6 +95,9 @@ pub(crate) fn parse(
             })
         })?;
         basic.scaling = hit.scaling.clone().map(ScalingCoefficient::new);
+        // Swing three of an Arming Sword is a Pierce, and a gate keyed on
+        // Pierce should fire for it and not for the two Slashes before it.
+        basic.kind = Some(hit.kind);
     }
 
     // A named skill fills in what it knows, over the weapon and under the
@@ -143,6 +148,10 @@ pub(crate) fn parse(
 
     let strike = Strike {
         weapon: basic.weapon.clone(),
+        // The kind follows the weapon, not the skill. "When attacking with
+        // a blunt weapon" is a statement about what is in your hand, so a
+        // Cleric's skill swung with a mace is still a blunt attack.
+        kind: basic.kind,
         // Naming a skill, picking a swing, or overriding the scaling by
         // hand all say "this blow", and the weapon's chain is a different
         // question. Overriding some other field — a hit location, a flat
@@ -335,13 +344,17 @@ mod tests {
     /// The Arming Sword's chain, as the weapon page prints it.
     fn chained() -> WeaponProfile {
         WeaponProfile {
-            combo: [("slash", 100), ("slash", 105), ("pierce", 110)]
-                .into_iter()
-                .map(|(kind, pct)| assay_core::schema::ComboHit {
-                    kind: kind.to_string(),
-                    scaling: Confidence::Unverified(Fixed::from_int(pct)),
-                })
-                .collect(),
+            combo: [
+                (DamageKind::Slash, 100),
+                (DamageKind::Slash, 105),
+                (DamageKind::Pierce, 110),
+            ]
+            .into_iter()
+            .map(|(kind, pct)| assay_core::schema::ComboHit {
+                kind,
+                scaling: Confidence::Unverified(Fixed::from_int(pct)),
+            })
+            .collect(),
             ..weapon()
         }
     }

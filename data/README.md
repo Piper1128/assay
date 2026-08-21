@@ -258,6 +258,17 @@ Weapon Mastery reads *"Increases physical attack power by 5% when
 attacking with a blunt weapon"* — a bonus to a derived stat, gated on
 what the swing is. That is the whole mechanism.
 
+**Gating is built; seeing it needs a Cleric.** The mechanism resolves,
+traces and is tested — a gated bonus stays out of the character sheet and
+is added at the moment the exchange reads the stat, so it moves the number
+for a mace and not for a sword. The one perk that uses it belongs to the
+Cleric, and there is no Cleric class in the dataset, so nothing can slot
+it yet. A character sheet screenshot is all that is missing.
+
+While adding it: perks were **not** class-locked. `ItemDef` has
+`required_classes` and `PerkDef` did not, so a Fighter could slot a Cleric
+perk and resolve a stat block nobody in the game can have. Now they match.
+
 **Open, and it contradicts the card:** community reports say Cleric's
 Blunt Weapon Mastery applies only to Maces rather than to all Blunt
 damage. The description is what is modelled, because the description is

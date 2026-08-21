@@ -244,6 +244,20 @@ fi
 git checkout --quiet -- crates/assay-cli/src/situation.rs
 verdict combo_counts_from_zero "$gate_rejected"
 
+# ── gate_ignores_kind ────────────────────────────────────────────────────────
+# A gate that fires on every swing (ADR-006 damage-kind amendment) must fail:
+# Blunt Weapon Mastery would pay out while its holder swings a sword, which is
+# the exact wrong answer the gate exists to avoid — and an easy one to write,
+# because it looks like the condition is still there.
+mutate crates/assay-core/src/exchange.rs '/probe: gate-checks-kind/ s/bonus.kind == kind;/true;/'
+if cargo test --quiet -p assay-core >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-core/src/exchange.rs
+verdict gate_ignores_kind "$gate_rejected"
+
 # ── final tree check ─────────────────────────────────────────────────────────
 if ! git diff --quiet -- crates/; then
     echo "probes: tree left dirty after restore — fix run.sh"

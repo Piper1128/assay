@@ -213,6 +213,7 @@ mod tests {
             derived,
             caps: BTreeMap::new(),
             breakdown: BTreeMap::new(),
+            conditional: Vec::new(),
             armor: crate::resolve::ArmorComposition {
                 item: Confidence::Verified(Fixed::ZERO),
                 bonus: Confidence::Verified(Fixed::ZERO),

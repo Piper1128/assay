@@ -226,6 +226,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
         data.insert_perk(PerkDef {
             id: PerkId::new(perk["id"].as_str().expect("perk id")),
             name: perk["name"].as_str().expect("perk name").to_string(),
+            required_classes: Vec::new(),
             effects: perk["effects"]
                 .as_array()
                 .expect("effects")
@@ -322,6 +323,7 @@ fn loadout(node: &Value) -> Loadout {
 fn strike(node: &Value) -> Strike {
     Strike {
         pinned: false,
+        kind: None,
         // The vector's exchanges name no weapon, so nothing looks up a
         // swing time and time-to-kill stays absent — which is what the
         // mirror computes too.

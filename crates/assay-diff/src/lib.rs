@@ -326,7 +326,10 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
                         // it has to surface here. `fields()` is written by
                         // hand and anything not listed is invisible.
                         for (n, hit) in weapon.combo.iter().enumerate() {
-                            map.insert(format!("weapon.combo.{n}.kind"), hit.kind.clone());
+                            map.insert(
+                                format!("weapon.combo.{n}.kind"),
+                                hit.kind.as_str().to_string(),
+                            );
                             insert_graded(
                                 &mut map,
                                 &format!("weapon.combo.{n}.scaling"),
