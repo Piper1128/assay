@@ -320,11 +320,27 @@ def resolve(dataset: dict, loadout: dict) -> dict:
                 )
     # Abilities contribute to the same "From Bonuses" row gear does, so they
     # join the other bucket rather than getting a path of their own.
+    #
+    # Unless they are gated on a kind of swing. Blunt Weapon Mastery's 5% is
+    # worth nothing while its holder is swinging a sword, so folding it in
+    # here would make the sheet lie for every weapon they are not currently
+    # holding. It waits for a strike instead (ADR-006 damage-kind amendment).
+    conditional = []
     for effect in effects:
-        if effect["value"]["kind"] == "derived_bonus":
-            other_parts.setdefault(effect["value"]["target"], []).append(
-                {**effect, "value": effect["value"]["micro"]}
+        if effect["value"]["kind"] != "derived_bonus":
+            continue
+        if effect["value"].get("when_kind") is not None:
+            conditional.append(
+                {
+                    "stat": effect["value"]["target"],
+                    "kind": effect["value"]["when_kind"],
+                    "value": {**effect, "value": effect["value"]["micro"]},
+                }
             )
+            continue
+        other_parts.setdefault(effect["value"]["target"], []).append(
+            {**effect, "value": effect["value"]["micro"]}
+        )
     item_ar_parts = item_parts.get("derived.armor_rating", [])
     other_ar_parts = other_parts.get("derived.armor_rating", [])
     item_bonus = fold_sum(
@@ -413,6 +429,9 @@ def resolve(dataset: dict, loadout: dict) -> dict:
             "bonus": item_bonus,
             "other": fold_sum(other_ar_parts),
         },
+        # Bonuses that depend on the swing rather than on the character, held
+        # out of `derived` and applied at the strike instead.
+        "conditional": conditional,
     }
 
 
@@ -447,6 +466,25 @@ def _pdr_at(dataset: dict, defender: dict, armor: int, reduction_id: str = "deri
     return map_conf(d["curve"], apply)
 
 
+def gated(who: dict, stat_id: str, swing_kind, value: dict) -> dict:
+    """A stat, plus whatever gates this swing switches on.
+
+    The gates live beside the resolved block rather than inside its numbers
+    because they depend on the swing, not the character. This is the moment
+    the swing is finally known, so this is where they are worth anything.
+
+    A swing whose kind is unknown switches nothing on. A bonus that fired
+    because we could not tell would land in a number nobody can check.
+    """
+    if swing_kind is None:
+        return value
+    for bonus in who.get("conditional", []):
+        if bonus["kind"] != swing_kind or bonus["stat"] != stat_id:
+            continue
+        value = zip_with(value, bonus["value"], lambda a, b: a + b)
+    return value
+
+
 def exchange_damage(
     dataset: dict, attacker: dict, defender: dict, strike: dict, context: dict
 ) -> dict:
@@ -477,9 +515,12 @@ def exchange_damage(
     reduction_id = ("derived.magical_damage_reduction" if kind == "magic"
                     else "derived.pdr")
 
-    # 3: + the type's power bonus, with the situational adjustment.
+    # 3: + the type's power bonus, with the situational adjustment. The
+    # gates fire here, at the read, for the same reason the type chooses the
+    # stat here: nothing about the nine steps changes, only what they read.
+    swing_kind = strike.get("kind")
     power = zip_with(
-        attacker["derived"][power_id],
+        gated(attacker, power_id, swing_kind, attacker["derived"][power_id]),
         context["power_bonus_adjust"],
         lambda p, a: p + a,
     )

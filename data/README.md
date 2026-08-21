@@ -269,6 +269,13 @@ While adding it: perks were **not** class-locked. `ItemDef` has
 `required_classes` and `PerkDef` did not, so a Fighter could slot a Cleric
 perk and resolve a stat block nobody in the game can have. Now they match.
 
+**Not exercised by any committed fixture.** The Rust and the Python mirror
+both implement the gate and both were checked by hand, but nothing in
+`fixtures/slice/` swings a gated blow — the only gated perk is Cleric-only
+and there is no Cleric class, so no loadout can take it. The cross-check
+therefore agrees about the gate without ever testing it. The Cleric class
+closes this at the same time as everything else it blocks.
+
 **Open, and it contradicts the card:** community reports say Cleric's
 Blunt Weapon Mastery applies only to Maces rather than to all Blunt
 damage. The description is what is modelled, because the description is

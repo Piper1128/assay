@@ -12,6 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use assay_core::exchange::{DamageType, Exchange, ExchangeContext, Strike};
+use assay_core::stats::DamageKind;
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use assay_core::{
     AbilityId, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
@@ -93,6 +94,10 @@ fn effect(node: &Value) -> Confidence<Effect> {
             DerivedStatId::new(node["target"].as_str().expect("raise_cap target")),
             Fixed::from_micro(node["micro"].as_i64().expect("micro")),
         ),
+        "derived_bonus" => Effect::DerivedBonus(
+            DerivedStatId::new(node["target"].as_str().expect("derived_bonus target")),
+            Fixed::from_micro(node["micro"].as_i64().expect("micro")),
+        ),
         "item_armor_bonus" => {
             Effect::ItemArmorBonus(Fixed::from_micro(node["micro"].as_i64().expect("micro")))
         }
@@ -105,6 +110,27 @@ fn effect(node: &Value) -> Confidence<Effect> {
         other => panic!("unknown effect kind: {other}"),
     };
     graded(node, payload)
+}
+
+/// One dataset effect, gate and all.
+///
+/// `StackedEffect::once` drops the gate, and a gated effect that arrives
+/// ungated does not fail — it applies to every swing instead of one kind of
+/// swing, and the number is merely wrong. This reader is a second
+/// implementation of the loader and every field it forgets is a field the
+/// vector silently stops checking.
+fn stacked(node: &Value) -> StackedEffect {
+    StackedEffect {
+        effect: effect(node),
+        max_stacks: node
+            .get("max_stacks")
+            .and_then(Value::as_u64)
+            .map(|n| u32::try_from(n).expect("max_stacks fits u32")),
+        when_kind: node.get("when_kind").map(|k| {
+            DamageKind::parse(k.as_str().expect("when_kind is a string"))
+                .expect("known damage kind")
+        }),
+    }
 }
 
 fn dataset(node: &Value) -> InMemoryDataset {
@@ -232,7 +258,7 @@ fn dataset(node: &Value) -> InMemoryDataset {
                 .as_array()
                 .expect("effects")
                 .iter()
-                .map(|e| StackedEffect::once(effect(e)))
+                .map(stacked)
                 .collect(),
         });
     }
