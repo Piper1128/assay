@@ -245,12 +245,23 @@ the game open produces one.
 Measuring one weapon would be enough to make the race readable, because
 the point is the ratio between two builds, not the absolute seconds.
 
-**Not modelled:** physical damage also has a *kind* — Slash, Pierce or
-Blunt — separate from the Physical/Magic split already built. The kind is
-recorded on each swing and nothing consumes it. Whether armour resists
-these differently is exactly the sort of thing plate and cloth exist for,
-but nothing has measured it, and inventing a rule would be worse than
-leaving a field visibly waiting.
+**What the kind is for.** Physical damage also has a *kind* — Slash,
+Pierce or Blunt — separate from the Physical/Magic split. It does **not**
+change the damage value: the weapon's own number does that, and a Blunt
+swing and a Slash swing of the same weapon at the same combo position hit
+for the same amount. Armour does not resist the kinds differently. (An
+earlier note here guessed it might; that guess was wrong and is recorded
+rather than deleted, next to the flat-PDR one.)
+
+The kind exists so perks and skills can condition on it. Cleric's Blunt
+Weapon Mastery reads *"Increases physical attack power by 5% when
+attacking with a blunt weapon"* — a bonus to a derived stat, gated on
+what the swing is. That is the whole mechanism.
+
+**Open, and it contradicts the card:** community reports say Cleric's
+Blunt Weapon Mastery applies only to Maces rather than to all Blunt
+damage. The description is what is modelled, because the description is
+the source; the contradiction is written down here and not built on.
 
 ### Two hit counts, and why both stay
 
