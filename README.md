@@ -126,12 +126,29 @@ format. Same writer, same reader, both in Rust.
 
 ### In a browser
 
+**<https://piper1128.github.io/assay/>** — built and published from `main`
+every time the gates pass, so it is never behind the dataset it embeds.
+
+That URL is the answer to a problem the local build created. `ui/assay.html`
+is not committed on purpose: it carries both the resolver and the dataset, so
+a checked-in copy drifts behind the thing it claims to compute. But that left
+anyone contributing observations working against whatever 1 MiB file they
+were last sent. Now everyone refreshes the same page.
+
+To build it yourself — offline, from a `file://` URL, with no server:
+
 ```
 python tools/build-ui.py --open
 ```
 
 Builds `ui/assay.html` and opens it: one file, no server, no install, no
-network. It runs the same resolver the CLI does — `assay-core` is
+network. Text recognition is the single exception and says so on the page —
+it fetches a pinned, SRI-checked release of Tesseract the first time and then
+works offline. The hash covers the entry script; the worker, the wasm core
+and the training data are fetched by Tesseract itself and are pinned to exact
+versions, which a hash cannot cover because they are not script tags.
+Vendoring the lot the way the resolver is vendored does not fit: the training
+data alone is larger than this whole page. It runs the same resolver the CLI does — `assay-core` is
 `no_std + alloc` with no floats and no hash maps, which compiles to
 `wasm32-unknown-unknown` unchanged, so the page does not carry a second
 implementation of the pipeline. Numbers cross into JavaScript as decimal

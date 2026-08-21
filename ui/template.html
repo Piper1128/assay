@@ -467,8 +467,10 @@
 
     <h2 style="margin-top:22px">Read a card</h2>
     <p class="hint">
-      Screenshot an item tooltip and paste it here. Text recognition needs the
-      network once, then works offline; everything else already does.
+      Screenshot an item tooltip and paste it here. Text recognition is the
+      one thing on this page that reaches the network: it fetches a pinned,
+      hash-checked release of Tesseract the first time, then works offline.
+      Nothing else here ever does, and nothing you type leaves the page.
     </p>
     <div class="field">
       <label for="observer">Your handle, for submissions</label>
@@ -1444,19 +1446,59 @@
     if (f) readCard(f);
   });
 
+  /// Where text recognition comes from, and the one place this page
+  /// reaches the network.
+  ///
+  /// Every URL is pinned to an exact version and the entry script carries
+  /// a Subresource Integrity hash, so the browser refuses it outright if
+  /// the bytes are not the ones this hash was taken from. That matters
+  /// more than it used to: the page is served to other people now, and an
+  /// unpinned CDN script is an open invitation on someone else's machine.
+  ///
+  /// The hash covers the entry script only. Tesseract then fetches its
+  /// worker, its wasm core and the English training data itself, and a
+  /// hash cannot be put on a fetch made by code rather than by a tag. They
+  /// are pinned to exact versions instead, which is the difference between
+  /// "whatever that name resolves to today" and "these releases".
+  ///
+  /// Vendoring the lot the way the resolver is vendored was considered and
+  /// does not fit: the training data alone is larger than this whole page.
+  const OCR = {
+    version: "5.1.1",
+    core: "6.0.0",
+    entry: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+    integrity: "sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F",
+  };
+
   let tesseract = null;
   function loadTesseract() {
     if (tesseract) return tesseract;
     tesseract = new Promise((ok, no) => {
       const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+      s.src = OCR.entry;
+      s.integrity = OCR.integrity;
+      // Required for the browser to check the hash at all: without it the
+      // response is opaque and the integrity attribute is ignored.
+      s.crossOrigin = "anonymous";
       s.onload = ok;
       s.onerror = () => no(new Error(
-        "could not load the text recogniser. It comes from the network the " +
-        "first time; the rest of this page never does."));
+        "could not load the text recogniser, or it did not match the hash " +
+        "this page pins it to. It comes from the network the first time; " +
+        "the rest of this page never does."));
       document.head.append(s);
     });
     return tesseract;
+  }
+
+  /// The pieces Tesseract fetches for itself, named rather than left to
+  /// its defaults so an upgrade on their side cannot arrive unannounced.
+  function ocrPaths() {
+    const npm = "https://cdn.jsdelivr.net/npm";
+    return {
+      workerPath: `${npm}/tesseract.js@${OCR.version}/dist/worker.min.js`,
+      corePath: `${npm}/tesseract.js-core@${OCR.core}`,
+      langPath: `${npm}/@tesseract.js-data/eng@1.0.0/4.0.0_best_int`,
+    };
   }
 
   async function readCard(file) {
@@ -1464,7 +1506,7 @@
     host.replaceChildren(el("p", "hint", "reading…"));
     try {
       await loadTesseract();
-      const { data } = await Tesseract.recognize(file, "eng");
+      const { data } = await Tesseract.recognize(file, "eng", ocrPaths());
       showCard(parseCard(data.text));
     } catch (e) {
       host.replaceChildren(el("div", "error", e.message || String(e)));

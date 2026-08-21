@@ -1,0 +1,98 @@
+# Publishes the browser page.
+#
+# `ui/assay.html` is deliberately not committed: it embeds both the resolver
+# and the dataset, so a checked-in copy would drift behind the thing it
+# claims to compute. That left contributors passing a 1 MiB file around by
+# hand and working against whatever build they last received.
+#
+# So it is built here instead, from the same two sources the local build uses
+# — `ui/template.html` and the wasm crate — and published whenever the gates
+# pass on main. The person applying submissions and the people sending them
+# refresh one URL and are on the same dataset by construction.
+#
+# It runs on `workflow_run` rather than on push so that it cannot publish a
+# commit the gates rejected. A page that shows numbers a probe would have
+# refused is worse than no page: it looks like an answer.
+name: pages
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: read the code, write a Pages deployment, nothing else.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and a newer commit wins. Cancelling in progress is
+# right here in a way it is not for tests — a superseded page has no value.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    # A failed ci run reaches this workflow too; it just must not deploy.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # rust-toolchain.toml controls version and components. The wasm target
+      # is added here rather than there because only this job needs it, and a
+      # target listed in the toolchain file is downloaded by every job that
+      # checks the repo out.
+      - name: Toolchain
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The CLI and the crate must be the same version or the generated glue
+      # does not match the module it is glue for. The crate pins `=0.2.100`;
+      # this reads that pin back out instead of repeating it, so the two
+      # cannot drift apart in a commit that only touches one of them.
+      - name: Install wasm-bindgen CLI at the crate's pinned version
+        run: |
+          pinned=$(grep -oP '^wasm-bindgen = "=\K[0-9.]+' crates/assay-wasm/Cargo.toml)
+          test -n "$pinned" || { echo "could not read the wasm-bindgen pin"; exit 1; }
+          echo "wasm-bindgen pinned at $pinned"
+          cargo install wasm-bindgen-cli --version "$pinned" --locked
+
+      - name: Build the page
+        run: python3 tools/build-ui.py
+
+      # Pages serves index.html; the file is called assay.html because that is
+      # what it is locally. Both names are published so a link to either works
+      # and so the file someone downloads keeps the name it had.
+      - name: Stage the site
+        run: |
+          mkdir -p site
+          cp ui/assay.html site/index.html
+          cp ui/assay.html site/assay.html
+          ls -l site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
