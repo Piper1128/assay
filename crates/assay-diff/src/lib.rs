@@ -322,6 +322,17 @@ fn fields(dataset: &Dataset) -> BTreeMap<String, BTreeMap<String, String>> {
                     }
                     insert_graded(&mut map, "move_speed_add", def.move_speed_add.as_ref());
                     if let Some(weapon) = &def.weapon {
+                        // A patch that reweights a combo is a patch note, so
+                        // it has to surface here. `fields()` is written by
+                        // hand and anything not listed is invisible.
+                        for (n, hit) in weapon.combo.iter().enumerate() {
+                            map.insert(format!("weapon.combo.{n}.kind"), hit.kind.clone());
+                            insert_graded(
+                                &mut map,
+                                &format!("weapon.combo.{n}.scaling"),
+                                Some(&hit.scaling),
+                            );
+                        }
                         insert_graded(&mut map, "weapon.base_damage", Some(&weapon.base_damage));
                         insert_graded(&mut map, "weapon.armor_pen", Some(&weapon.armor_pen));
                     }

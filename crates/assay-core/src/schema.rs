@@ -159,6 +159,10 @@ pub struct WeaponProfile {
     pub base_damage: Confidence<Fixed>,
     /// Armor penetration in percentage points (ADR-006 step 5).
     pub armor_pen: Confidence<Fixed>,
+    /// The chain of swings this weapon makes, in order. Empty when nobody
+    /// has transcribed it; a weapon with no combo swings at 100% forever,
+    /// which is what the model assumed before the chains were recorded.
+    pub combo: Vec<ComboHit>,
     /// Seconds between swings at 0% Action Speed.
     ///
     /// Optional because no item card prints it and nothing in the dataset
@@ -170,6 +174,25 @@ pub struct WeaponProfile {
     /// Absent means time-to-kill is unavailable and says so, rather than
     /// being guessed from a plausible-looking constant.
     pub swing_time: Option<Confidence<Fixed>>,
+}
+
+/// One swing in a weapon's chain.
+///
+/// A weapon is a sequence, not a single blow: an Arming Sword runs
+/// `Slash/Slash/Pierce` at `100%/105%/110%`, and a War Hammer runs four
+/// swings to 115%. Treating every hit as the first understates a fight by
+/// however much the chain climbs.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ComboHit {
+    /// `slash`, `pierce` or `blunt`, as the weapon page names it.
+    ///
+    /// Recorded and not consumed. Armour types plausibly resist these
+    /// differently — that is what plate and cloth are for — but nothing
+    /// has measured how, and a kind that silently did nothing would be
+    /// worse than one that visibly waits.
+    pub kind: String,
+    /// This swing's share of base damage, in percentage points.
+    pub scaling: Confidence<Fixed>,
 }
 
 /// How a skill attacks: the parts of ADR-006's first eight steps that

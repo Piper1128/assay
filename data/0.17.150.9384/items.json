@@ -43,7 +43,30 @@
         "armor_pen": {
           "confidence": "verified",
           "micro": 0
-        }
+        },
+        "combo": [
+          {
+            "kind": "slash",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 100000000
+            }
+          },
+          {
+            "kind": "slash",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 105000000
+            }
+          },
+          {
+            "kind": "pierce",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 110000000
+            }
+          }
+        ]
       }
     },
     {
@@ -67,7 +90,30 @@
         "armor_pen": {
           "confidence": "unverified",
           "micro": 5000000
-        }
+        },
+        "combo": [
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 100000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 110000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 110000000
+            }
+          }
+        ]
       }
     },
     {
@@ -135,7 +181,30 @@
         "armor_pen": {
           "confidence": "unverified",
           "micro": 10000000
-        }
+        },
+        "combo": [
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 100000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 105000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 110000000
+            }
+          }
+        ]
       }
     },
     {
@@ -297,7 +366,30 @@
         "armor_pen": {
           "confidence": "unverified",
           "micro": 10000000
-        }
+        },
+        "combo": [
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 100000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 105000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 110000000
+            }
+          }
+        ]
       }
     },
     {
@@ -448,7 +540,37 @@
         "armor_pen": {
           "confidence": "unverified",
           "micro": 10000000
-        }
+        },
+        "combo": [
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 100000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 105000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 110000000
+            }
+          },
+          {
+            "kind": "blunt",
+            "scaling": {
+              "confidence": "unverified",
+              "micro": 115000000
+            }
+          }
+        ]
       }
     }
   ]

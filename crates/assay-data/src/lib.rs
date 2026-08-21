@@ -38,8 +38,8 @@ use assay_core::fixed::Fixed;
 use assay_core::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use assay_core::loadout::Slot;
 use assay_core::schema::{
-    AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, Effect, InMemoryDataset, ItemDef,
-    PerkDef, SkillDef, StackedEffect, StrikeProfile, WeaponProfile,
+    AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, ComboHit, Effect,
+    InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect, StrikeProfile, WeaponProfile,
 };
 use serde::Deserialize;
 
@@ -328,6 +328,25 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
                         base_damage: w.base_damage.into_fixed()?,
                         armor_pen: w.armor_pen.into_fixed()?,
                         swing_time: w.swing_time.map(GradedMicro::into_fixed).transpose()?,
+                        combo: w
+                            .combo
+                            .into_iter()
+                            .map(|hit| -> Result<ComboHit, LoadError> {
+                                match hit.kind.as_str() {
+                                    "slash" | "pierce" | "blunt" => {}
+                                    other => {
+                                        return Err(LoadError::Invalid(format!(
+                                            "{}: unknown damage kind {other:?}",
+                                            dto.id
+                                        )));
+                                    }
+                                }
+                                Ok(ComboHit {
+                                    kind: hit.kind,
+                                    scaling: hit.scaling.into_fixed()?,
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
                     })
                 })
                 .transpose()?,
@@ -698,6 +717,14 @@ impl ItemAttributesDto {
     }
 }
 
+/// One swing in a weapon's chain.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComboHitDto {
+    kind: String,
+    scaling: GradedMicro,
+}
+
 /// How a skill attacks, if it attacks. Absence of a field means "as the
 /// weapon swings", which is not the same statement as zero.
 #[derive(Debug, Clone, Deserialize)]
@@ -724,6 +751,9 @@ struct StrikeProfileDto {
 struct WeaponDto {
     base_damage: GradedMicro,
     armor_pen: GradedMicro,
+    /// The chain of swings, in order.
+    #[serde(default)]
+    combo: Vec<ComboHitDto>,
     /// Seconds between swings at 0% Action Speed. No card prints it, so
     /// nothing has one yet — the field is here so a measurement has
     /// somewhere to land.

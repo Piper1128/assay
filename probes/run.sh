@@ -208,6 +208,19 @@ fi
 git checkout --quiet -- crates/assay-core/src/stats.rs
 verdict pdr_mod_additive "$gate_rejected"
 
+# ── combo_counts_from_zero ───────────────────────────────────────────────────
+# Reading the chain from zero must fail. A weapon's swings are named 1, 2, 3
+# on the page they were transcribed from, and off-by-one here does not crash:
+# it quietly answers about the wrong swing, at a scaling 5 points out.
+sed -i '/probe: combo-counts-from-one/ s/n - 1;/n;/' crates/assay-cli/src/situation.rs
+if cargo test --quiet -p assay-cli >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-cli/src/situation.rs
+verdict combo_counts_from_zero "$gate_rejected"
+
 # ── final tree check ─────────────────────────────────────────────────────────
 if ! git diff --quiet -- crates/; then
     echo "probes: tree left dirty after restore — fix run.sh"

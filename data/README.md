@@ -209,3 +209,45 @@ Grading it that way is not a shortcut. The static/rolled split matters for the
 loadout it is a fact about the copy in your hands, and every line on a card you
 are looking at is equally that. So the whole card arrives as rolls, `Verified`,
 and nothing is promoted or demoted on the way in.
+
+## Weapon chains, and the timings that do not exist
+
+Asked to find swing times and combo data and record them as `unverified`,
+the answer split cleanly in half.
+
+**The chains exist.** The wiki's weapon pages print a Primary Attacks line
+per weapon, and the weapons differ from each other in ways that matter:
+
+| Weapon | Chain | Scaling |
+| --- | --- | --- |
+| Arming Sword | Slash / Slash / Pierce | 100 / 105 / 110 |
+| Flanged Mace | Blunt ×3 | 100 / 105 / 110 |
+| Morning Star | Blunt ×3 | 100 / 105 / 110 |
+| War Hammer | Blunt ×4 | 100 / 105 / 110 / 115 |
+| Club | Blunt ×3 | 100 / 110 / 110 |
+
+Two things are worth noticing. The War Hammer's chain is a swing longer
+than everyone else's, so its last blow is the hardest in the dataset. And
+the Club climbs on its *second* swing where the others climb on their
+third, which is the sort of difference that would never show up in a tool
+that treats a weapon as one number.
+
+All of it is recorded `unverified`: the wiki has contradicted the game
+three times in this project, and a chain nobody has watched land is a
+transcription, not a measurement.
+
+**The timings do not exist.** No page carries a swing time, a windup, an
+animation length, or an attacks-per-second figure — for any weapon, in any
+unit. So `WeaponProfile.swing_time` stays empty and time-to-kill keeps
+saying it does not know, which is the correct answer until someone with
+the game open produces one.
+
+Measuring one weapon would be enough to make the race readable, because
+the point is the ratio between two builds, not the absolute seconds.
+
+**Not modelled:** physical damage also has a *kind* — Slash, Pierce or
+Blunt — separate from the Physical/Magic split already built. The kind is
+recorded on each swing and nothing consumes it. Whether armour resists
+these differently is exactly the sort of thing plate and cloth exist for,
+but nothing has measured it, and inventing a rule would be worse than
+leaving a field visibly waiting.

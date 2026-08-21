@@ -71,6 +71,30 @@ pub(crate) fn parse(
     let dto: SituationDto = toml::from_str(text).map_err(SituationError::Syntax)?;
     let mut basic = Strike::basic_swing(weapon_id, weapon);
 
+    // Which swing in the chain, if the weapon has one. A weapon is a
+    // sequence — an Arming Sword runs 100/105/110 — so "what does it hit
+    // for" has as many answers as the chain is long, and asking for the
+    // third is a different question from asking for the first.
+    if let Some(n) = dto.combo_hit {
+        if n == 0 {
+            return Err(SituationError::Invalid(
+                "combo_hit counts from 1: the first swing is 1, not 0".into(),
+            ));
+        }
+        let index = n - 1; // probe: combo-counts-from-one
+        let hit = weapon.combo.get(index).ok_or_else(|| {
+            SituationError::Invalid(if weapon.combo.is_empty() {
+                "this weapon has no chain recorded, so there is no swing to pick".to_string()
+            } else {
+                format!(
+                    "this weapon's chain is {} swings long, so there is no swing {n}",
+                    weapon.combo.len()
+                )
+            })
+        })?;
+        basic.scaling = hit.scaling.clone().map(ScalingCoefficient::new);
+    }
+
     // A named skill fills in what it knows, over the weapon and under the
     // file. Three layers, and the order is the point: the weapon is what
     // you are holding, the skill is what the game says it does, and an
@@ -191,6 +215,11 @@ pub(crate) fn parse(
 struct SituationDto {
     #[serde(default)]
     name: Option<String>,
+    /// Which swing in the weapon's chain, counting from 1. A skill named
+    /// below overrides it: a skill replaces the normal swing rather than
+    /// joining the chain.
+    #[serde(default)]
+    combo_hit: Option<usize>,
     /// A skill to take the attack's numbers from, so they live in the
     /// dataset where a patch can change them and `assay diff` can see it.
     /// Anything written below still wins: the file is the question.
@@ -290,8 +319,73 @@ mod tests {
         WeaponProfile {
             base_damage: Confidence::Verified(Fixed::from_int(32)),
             armor_pen: Confidence::Verified(Fixed::from_int(15)),
+            combo: Vec::new(),
             swing_time: None,
         }
+    }
+
+    /// The Arming Sword's chain, as the weapon page prints it.
+    fn chained() -> WeaponProfile {
+        WeaponProfile {
+            combo: [("slash", 100), ("slash", 105), ("pierce", 110)]
+                .into_iter()
+                .map(|(kind, pct)| assay_core::schema::ComboHit {
+                    kind: kind.to_string(),
+                    scaling: Confidence::Unverified(Fixed::from_int(pct)),
+                })
+                .collect(),
+            ..weapon()
+        }
+    }
+
+    #[test]
+    fn the_third_swing_hits_harder_than_the_first() {
+        // The reason the chain is worth recording at all: "what does this
+        // weapon hit for" has three answers, and the tool was giving the
+        // smallest of them to every question.
+        let d = data();
+        let id = ItemId::new("item.test");
+        let first = parse("combo_hit = 1", &id, &chained(), &d).unwrap();
+        let third = parse("combo_hit = 3", &id, &chained(), &d).unwrap();
+        assert_eq!(first.strike.scaling.value().value(), Fixed::from_int(100));
+        assert_eq!(third.strike.scaling.value().value(), Fixed::from_int(110));
+        // And the grade travels with it: nobody has measured these, so an
+        // answer built on one cannot come back verified.
+        assert!(matches!(third.strike.scaling, Confidence::Unverified(_)));
+    }
+
+    #[test]
+    fn a_skill_replaces_the_swing_rather_than_joining_the_chain() {
+        // Order matters here and the wrong order is plausible: a skill is
+        // not the fourth hit of a combo, it is a different attack. If the
+        // chain won, Sneak Attack's 0% scaling would silently become 110%
+        // and the flat bonus would start multiplying.
+        let s = parse(
+            "combo_hit = 3
+skill = \"skill.rogue.sneak_attack\"",
+            &ItemId::new("item.test"),
+            &chained(),
+            &data(),
+        )
+        .unwrap();
+        assert_eq!(s.strike.scaling.value().value(), Fixed::ZERO);
+    }
+
+    #[test]
+    fn asking_for_a_swing_the_weapon_does_not_have_says_so() {
+        let d = data();
+        let id = ItemId::new("item.test");
+        // Off the end of a known chain.
+        let err = parse("combo_hit = 4", &id, &chained(), &d).err().unwrap();
+        assert!(format!("{err}").contains("3 swings long"), "{err}");
+        // Counting from zero: an easy mistake, and silently reading swing
+        // one would answer a question the file did not ask.
+        let err = parse("combo_hit = 0", &id, &chained(), &d).err().unwrap();
+        assert!(format!("{err}").contains("counts from 1"), "{err}");
+        // No chain recorded at all is a different problem and gets a
+        // different sentence — one says "look it up", the other "count".
+        let err = parse("combo_hit = 1", &id, &weapon(), &d).err().unwrap();
+        assert!(format!("{err}").contains("no chain recorded"), "{err}");
     }
 
     #[test]

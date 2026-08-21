@@ -59,6 +59,11 @@ skill = "skill.rogue.sneak_attack"
 power_bonus_adjust = "-30"
 ```
 
+A weapon is a chain, not a single blow — an Arming Sword runs
+`Slash/Slash/Pierce` at `100%/105%/110%` — so `combo_hit = 3` asks about
+the third swing. Naming a skill overrides it: a skill replaces the normal
+swing rather than joining the chain.
+
 A situation names the skill and states the circumstances. The skill's own
 numbers live in the dataset, so a patch that changes Sneak Attack's scaling
 shows up in `assay diff` — while they lived in a file beside the tool, such a
