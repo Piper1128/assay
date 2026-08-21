@@ -398,6 +398,7 @@
     situation: new Set(),
     hitLocation: "",
     damageType: "physical",
+    skill: "",
   };
 
   /// The circumstances with numbers this project already has. Each one is a
@@ -407,11 +408,14 @@
   /// Nothing is invented here: every value comes from an ADR or the source
   /// analysis. A circumstance whose number we do not know is not on this
   /// list — it would have to be typed, and typing it is honest.
+  // Skills are NOT here. Their numbers live in the dataset, where a patch
+  // can change them and `assay diff` can see it — carrying Sneak Attack's
+  // 0% scaling in JavaScript put a fact about the game one more layer away
+  // from the tool that is supposed to notice it changing. The page names
+  // the skill and the resolver looks it up.
   const SITUATIONS = [
     ["back", "Behind them", { context: { powerBonusAdjust: "30" } }],
     ["hide", "Leaving Hide", { context: { powerBonusAdjust: "-30" } }],
-    ["sneak", "Sneak Attack",
-      { strike: { scaling: "0", flatBonus: "15", trueDamage: "1" } }],
     ["lethal", "Lethal Mark on them", { context: { pdrMod: "-30" } }],
     ["weakpoint", "Weakpoint Attack landed",
       { context: { itemArmorBonusMods: { "skill.rogue.weakpoint_attack": "-30" } } }],
@@ -609,6 +613,7 @@
     const hit = state.hitLocation.replace(/−/g, "-").trim();
     if (hit) out.context.hitLocationBonus = hit;
     out.type = state.damageType;
+    if (state.skill) out.skill = state.skill;
     return JSON.stringify(out);
   }
 
@@ -626,6 +631,20 @@
       kinds.append(b);
     }
     host.append(kinds);
+
+    // Every attacking skill the dataset knows, offered by name. Adding one
+    // to the dataset puts it here with no code change.
+    const attacking = CATALOG.skills.filter(s => s.attacks);
+    if (attacking.length) {
+      const skill = el("select");
+      skill.append(new Option("— a plain swing —", ""));
+      for (const s of attacking) skill.append(new Option(s.name, s.id));
+      skill.value = state.skill;
+      skill.onchange = () => { state.skill = skill.value; renderHit(); };
+      const f = el("div", "field");
+      f.append(el("label", null, "Skill"), skill);
+      host.append(f);
+    }
 
     const picks = el("div", "situations");
     for (const [id, label] of SITUATIONS) {
@@ -661,7 +680,8 @@
     head.append(el("span", "grade " + out.damage.confidence,
       { verified: "ok", unverified: "~", unknown: "?" }[out.damage.confidence]));
     head.append(el("span", "hint",
-      `damage with ${out.weapon}, against ${out.effectivePdr.value}% effective PDR`));
+      `${out.skill ? out.skill + " with " : "damage with "}${out.weapon}, ` +
+      `against ${out.effectivePdr.value}% effective reduction`));
     host.append(head);
 
     const steps = el("div", "steps");

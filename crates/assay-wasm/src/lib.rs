@@ -115,7 +115,15 @@ pub fn catalog() -> String {
             }
             assay_data::EntityKind::Skill => {
                 if let Some(def) = data.entities.skill(&SkillId::new(id)) {
-                    skills.push(json!({ "id": id, "name": def.name }));
+                    // Whether it attacks, so the page can offer the ones
+                    // that do without knowing any of their numbers. A skill
+                    // added to the dataset then appears in the UI with no
+                    // code change, the way a derived stat does (ADR-012).
+                    skills.push(json!({
+                        "id": id,
+                        "name": def.name,
+                        "attacks": def.strike.is_some(),
+                    }));
                 }
             }
             assay_data::EntityKind::Curve => {}
@@ -617,8 +625,8 @@ pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) 
         Ok(v) => v,
         Err(e) => return json!({ "ok": false, "error": e.to_string() }).to_string(),
     };
-    let (strike, context) = match build_situation(&situation, profile) {
-        Ok(pair) => pair,
+    let (strike, context, named) = match build_situation(&situation, profile, &data.entities) {
+        Ok(parts) => parts,
         Err(e) => return json!({ "ok": false, "error": e }).to_string(),
     };
 
@@ -628,6 +636,7 @@ pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) 
             "damage": graded(&out.damage.clone().map(|d| d.value())),
             "effectivePdr": graded(&out.effective_pdr.clone().map(|p| p.value())),
             "weapon": data.entities.item(weapon_id).map(|i| i.name.clone()),
+            "skill": named,
             "steps": out
                 .trace
                 .iter()
@@ -642,8 +651,47 @@ pub fn exchange(attacker_json: &str, defender_json: &str, situation_json: &str) 
 fn build_situation(
     node: &Value,
     weapon: &assay_core::schema::WeaponProfile,
-) -> Result<(Strike, ExchangeContext), String> {
-    let basic = Strike::basic_swing(weapon);
+    data: &impl DatasetSource,
+) -> Result<(Strike, ExchangeContext, Option<String>), String> {
+    let mut basic = Strike::basic_swing(weapon);
+
+    // Three layers, same as the CLI: the weapon is what you hold, the skill
+    // is what the game says it does, an explicit field is what you asked.
+    // The page used to carry Sneak Attack's numbers in JavaScript, which put
+    // a fact about the game one more layer away from `assay diff`.
+    let mut named = None;
+    if let Some(id) = node
+        .get("skill")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        let skill = data
+            .skill(&SkillId::new(id))
+            .ok_or_else(|| format!("no such skill: {id}"))?;
+        let profile = skill
+            .strike
+            .as_ref()
+            .ok_or_else(|| format!("{} is not an attack", skill.name))?;
+        if let Some(v) = &profile.base {
+            basic.base = v.clone().map(assay_core::stats::Damage::new);
+        }
+        if let Some(v) = &profile.scaling {
+            basic.scaling = v.clone().map(assay_core::stats::ScalingCoefficient::new);
+        }
+        if let Some(v) = &profile.flat_bonus {
+            basic.flat_bonus = v.clone().map(assay_core::stats::Damage::new);
+        }
+        if let Some(v) = &profile.penetration {
+            basic.penetration = v.clone().map(assay_core::stats::ArmorPen::new);
+        }
+        if let Some(v) = &profile.true_damage {
+            basic.true_damage = v.clone().map(assay_core::stats::TrueDamage::new);
+        }
+        if profile.damage_type.as_deref() == Some("magic") {
+            basic.damage_type = DamageType::Magic;
+        }
+        named = Some(skill.name.clone());
+    }
     let neutral = ExchangeContext::default();
     let fixed = |section: &str, key: &str| -> Result<Option<Fixed>, String> {
         let Some(raw) = node.get(section).and_then(|s| s.get(key)) else {
@@ -663,7 +711,8 @@ fn build_situation(
     let strike = Strike {
         damage_type: match node.get("type").and_then(Value::as_str) {
             Some("magic") => DamageType::Magic,
-            Some("physical") | None => DamageType::Physical,
+            Some("physical") => DamageType::Physical,
+            None => basic.damage_type,
             Some(other) => return Err(format!("unknown damage type: {other}")),
         },
         base: fixed("strike", "base")?.map_or(basic.base, |v| {
@@ -710,5 +759,5 @@ fn build_situation(
             .map_or(neutral.hit_location_bonus, Confidence::Verified),
         item_armor_bonus_mods: mods,
     };
-    Ok((strike, context))
+    Ok((strike, context, named))
 }
