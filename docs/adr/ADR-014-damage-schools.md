@@ -5,7 +5,7 @@ Amends: ADR-006 damage-kind amendment (generalises its gate)
 Relates to: ADR-006 (exchange model), ADR-012 (derived stats as ratings)
 Date: 2026-08-22
 
-## The evidence
+## The evidence: six cards, and a documented list
 
 Six Cleric and Wizard cards, read off the game:
 
@@ -20,6 +20,24 @@ Six Cleric and Wizard cards, read off the game:
 
 Every magical attack names a school, and perks grant school-specific damage
 bonuses. `DamageType { Physical, Magic }` cannot express either.
+
+The wiki's Damage Types page names **twelve**, and says the list is closed:
+
+> Fire · Ice · Lightning · Earth · Arcane · Light · Dark · Evil · Curse ·
+> Divine · Air · Spirit
+
+> All Magical damage is **one or more** of the following types, otherwise it
+> is **Neutral** damage.
+
+It names the physical three as Slash, Pierce and Blunt, which is what the
+model already has — one independent source agreeing with cards we read
+ourselves.
+
+That page is `documented`, and ADR-013 has just finished saying what that is
+worth: it attests and it never corroborates. It was also a `documented`
+source that had Blunt Weapon Mastery wrong this morning. So the twelve are
+taken as a shape to design against, not as twelve facts; the four with cards
+behind them are the four that are known.
 
 ## The defect, and what it is not
 
@@ -49,16 +67,38 @@ pub enum DamageTag {
     // physical
     Slash, Pierce, Blunt,
     // magical
-    Divine, Earth, Fire, Ice,
+    Fire, Ice, Lightning, Earth, Arcane,
+    Light, Dark, Evil, Curse, Divine, Air, Spirit,
 }
 ```
 
-`Strike.kind` becomes `Strike.tag`, `StackedEffect.when_kind` becomes
-`when_tag`, and the existing gate mechanism — divert out of the sheet at
-ADR-005 stage 3, apply at the stat read in the exchange — is untouched.
-Nothing about the nine steps changes, which is what keeps ADR-006 locked.
+`StackedEffect.when_kind` becomes `when_tag`, and the existing gate mechanism
+— divert out of the sheet at ADR-005 stage 3, apply at the stat read in the
+exchange — is untouched. Nothing about the nine steps changes, which is what
+keeps ADR-006 locked.
 
-**2. A tag belongs to a type, and the loader enforces it.**
+**2. A strike carries a *set* of tags, not one.**
+
+```rust
+pub struct Strike { .., pub tags: BTreeSet<DamageTag> }
+```
+
+This is the wiki's "one or more" and it is the whole reason to read the page
+before writing the code. The first draft of this ADR gave a strike a single
+optional tag, which cannot say what the source says.
+
+Whether "one or more" means one blow carrying two schools or a spell dealing
+two blows of one each is **unmeasured**, and Flamefrost Spear — named in the
+duo analysis with a `30/30` figure — reads either way. A set is safe against
+both: it degrades to one element for every card we have, and it does not have
+to be widened later against a dataset that has assumed otherwise.
+
+A gate fires when the strike's set **contains** its tag. An empty set is
+**Neutral**: magical damage of no school, which the page names rather than
+leaves as absence. So `tags.is_empty()` is a state with a meaning, and a gate
+on any school correctly stays shut for it.
+
+**3. A tag belongs to a type, and the loader enforces it.**
 
 Rust cannot stop `Blunt` reaching a magical strike, so the dataset loader
 does: a physical strike or effect tagged with a school, or a magical one
@@ -67,13 +107,18 @@ nonsense value in this project is caught, and it is the same reason
 `DamageKind::parse` refuses a kind nobody recognises — a tag that can never
 match reads exactly like a perk that does nothing.
 
-**3. The list is closed, and grows by measurement.**
+**4. All twelve are named now, and each is graded by what backs it.**
 
-Four schools are attested. There are almost certainly more, and an unknown
-one is refused rather than accepted as a string, for the reason above. Adding
-one is a one-line change and a card.
+Four have cards behind them — Divine, Earth, Fire, Ice. The other eight come
+from the closed list on a `documented` page. Naming all twelve costs one line
+each and means the loader refuses a typo instead of accepting a gate that can
+never fire; leaving eight out would mean refusing a school the game has.
 
-**4. School-gated bonuses target Magic Power Bonus.**
+They are not equally known and the dataset says so: a value tagged with a
+school nobody has seen on a card is graded no better than the page it came
+from.
+
+**5. School-gated bonuses target Magic Power Bonus.**
 
 Mirroring the physical case: *"gain 5% fire magical damage bonus"* is modelled
 as a `DerivedBonus` on `derived.magic_power_bonus`, gated on `Fire`.
@@ -99,6 +144,12 @@ better done while four files carry it than when forty do.
 
 ## Deferred, deliberately
 
+**Projectile.** The same page lists Projectile as a damage category, and the
+character sheet carries Projectile Damage Reduction. It is not a school — an
+arrow is physical and pierces — but a second axis on the attack, in the way
+Undead is a second axis on the target. Nothing in the dataset shoots anything
+yet.
+
 **The Undead/Demon axis.** The character sheet carries Undead Damage Bonus,
 Demon Damage Bonus, Undead Damage Reduction and Demon Damage Reduction. These
 are *not* schools: they are properties of who is being hit, not of the blow.
@@ -123,6 +174,11 @@ speed; Faithfulness takes 15% move speed bonus for one second. The model has
 these carries a duration, which lands in the same deferral as above.
 
 ## Rejected
+
+**A single tag rather than a set.** What the first draft of this ADR said,
+before the source was read. The page's "one or more" is one sentence and it
+is the difference between a field that can hold what the game has and one
+that cannot.
 
 **A separate `School` type beside `DamageKind`.** Two fields, two gates, two
 probes, for one idea. The nonsense combinations it would prevent at compile

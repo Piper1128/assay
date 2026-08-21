@@ -376,6 +376,18 @@ Four spells and two perks name one:
 carries an Undead/Demon axis on top — target-type modifiers we do not model
 either.
 
+The wiki's Damage Types page names twelve schools and calls the list closed
+— Fire, Ice, Lightning, Earth, Arcane, Light, Dark, Evil, Curse, Divine, Air
+and Spirit — and adds that magical damage is **one or more** of them, or else
+**Neutral**. Four of the twelve have cards behind them; the rest are
+`documented`, which ADR-013 has just finished defining as attesting without
+corroborating, and which was wrong about Blunt Weapon Mastery this morning.
+
+The "one or more" is the load-bearing part: a strike carries a *set* of
+schools, not one. Whether that means one blow with two schools or a spell
+dealing two blows is unmeasured — Flamefrost Spear's `30/30` reads either way
+— and a set is safe against both readings.
+
 Designed in `docs/adr/ADR-014-damage-schools.md`, and the finding there is
 that this is not a new mechanism: physical damage has a kind, magical damage
 has a school, and both are a tag on the strike that perks gate on. The gate
