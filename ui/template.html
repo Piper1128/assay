@@ -138,20 +138,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    /* The figure is the ground the slots stand on, so it is lit from the
-       centre rather than drawn as an outline on the panel colour. */
-    background: radial-gradient(ellipse at 50% 42%,
-                #221d16 0%, var(--surface) 62%, transparent 100%);
+    /* Lit from behind, so the figure has something to be a shape against.
+       A dark figure on the panel colour is a smudge; a dark figure on a
+       pool of light is a silhouette. */
+    background: radial-gradient(ellipse at 50% 44%,
+                #3c331f 0%, #262019 54%, transparent 100%);
     border-radius: 6px;
   }
   .doll-figure svg { width: 100%; height: auto; display: block; }
-  /* Three depths, so plate reads as plate: the recesses behind it, the
-     plates themselves, and the lit edge along the top of each one. */
-  .fig-deep { fill: #100e0a; }
-  .fig-plate { fill: #2b251d; }
-  .fig-plate-2 { fill: #332c22; }
-  .fig-edge { fill: none; stroke: #4a4132; stroke-width: 1.1; stroke-linecap: round; }
-  .fig-glow { fill: var(--gold); opacity: .55; }
+  /* One fill and nothing else. Seams, highlights and plate edges were the
+     wrong idea: a silhouette is a shape, and the moment it carries internal
+     detail it stops being one and becomes a small bad drawing. Everything
+     this figure says, it says with its outline and with the holes in it. */
+  .fig { fill: #0b0a07; }
   .doll-wide { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 7px; }
 
   .gs {
@@ -645,94 +644,75 @@
     wide: ["weapon"],
   };
 
-  /// A plate-armoured figure, drawn rather than fetched.
+  /// An armoured figure, drawn rather than fetched.
   ///
   /// Nothing on this page may reach the network — it has to run from a
   /// file:// URL with no server — so an image was never an option and an
-  /// SVG is not a compromise. Built from a helm, pauldrons, a cuirass,
-  /// tassets, greaves and boots because that is what the silhouette in the
-  /// game is; a featureless mannequin would say "a person" where this says
-  /// "a person wearing the things these slots hold".
+  /// SVG is not a compromise.
   ///
-  /// It stands wide: arms carried out from the body, feet apart, boots
-  /// turned outward in profile. A figure with its arms at its sides and
-  /// its feet together reads as standing to attention, and this one is
-  /// meant to read as about to be hit.
+  /// It is a true silhouette: one fill, no seams, no highlights. The shape
+  /// carries everything, which makes the negative space load-bearing — the
+  /// long slit between each arm and the ribs, the gap between the legs,
+  /// the notch under the crest. Overlapping pieces in one colour merge
+  /// invisibly, so the parts that must read as separate are exactly the
+  /// parts that must not touch.
   ///
-  /// Two things that look like bugs rather than style if they are wrong.
-  /// Every arm plate has to overlap the one above it along the same slant
-  /// — pauldron, upper plate, couter, vambrace, gauntlet — or the arm
-  /// falls into separate floating blocks. And the plates behind the arms
-  /// have to slant with them, or the backing shows through as a straight
-  /// column behind a diagonal limb.
+  /// Symmetric and front-on, because the slots are: head above, hands to
+  /// the sides, feet below. A figure standing three-quarters or holding a
+  /// weapon in one hand would make the left and right columns mean
+  /// different things.
   const FIGURE = [
-    '<svg viewBox="0 0 104 262" xmlns="http://www.w3.org/2000/svg"',
+    '<svg viewBox="0 0 120 240" xmlns="http://www.w3.org/2000/svg"',
     ' role="img" aria-label="armoured figure showing where each slot sits">',
+    '<g class="fig">',
 
-    // ── the dark behind the plate, so the seams have somewhere to fall
-    '<path class="fig-deep" d="M33 30h38v34H33zm-3 36h44v98H30z"/>',
-    '<path class="fig-deep" d="M21 86L43 86L33 168L9 168Z"/>',
-    '<path class="fig-deep" d="M83 86L61 86L71 168L95 168Z"/>',
-    '<path class="fig-deep" d="M31 164h21v90H31zm21 0h21v90H52z"/>',
+    // ── crest: two plumes swept back off the dome ─────────────────────
+    '<path d="M59 8C56 16 52 24 47 30C42 26 41 16 45 10C49 4 56 3 59 8Z"/>',
+    '<path d="M61 8C64 16 68 24 73 30C78 26 79 16 75 10C71 4 64 3 61 8Z"/>',
 
-    // ── great helm ────────────────────────────────────────────────────
-    '<path class="fig-plate-2" d="M52 13c-11 0-18 6-18 16v7h36v-7c0-10-7-16-18-16z"/>',
-    '<path class="fig-plate" d="M34 36h36v13c0 9-8 14-18 14s-18-5-18-14V36z"/>',
-    '<path class="fig-deep" d="M37 40h12v5H37zm18 0h12v5H55z"/>',
-    '<path class="fig-deep" d="M50 36h4v20h-4z"/>',
-    '<path class="fig-edge" d="M34 36h36M37 25q15-6 30 0"/>',
+    // ── helm ──────────────────────────────────────────────────────────
+    '<path d="M60 22C72 22 80 33 80 47C80 57 76 63 73 68L47 68',
+    'C44 63 40 57 40 47C40 33 48 22 60 22Z"/>',
+    '<path d="M50 64H70L74 76H46Z"/>',
 
-    // ── gorget ────────────────────────────────────────────────────────
-    '<path class="fig-plate-2" d="M42 60h20l4 9H38z"/>',
+    // ── pauldrons, domed over the shoulder the way the reference has ──
+    '<path d="M46 72C31 72 21 83 20 99C19 107 20 112 22 116L33 111L41 90Z"/>',
+    '<path d="M74 72C89 72 99 83 100 99C101 107 100 112 98 116L87 111L79 90Z"/>',
 
-    // ── pauldrons, flared wide because the arms are carried out ───────
-    '<path class="fig-plate-2" d="M35 68c-11 1-18 7-20 17l-2 13 24 5 4-35z"/>',
-    '<path class="fig-plate-2" d="M69 68c11 1 18 7 20 17l2 13-24 5-4-35z"/>',
-    '<path class="fig-edge" d="M15 88q8-12 18-14M89 88q-8-12-18-14"/>',
+    // ── torso: wide, with only a little waist ─────────────────────────
+    '<path d="M40 74H80L83 106L79 144H41L37 106Z"/>',
 
-    // ── cuirass ───────────────────────────────────────────────────────
-    '<path class="fig-plate" d="M36 68h32l6 20-4 34c0 9-8 14-18 14s-18-5-18-14',
-    'l-4-34z"/>',
-    // the centre ridge is what makes a breastplate read as one
-    '<path class="fig-edge" d="M52 70v62M40 76q12 7 24 0"/>',
+    // ── arms, carried just clear of the ribs. The slit they leave is
+    //    the whole reason the pose reads as a person and not a slab ────
+    '<path d="M22 110L36 106L34 142L20 144Z"/>',
+    '<path d="M98 110L84 106L86 142L100 144Z"/>',
+    '<path d="M20 140L34 138L33 170L21 172Z"/>',
+    '<path d="M100 140L86 138L87 170L99 172Z"/>',
 
-    // ── arms, slanting away from the body ─────────────────────────────
-    '<path class="fig-plate" d="M23 88L41 88L35 118L17 118Z"/>',
-    '<path class="fig-plate" d="M81 88L63 88L69 118L87 118Z"/>',
-    '<path class="fig-plate-2" d="M17 115L36 115L35 129L16 129Z"/>',
-    '<path class="fig-plate-2" d="M87 115L68 115L69 129L88 129Z"/>',
-    '<path class="fig-plate" d="M17 127L33 127L29 152L13 152Z"/>',
-    '<path class="fig-plate" d="M87 127L71 127L75 152L91 152Z"/>',
-    '<path class="fig-plate-2" d="M11 150L31 150L30 168L10 168Z"/>',
-    '<path class="fig-plate-2" d="M93 150L73 150L74 168L94 168Z"/>',
+    // ── gauntlets, each with a thumb ──────────────────────────────────
+    '<path d="M19 168L34 166L35 184C35 189 31 192 27 192L23 192',
+    'C20 192 18 189 18 185Z"/>',
+    '<path d="M101 168L86 166L85 184C85 189 89 192 93 192L97 192',
+    'C100 192 102 189 102 185Z"/>',
+    '<path d="M33 172L38 174L38 182L33 181Z"/>',
+    '<path d="M87 172L82 174L82 182L87 181Z"/>',
 
-    // ── fauld and tassets ─────────────────────────────────────────────
-    '<path class="fig-plate-2" d="M34 132h36l-3 15H37z"/>',
-    '<path class="fig-plate" d="M35 145h16l-2 24H36zm18 0h16l1 24H55z"/>',
+    // ── fauld ─────────────────────────────────────────────────────────
+    '<path d="M41 140H79L81 164H39Z"/>',
 
-    // ── cuisses: apart at the hip and drifting wider down the thigh ───
-    '<path class="fig-plate" d="M35 166L53 166L50 200L32 200Z"/>',
-    '<path class="fig-plate" d="M69 166L51 166L54 200L72 200Z"/>',
+    // ── legs, apart, with the gap narrowing to a notch at the hip ─────
+    '<path d="M40 162L58 162L56 198L38 198Z"/>',
+    '<path d="M80 162L62 162L64 198L82 198Z"/>',
+    '<path d="M38 196L56 196L55 222L37 222Z"/>',
+    '<path d="M82 196L64 196L65 222L83 222Z"/>',
 
-    // ── poleyns ───────────────────────────────────────────────────────
-    '<path class="fig-plate-2" d="M32 197L50 197L49 213L31 213Z"/>',
-    '<path class="fig-plate-2" d="M72 197L54 197L55 213L73 213Z"/>',
+    // ── boots ─────────────────────────────────────────────────────────
+    '<path d="M36 219L56 219L57 231C57 234 55 236 52 236L36 236',
+    'C33 236 32 233 33 230Z"/>',
+    '<path d="M84 219L64 219L63 231C63 234 65 236 68 236L84 236',
+    'C87 236 88 233 87 230Z"/>',
 
-    // ── greaves ───────────────────────────────────────────────────────
-    '<path class="fig-plate" d="M32 211L49 211L48 230L31 230Z"/>',
-    '<path class="fig-plate" d="M72 211L55 211L56 230L73 230Z"/>',
-    '<path class="fig-edge" d="M40 215v14M64 215v14"/>',
-
-    // ── boots, turned outward and seen from the side ──────────────────
-    '<path class="fig-plate-2" d="M31 224L50 224L50 232L31 232Z"/>',
-    '<path class="fig-plate-2" d="M73 224L54 224L54 232L73 232Z"/>',
-    '<path class="fig-plate" d="M33 228L49 228L49 254L23 254',
-    'C19 254 18 250 21 247L33 242Z"/>',
-    '<path class="fig-plate" d="M71 228L55 228L55 254L81 254',
-    'C85 254 86 250 83 247L71 242Z"/>',
-    '<path class="fig-edge" d="M23 251h25M81 251H56"/>',
-
-    "</svg>",
+    "</g></svg>",
   ].join("");
 
   /// What to call a slot on the figure.
