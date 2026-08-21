@@ -652,65 +652,75 @@
   ///
   /// It is a true silhouette: one fill, no seams, no highlights. The shape
   /// carries everything, which makes the negative space load-bearing — the
-  /// long slit between each arm and the ribs, the gap between the legs,
-  /// the notch under the crest. Overlapping pieces in one colour merge
-  /// invisibly, so the parts that must read as separate are exactly the
-  /// parts that must not touch.
+  /// slit between each arm and the ribs, the notch between the legs.
+  /// Overlapping pieces in one colour merge invisibly, so the parts that
+  /// must read as separate are exactly the parts that must not touch.
   ///
   /// Symmetric and front-on, because the slots are: head above, hands to
   /// the sides, feet below. A figure standing three-quarters or holding a
   /// weapon in one hand would make the left and right columns mean
   /// different things.
+  ///
+  /// Two proportions decide whether this reads as a knight or as an
+  /// animal, and both were wrong the first time.
+  ///
+  /// The crest must touch the helm. Drawn as two plumes standing clear of
+  /// the dome, they stop being a crest at this size and become ears — the
+  /// gap is the whole problem, so the fin overlaps into the dome and the
+  /// two merge into one shape.
+  ///
+  /// The elbow belongs at the waist and the fingertips at mid-thigh. Hands
+  /// that reach the knee read as an ape however good the armour is, and
+  /// the legs have to be about four tenths of the height or the figure
+  /// sits down into itself.
   const FIGURE = [
-    '<svg viewBox="0 0 120 240" xmlns="http://www.w3.org/2000/svg"',
+    '<svg viewBox="0 0 120 248" xmlns="http://www.w3.org/2000/svg"',
     ' role="img" aria-label="armoured figure showing where each slot sits">',
     '<g class="fig">',
 
-    // ── crest: two plumes swept back off the dome ─────────────────────
-    '<path d="M59 8C56 16 52 24 47 30C42 26 41 16 45 10C49 4 56 3 59 8Z"/>',
-    '<path d="M61 8C64 16 68 24 73 30C78 26 79 16 75 10C71 4 64 3 61 8Z"/>',
-
     // ── helm ──────────────────────────────────────────────────────────
-    '<path d="M60 22C72 22 80 33 80 47C80 57 76 63 73 68L47 68',
-    'C44 63 40 57 40 47C40 33 48 22 60 22Z"/>',
-    '<path d="M50 64H70L74 76H46Z"/>',
+    '<path d="M42 44C42 32 50 22 60 22C70 22 78 32 78 44L78 56',
+    'C78 63 74 67 70 69L50 69C46 67 42 63 42 56Z"/>',
+    // the crest, overlapping into the dome so there is no gap to read as
+    // a pair of ears
+    '<path d="M60 5C63 10 65 17 66 26L54 26C55 17 57 10 60 5Z"/>',
+    '<path d="M50 65H70L74 77H46Z"/>',
 
-    // ── pauldrons, domed over the shoulder the way the reference has ──
-    '<path d="M46 72C31 72 21 83 20 99C19 107 20 112 22 116L33 111L41 90Z"/>',
-    '<path d="M74 72C89 72 99 83 100 99C101 107 100 112 98 116L87 111L79 90Z"/>',
+    // ── pauldrons ─────────────────────────────────────────────────────
+    '<path d="M45 71C31 72 22 83 22 99L25 110L39 104L46 84Z"/>',
+    '<path d="M75 71C89 72 98 83 98 99L95 110L81 104L74 84Z"/>',
 
-    // ── torso: wide, with only a little waist ─────────────────────────
-    '<path d="M40 74H80L83 106L79 144H41L37 106Z"/>',
+    // ── torso ─────────────────────────────────────────────────────────
+    '<path d="M40 75H80L82 104L77 134H43L38 104Z"/>',
 
-    // ── arms, carried just clear of the ribs. The slit they leave is
-    //    the whole reason the pose reads as a person and not a slab ────
-    '<path d="M22 110L36 106L34 142L20 144Z"/>',
-    '<path d="M98 110L84 106L86 142L100 144Z"/>',
-    '<path d="M20 140L34 138L33 170L21 172Z"/>',
-    '<path d="M100 140L86 138L87 170L99 172Z"/>',
+    // ── arms: elbow at the waist, fingertips at mid-thigh ─────────────
+    '<path d="M23 94L37 92L35 128L21 130Z"/>',
+    '<path d="M97 94L83 92L85 128L99 130Z"/>',
+    '<path d="M21 126L35 126L33 152L22 154Z"/>',
+    '<path d="M99 126L85 126L87 152L98 154Z"/>',
 
     // ── gauntlets, each with a thumb ──────────────────────────────────
-    '<path d="M19 168L34 166L35 184C35 189 31 192 27 192L23 192',
-    'C20 192 18 189 18 185Z"/>',
-    '<path d="M101 168L86 166L85 184C85 189 89 192 93 192L97 192',
-    'C100 192 102 189 102 185Z"/>',
-    '<path d="M33 172L38 174L38 182L33 181Z"/>',
-    '<path d="M87 172L82 174L82 182L87 181Z"/>',
+    '<path d="M20 150L34 150L34 164C34 168 31 170 27 170',
+    'C23 170 20 168 20 164Z"/>',
+    '<path d="M100 150L86 150L86 164C86 168 89 170 93 170',
+    'C97 170 100 168 100 164Z"/>',
+    '<path d="M33 154L38 156L38 163L33 162Z"/>',
+    '<path d="M87 154L82 156L82 163L87 162Z"/>',
 
     // ── fauld ─────────────────────────────────────────────────────────
-    '<path d="M41 140H79L81 164H39Z"/>',
+    '<path d="M43 130H77L79 154H41Z"/>',
 
-    // ── legs, apart, with the gap narrowing to a notch at the hip ─────
-    '<path d="M40 162L58 162L56 198L38 198Z"/>',
-    '<path d="M80 162L62 162L64 198L82 198Z"/>',
-    '<path d="M38 196L56 196L55 222L37 222Z"/>',
-    '<path d="M82 196L64 196L65 222L83 222Z"/>',
+    // ── legs, apart, and long enough to carry the body ────────────────
+    '<path d="M42 150L58 150L57 194L40 194Z"/>',
+    '<path d="M78 150L62 150L63 194L80 194Z"/>',
+    '<path d="M40 192L57 192L56 228L39 228Z"/>',
+    '<path d="M80 192L63 192L64 228L81 228Z"/>',
 
     // ── boots ─────────────────────────────────────────────────────────
-    '<path d="M36 219L56 219L57 231C57 234 55 236 52 236L36 236',
-    'C33 236 32 233 33 230Z"/>',
-    '<path d="M84 219L64 219L63 231C63 234 65 236 68 236L84 236',
-    'C87 236 88 233 87 230Z"/>',
+    '<path d="M38 225L57 225L58 238C58 242 56 244 53 244L38 244',
+    'C35 244 34 241 35 237Z"/>',
+    '<path d="M82 225L63 225L62 238C62 242 64 244 67 244L82 244',
+    'C85 244 86 241 85 237Z"/>',
 
     "</g></svg>",
   ].join("");
