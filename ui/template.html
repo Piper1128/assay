@@ -397,6 +397,7 @@
     font-size: 30px;
     color: var(--ink);
   }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .situations { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
   .situations button[aria-pressed="true"] {
     border-color: var(--gold);
@@ -547,6 +548,9 @@
     if (text !== undefined) n.textContent = text;
     return n;
   };
+
+  /// Where submissions go. One constant, so a fork changes it once.
+  const REPO = "https://github.com/Piper1128/assay";
 
   let CATALOG = null;
   // Two builds and a view. "A vs B" is a view rather than a third build:
@@ -1631,25 +1635,67 @@
     howField.append(el("label", null, "How you saw it"), how);
     host.append(howField);
 
-    const send = el("button", null, "Copy a submission");
-    send.onclick = async () => {
+    /// Builds the submission, or says why it cannot.
+    ///
+    /// Both actions below need the same text, and computing it twice would
+    /// let them disagree about what was sent.
+    function compose() {
       const observer = $("observer").value.trim();
       if (!observer) {
         $("observer").focus();
-        return;
+        return { ok: false, error: "put a handle in the field above first" };
       }
-      const out = JSON.parse(wasm_bindgen.submission_json(JSON.stringify({
+      return JSON.parse(wasm_bindgen.submission_json(JSON.stringify({
         id: idField.value.trim(),
         name: card.name ?? "",
         slot: card.slot ?? "",
         lines: card.taken,
         unrecognised: card.missed,
       }), observer, today(), how.value));
+    }
+
+    const actions = el("div", "actions");
+
+    // The direct route: this opens a filled-in issue, a robot reviews it
+    // against the dataset and says what it would change, and a maintainer
+    // decides whether that becomes a pull request.
+    //
+    // No `labels=` in the URL on purpose. Labelling is what turns a reading
+    // into a proposed commit, and a contributor labelling their own reading
+    // would be the reading approving itself.
+    const open = el("button", "primary", "Send it as an issue");
+    open.onclick = () => {
+      const out = compose();
+      if (!out.ok) { open.textContent = out.error; return; }
+      const body =
+        "Read off an item card in game. The JSON below is what the page " +
+        "wrote; I have not edited it by hand.\n\n```json\n" + out.text + "\n```";
+      const url = REPO + "/issues/new?title=" +
+        encodeURIComponent("submission: " + (idField.value.trim() || "an item")) +
+        "&body=" + encodeURIComponent(body);
+      // A URL is not a transport. Past a few thousand characters browsers
+      // and servers start truncating, and a submission truncated in transit
+      // is worse than one that never left: it would look complete.
+      if (url.length > 6000) {
+        open.textContent = "too long for a link — use Copy, then paste it into an issue";
+        return;
+      }
+      window.open(url, "_blank", "noopener");
+      open.textContent = "opened — check the text, then submit the issue";
+    };
+    actions.append(open);
+
+    // And the route that needs no account and no network: the same text, on
+    // the clipboard, to send however you like.
+    const send = el("button", null, "Copy a submission");
+    send.onclick = async () => {
+      const out = compose();
       if (!out.ok) { send.textContent = out.error; return; }
       await navigator.clipboard.writeText(out.text);
-      send.textContent = "copied — send it on, then `assay submit`";
+      send.textContent = "copied — send it on, or run `assay submit`";
     };
-    host.append(send);
+    actions.append(send);
+    host.append(actions);
   }
 
   // ── start ──────────────────────────────────────────────────────────

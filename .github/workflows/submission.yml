@@ -1,0 +1,194 @@
+# Submissions arriving as issues.
+#
+# ADR-003 puts a human between an observation and the dataset. This does not
+# move that boundary — it removes the copy-paste around it. Two steps, and
+# the gap between them is the boundary:
+#
+#   opened/edited  →  review it and say what it would change. Read-only.
+#   labelled       →  apply it on a branch and open a pull request.
+#
+# Only someone with triage rights can add a label, so a contributor cannot
+# turn their own observation into a commit. And a pull request is still a
+# proposal: nothing here merges anything.
+#
+# The issue body is text a stranger typed. It reaches the runner through
+# `env:` and never through `${{ }}` inside a `run:` block — a body
+# interpolated into a shell script is executed by that shell, which would
+# make "open an issue" and "run a command on this runner" the same act.
+# Everything downstream reads the file `tools/from_issue.py` wrote, and the
+# branch name comes from the issue number, which GitHub controls and nobody
+# types.
+name: submission
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── review: what would this change? ─────────────────────────────────────
+  review:
+    # Quiet on issues that are not trying to be submissions, so opening a bug
+    # report does not get answered by a robot explaining the JSON format.
+    if: >-
+      (github.event.action == 'opened' || github.event.action == 'edited') &&
+      contains(github.event.issue.body, 'submission')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Read the submission out of the issue
+        id: extract
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          if ! python3 tools/from_issue.py submission.json 2> extract.err; then
+            {
+              echo "I could not read a submission out of this issue."
+              echo
+              echo '```'
+              cat extract.err
+              echo '```'
+            } > comment.md
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Review it against the dataset
+        if: steps.extract.outputs.ok == 'true'
+        run: |
+          # Exit 2 is disagreement, which is a result and not a failure —
+          # the most informative thing a submission can contain.
+          set +e
+          cargo run --quiet -p assay-cli -- submit submission.json > review.txt 2>&1
+          code=$?
+          set -e
+          {
+            case $code in
+              0) echo "This would apply cleanly. A maintainer can add the **submission** label to turn it into a pull request." ;;
+              2) echo "This **disagrees** with the dataset, so none of it would be applied. Two people reading one card differently means something is wrong — a rarity nobody recorded, a patch nobody noticed, a misread digit — and taking the newer number would throw that away at the moment it appeared." ;;
+              *) echo "The review itself failed, which is a bug here rather than a problem with your reading." ;;
+            esac
+            echo
+            echo '```'
+            cat review.txt
+            echo '```'
+          } > comment.md
+
+      - name: Say so on the issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue comment "${{ github.event.issue.number }}" --body-file comment.md
+
+  # ── apply: a maintainer labelled it, so propose it as a pull request ────
+  apply:
+    if: >-
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'submission'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Read the submission out of the issue
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python3 tools/from_issue.py submission.json
+
+      - name: Apply it, and open a pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          # No pipe: `| tee` would report tee's exit status, and this branches
+          # on the CLI's — 2 is disagreement, which must not be mistaken for
+          # "applied cleanly and changed nothing".
+          set +e
+          cargo run --quiet -p assay-cli -- submit submission.json --apply > applied.txt 2>&1
+          code=$?
+          set -e
+          cat applied.txt
+
+          if [ "$code" -eq 2 ]; then
+            {
+              echo "Not applied: this **disagrees** with the dataset."
+              echo
+              echo '```'
+              cat applied.txt
+              echo '```'
+              echo
+              echo "Settle each field before labelling it again."
+            } > comment.md
+            gh issue comment "$ISSUE" --body-file comment.md
+            exit 0
+          fi
+          if [ "$code" -ne 0 ]; then
+            {
+              echo "The apply step failed, which is a bug here rather than a"
+              echo "problem with the reading."
+              echo
+              echo '```'
+              cat applied.txt
+              echo '```'
+            } > comment.md
+            gh issue comment "$ISSUE" --body-file comment.md
+            exit 1
+          fi
+
+          if git diff --quiet -- data/; then
+            gh issue comment "$ISSUE" \
+              --body "Applied, and the dataset already said all of it — nothing to propose."
+            exit 0
+          fi
+
+          # Named from the issue number, which GitHub controls. A branch named
+          # from anything a contributor typed is a branch a contributor named.
+          branch="submission/$ISSUE"
+          existing=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
+          if [ -n "$existing" ]; then
+            gh issue comment "$ISSUE" \
+              --body "There is already an open pull request for this issue: $existing"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add data/
+          {
+            echo "data: apply the observation from #$ISSUE"
+            echo
+            sed 's/^/  /' applied.txt
+          } > msg.txt
+          git commit --file msg.txt
+          git push -u origin "$branch"
+
+          {
+            echo "Applies the observation from #$ISSUE."
+            echo
+            echo '```'
+            cat applied.txt
+            echo '```'
+            echo
+            echo "The gates run on this branch, and merging is the review."
+            echo "Nothing here decided whether the numbers are right."
+          } > pr.md
+          url=$(gh pr create --title "data: observation from #$ISSUE" \
+                             --body-file pr.md --base main --head "$branch")
+          gh issue comment "$ISSUE" \
+            --body "Proposed as $url — the gates run there, and merging is the review."

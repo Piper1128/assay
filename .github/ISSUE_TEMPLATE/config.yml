@@ -1,0 +1,9 @@
+# Submissions are written by the page, not typed into a form: it knows the
+# format, and a form would be a second place for the format to be wrong.
+blank_issues_enabled: true
+contact_links:
+  - name: Send an observation from an item card
+    url: https://piper1128.github.io/assay/
+    about: >-
+      Open the page, read a card with it, and press "Send it as an issue".
+      The JSON arrives filled in and a robot tells you what it would change.

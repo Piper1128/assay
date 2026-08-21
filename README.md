@@ -124,6 +124,24 @@ already verified is corroboration.
 The browser page writes submissions, so a contributor never has to learn the
 format. Same writer, same reader, both in Rust.
 
+#### Sending one without touching the repository
+
+Read a card on <https://piper1128.github.io/assay/> and press **Send it as an
+issue**. The JSON arrives filled in, and a robot reviews it against the
+dataset and answers on the issue: what it would add, or which field it
+disagrees about and what the dataset currently says.
+
+That review is read-only. What turns an observation into a proposed commit is
+a maintainer adding the **submission** label — and only someone with triage
+rights can add a label, so a reading cannot approve itself. Labelling applies
+it on a branch and opens a pull request; the gates run there, and merging is
+the review. Nothing in the chain decides whether a number is right.
+
+The page never sends anything by itself. Pressing the button opens a GitHub
+issue form with the text in it, and you submit it — or press **Copy a
+submission** instead and send it however you like, which needs no account at
+all.
+
 ### In a browser
 
 **<https://piper1128.github.io/assay/>** — built and published from `main`
