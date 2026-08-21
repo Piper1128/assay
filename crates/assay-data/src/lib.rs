@@ -42,7 +42,7 @@ use assay_core::schema::{
     AttributeBlock, AttributeBlockDelta, AttributeKind, ClassDef, ComboHit, Effect,
     InMemoryDataset, ItemDef, PerkDef, SkillDef, StackedEffect, StrikeProfile, WeaponProfile,
 };
-use assay_core::stats::{DamageKind, Rarity};
+use assay_core::stats::{DamageTag, Rarity};
 use serde::Deserialize;
 
 /// Provenance for one dataset file (ADR-004): where it came from, when, and
@@ -347,7 +347,7 @@ pub fn decode(text: &DatasetText, build: &str) -> Result<Dataset, LoadError> {
                             .into_iter()
                             .map(|hit| -> Result<ComboHit, LoadError> {
                                 Ok(ComboHit {
-                                    kind: DamageKind::parse(&hit.kind).ok_or_else(|| {
+                                    kind: DamageTag::parse(&hit.kind).ok_or_else(|| {
                                         LoadError::Invalid(format!(
                                             "{}: unknown damage kind {:?}. It is                                              `slash`, `pierce` or `blunt` — a kind                                              nobody recognises would match no gate,                                              which reads exactly like a perk that                                              does nothing.",
                                             dto.id, hit.kind
@@ -462,6 +462,20 @@ fn attribute_block(points: &BTreeMap<String, i32>) -> Result<AttributeBlock, Loa
     Ok(block)
 }
 
+/// Which side of the damage type a derived stat sits on, when it sits on
+/// one at all.
+///
+/// Read off `DamageType`'s own lookups rather than listed again here: a
+/// second list of which stat is which would be a second place to be wrong.
+fn stat_side(stat: &str) -> Option<assay_core::stats::DamageType> {
+    use assay_core::stats::DamageType;
+    [DamageType::Physical, DamageType::Magic]
+        .into_iter()
+        .find(|&side| {
+            stat == side.power_bonus() || stat == side.rating() || stat == side.reduction()
+        })
+}
+
 fn effects(dtos: &[EffectDto]) -> Result<Vec<StackedEffect>, LoadError> {
     dtos.iter()
         .map(|dto| {
@@ -509,13 +523,16 @@ fn effects(dtos: &[EffectDto]) -> Result<Vec<StackedEffect>, LoadError> {
                     )));
                 }
             }
-            let when_kind = dto
-                .when_kind
+            let when_tag = dto
+                .when_tag
                 .as_deref()
                 .map(|text| {
-                    DamageKind::parse(text).ok_or_else(|| {
+                    DamageTag::parse(text).ok_or_else(|| {
                         LoadError::Invalid(format!(
-                            "unknown when_kind {text:?}. It is `slash`, `pierce`                              or `blunt` — a gate on a kind nobody recognises                              would never fire, which reads exactly like a perk                              that does nothing."
+                            "unknown when_tag {text:?}. A gate on a tag nobody \
+                             recognises would never fire, which reads exactly \
+                             like a perk that does nothing. It is one of: {}.",
+                            DamageTag::ALL.map(DamageTag::as_str).join(", ")
                         ))
                     })
                 })
@@ -524,16 +541,38 @@ fn effects(dtos: &[EffectDto]) -> Result<Vec<StackedEffect>, LoadError> {
             // one is applied where the strike is known. Accepting a gate the
             // pipeline would then ignore is how a perk ends up doing nothing
             // while looking configured.
-            if when_kind.is_some() && !matches!(effect, Effect::DerivedBonus(..)) {
+            if when_tag.is_some() && !matches!(effect, Effect::DerivedBonus(..)) {
                 return Err(LoadError::Invalid(format!(
-                    "{:?} cannot be gated on a damage kind: only derived_bonus                      is applied at the strike, where the kind is known. A gate                      here would be read and never used.",
+                    "{:?} cannot be gated on a damage tag: only derived_bonus \
+                     is applied at the strike, where the blow is known. A gate \
+                     here would be read and never used.",
                     dto.kind
                 )));
+            }
+            // A tag belongs to one side of the damage type, and so does the
+            // stat it would raise. Fire on Physical Power Bonus is nonsense
+            // Rust cannot refuse, so it is refused here — the same place
+            // every other invalid value in this dataset is caught, and for
+            // the same reason: a gate that can never fire is indistinguishable
+            // from a perk that does nothing (ADR-014).
+            if let (Some(tag), Effect::DerivedBonus(target, _)) = (when_tag, &effect) {
+                let side = stat_side(target.as_str());
+                let crosses = side.is_some_and(|s| s != tag.damage_type()); // probe: tag-matches-side
+                if crosses {
+                    return Err(LoadError::Invalid(format!(
+                        "{} is a {} tag and {} is a {} stat, so this gate could \
+                         never fire.",
+                        tag.as_str(),
+                        tag.damage_type().as_str(),
+                        target.as_str(),
+                        side.unwrap_or_default().as_str(),
+                    )));
+                }
             }
             Ok(StackedEffect {
                 effect: dto.confidence.wrap_with_note(effect, dto.note.as_deref())?,
                 max_stacks: dto.max_stacks,
-                when_kind,
+                when_tag,
             })
         })
         .collect()
@@ -835,7 +874,7 @@ struct EffectDto {
     /// `slash`, `pierce` or `blunt` when the effect only applies to that
     /// kind of swing.
     #[serde(default)]
-    when_kind: Option<String>,
+    when_tag: Option<String>,
     #[serde(default)]
     note: Option<String>,
 }
@@ -904,12 +943,69 @@ mod tests {
         let err = parse_effects(
             r#"[{"confidence":"verified","kind":"derived_bonus",
                  "target":"derived.physical_power_bonus","micro":5000000,
-                 "when_kind":"bludgeon"}]"#,
+                 "when_tag":"bludgeon"}]"#,
         )
         .unwrap_err();
         let text = format!("{err:?}");
         assert!(text.contains("bludgeon"), "{text}");
         assert!(text.contains("slash"), "{text}");
+    }
+
+    #[test]
+    fn a_school_cannot_gate_a_physical_stat() {
+        // Rust cannot refuse `Fire` on Physical Power Bonus, so this does.
+        // A gate that can never fire is indistinguishable from a perk that
+        // does nothing, which is the failure this project keeps naming.
+        let err = parse_effects(
+            r#"[{"confidence":"verified","kind":"derived_bonus",
+                 "target":"derived.physical_power_bonus","micro":5000000,
+                 "when_tag":"fire"}]"#,
+        )
+        .unwrap_err();
+        let text = format!("{err:?}");
+        assert!(text.contains("fire"), "{text}");
+        assert!(text.contains("never fire"), "{text}");
+    }
+
+    #[test]
+    fn a_kind_cannot_gate_a_magical_stat() {
+        let err = parse_effects(
+            r#"[{"confidence":"verified","kind":"derived_bonus",
+                 "target":"derived.magic_power_bonus","micro":5000000,
+                 "when_tag":"blunt"}]"#,
+        )
+        .unwrap_err();
+        assert!(format!("{err:?}").contains("never fire"), "{err:?}");
+    }
+
+    #[test]
+    fn a_school_gating_a_magical_stat_is_fine() {
+        // Fire Mastery's shape, and the reason the check is by side rather
+        // than by a list of allowed pairs.
+        let ok = parse_effects(
+            r#"[{"confidence":"verified","kind":"derived_bonus",
+                 "target":"derived.magic_power_bonus","micro":5000000,
+                 "when_tag":"fire"}]"#,
+        )
+        .unwrap();
+        assert_eq!(ok[0].when_tag, Some(DamageTag::Fire));
+    }
+
+    #[test]
+    fn all_twelve_schools_and_three_kinds_parse() {
+        // The list is closed and the loader is the only thing that refuses a
+        // typo, so a name dropped from it silently becomes a gate that can
+        // never fire.
+        for tag in DamageTag::ALL {
+            assert_eq!(
+                DamageTag::parse(tag.as_str()),
+                Some(tag),
+                "{}",
+                tag.as_str()
+            );
+        }
+        assert_eq!(DamageTag::ALL.len(), 15);
+        assert_eq!(DamageTag::parse("holy"), None);
     }
 
     #[test]
@@ -919,7 +1015,7 @@ mod tests {
         // configured and doing nothing.
         let err = parse_effects(
             r#"[{"confidence":"verified","kind":"move_speed_add","micro":5000000,
-                 "when_kind":"blunt"}]"#,
+                 "when_tag":"blunt"}]"#,
         )
         .unwrap_err();
         assert!(format!("{err:?}").contains("cannot be gated"), "{err:?}");
@@ -930,7 +1026,7 @@ mod tests {
         let ok =
             parse_effects(r#"[{"confidence":"verified","kind":"move_speed_add","micro":5000000}]"#)
                 .unwrap();
-        assert_eq!(ok[0].when_kind, None);
+        assert_eq!(ok[0].when_tag, None);
     }
 
     #[test]

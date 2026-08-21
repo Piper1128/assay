@@ -56,7 +56,9 @@ use crate::fixed::Fixed;
 use crate::ids::{AbilityId, ClassId, CurveId, DerivedStatId, ItemId};
 use crate::resolve::{Resolved, StageNote};
 use crate::schema::{DatasetSource, WeaponProfile};
-pub use crate::stats::{DamageKind, DamageType};
+pub use crate::stats::{DamageTag, DamageType};
+
+use alloc::collections::BTreeSet;
 
 use crate::stats::{
     ArmorPen, ArmorRating, Damage, EffectivePdr, PdrMod, PdrPercent, ScalingCoefficient,
@@ -80,13 +82,19 @@ pub struct Strike {
     pub scaling: Confidence<ScalingCoefficient>,
     /// Flat Buff Weapon Damage (step 4).
     pub flat_bonus: Confidence<Damage>,
-    /// Which kind of physical blow this is, when it is known.
+    /// What this blow is made of: a kind if it is physical, one or more
+    /// schools if it is magical (ADR-014).
     ///
-    /// `None` for an unarmed strike, a spell, or a weapon whose chain
-    /// nobody has transcribed. A gated effect never applies to a strike of
-    /// unknown kind: a bonus that fires because we did not know is worse
-    /// than one that does not fire.
-    pub kind: Option<DamageKind>,
+    /// A set, because the source says magical damage is *one or more* of the
+    /// schools. Whether that means one blow carrying two or a spell dealing
+    /// two blows of one each is unmeasured, and a set is safe against both
+    /// readings — it holds a single element for every card anyone has read.
+    ///
+    /// Empty means nothing is known about the blow, or that it is Neutral:
+    /// magical damage of no school. Either way a gated effect stays shut,
+    /// because a bonus that fires when we could not tell is worse than one
+    /// that does not fire.
+    pub tags: BTreeSet<DamageTag>,
     /// Whether this attack is one specific blow rather than the weapon
     /// simply swinging: a named skill, or a swing picked out of the chain.
     ///
@@ -124,11 +132,16 @@ impl Strike {
             // A plain swing is the weapon doing its normal thing, so the
             // chain applies. Anything more specific sets this.
             pinned: false,
-            // A plain swing is the chain's first swing, so it is whatever
-            // kind that swing is. Leaving this None would mean a mace's
-            // ordinary blow was not Blunt, and every gate keyed on Blunt
-            // would sit silent for the weapon it was written for.
-            kind: weapon.combo.first().map(|hit| hit.kind),
+            // A plain swing is the chain's first swing, so it carries that
+            // swing's kind. Leaving this empty would mean a mace's ordinary
+            // blow was not Blunt, and every gate keyed on Blunt would sit
+            // silent for the weapon it was written for.
+            tags: weapon
+                .combo
+                .first()
+                .map(|hit| hit.kind)
+                .into_iter()
+                .collect(),
             weapon: Some(id.clone()),
             base: weapon.base_damage.clone().map(Damage::new),
             // 100%: an unmodified swing scales fully. Sneak Attack's 0% is a
@@ -323,11 +336,11 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
         stage: u8,
     ) -> Result<Confidence<Fixed>, ExchangeError> {
         let mut value = Self::require(who, id)?;
-        let Some(kind) = self.strike.kind else {
+        if self.strike.tags.is_empty() {
             return Ok(value);
-        };
+        }
         for bonus in &who.conditional {
-            let fires = bonus.kind == kind; // probe: gate-checks-kind
+            let fires = self.strike.tags.contains(&bonus.tag); // probe: gate-checks-tag
             if !fires || bonus.stat.as_str() != id {
                 continue;
             }
@@ -339,7 +352,7 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
                 detail: format!(
                     "{} applies to a {} swing: {id} {before} +{} → {}",
                     bonus.source,
-                    kind.as_str(),
+                    bonus.tag.as_str(),
                     bonus.value.value(),
                     value.value()
                 ),
@@ -982,7 +995,7 @@ mod tests {
     fn strike(base: i64, scaling: i64, flat: i64, pen: i64, true_dmg: i64) -> Strike {
         Strike {
             pinned: false,
-            kind: None,
+            tags: BTreeSet::new(),
             weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(base))),
@@ -1029,7 +1042,7 @@ mod tests {
         let (a, d) = (combatant(&data, 0), combatant(&data, 40));
         let sneak = Strike {
             pinned: false,
-            kind: None,
+            tags: BTreeSet::new(),
             weapon: None,
             damage_type: DamageType::Physical,
             base: Confidence::Verified(Damage::new(fx(10))),
@@ -1275,7 +1288,7 @@ mod tests {
             .expect("physical resolves");
         let magic_strike = Strike {
             pinned: false,
-            kind: None,
+            tags: BTreeSet::new(),
             damage_type: DamageType::Magic,
             ..strike.clone()
         };
@@ -1427,7 +1440,7 @@ mod tests {
                 combo: [100i64, 105, 110]
                     .into_iter()
                     .map(|pct| crate::schema::ComboHit {
-                        kind: DamageKind::Blunt,
+                        kind: DamageTag::Blunt,
                         scaling: Confidence::Unverified(fx(pct)),
                     })
                     .collect(),
@@ -1506,7 +1519,7 @@ mod tests {
 
     /// Adds a perk that grants +5 physical power, but only on the named
     /// kind of swing — Blunt Weapon Mastery's shape.
-    fn gated_perk(data: &mut InMemoryDataset, kind: DamageKind) {
+    fn gated_perk(data: &mut InMemoryDataset, tag: DamageTag) {
         data.insert_perk(crate::schema::PerkDef {
             id: crate::ids::PerkId::new("perk.test.mastery"),
             name: "Test Mastery".to_string(),
@@ -1517,7 +1530,7 @@ mod tests {
                     fx(5),
                 )),
                 max_stacks: None,
-                when_kind: Some(kind),
+                when_tag: Some(tag),
             }],
         });
     }
@@ -1540,17 +1553,17 @@ mod tests {
     #[test]
     fn a_gate_fires_on_its_kind_and_stays_shut_on_the_others() {
         let mut data = dataset();
-        gated_perk(&mut data, DamageKind::Blunt);
+        gated_perk(&mut data, DamageTag::Blunt);
         let (a, d) = (gated_attacker(&data), combatant(&data, 0));
 
         let mut blunt = strike(20, 100, 0, 0, 0);
-        blunt.kind = Some(DamageKind::Blunt);
+        blunt.tags = [DamageTag::Blunt].into_iter().collect();
         let hit = Exchange::new(&a, &d, &blunt, &ExchangeContext::default(), &data)
             .damage()
             .unwrap();
 
         let mut slash = strike(20, 100, 0, 0, 0);
-        slash.kind = Some(DamageKind::Slash);
+        slash.tags = [DamageTag::Slash].into_iter().collect();
         let miss = Exchange::new(&a, &d, &slash, &ExchangeContext::default(), &data)
             .damage()
             .unwrap();
@@ -1570,10 +1583,10 @@ mod tests {
         // Firing because we could not tell would put a bonus into a number
         // nobody can check — an unarmed strike is not secretly blunt.
         let mut data = dataset();
-        gated_perk(&mut data, DamageKind::Blunt);
+        gated_perk(&mut data, DamageTag::Blunt);
         let (a, d) = (gated_attacker(&data), combatant(&data, 0));
         let unknown = strike(20, 100, 0, 0, 0);
-        assert_eq!(unknown.kind, None);
+        assert!(unknown.tags.is_empty());
         let out = Exchange::new(&a, &d, &unknown, &ExchangeContext::default(), &data)
             .damage()
             .unwrap();
@@ -1586,14 +1599,14 @@ mod tests {
         // one. Folding it in would make the sheet lie for every weapon the
         // character is not currently holding.
         let mut data = dataset();
-        gated_perk(&mut data, DamageKind::Blunt);
+        gated_perk(&mut data, DamageTag::Blunt);
         let a = gated_attacker(&data);
         assert_eq!(
             a.stat(well_known::PHYSICAL_POWER_BONUS).map(|v| *v.value()),
             Some(Fixed::ZERO)
         );
         assert_eq!(a.conditional.len(), 1);
-        assert_eq!(a.conditional[0].kind, DamageKind::Blunt);
+        assert_eq!(a.conditional[0].tag, DamageTag::Blunt);
     }
 
     #[test]

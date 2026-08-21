@@ -12,7 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use assay_core::exchange::{DamageType, Exchange, ExchangeContext, Strike};
-use assay_core::stats::DamageKind;
+use assay_core::stats::DamageTag;
 use assay_core::stats::{ArmorPen, Damage, PdrMod, ScalingCoefficient, TrueDamage};
 use assay_core::{
     AbilityId, AttributeBlock, AttributeKind, ClassDef, ClassId, Confidence, Curve, CurveId,
@@ -126,9 +126,8 @@ fn stacked(node: &Value) -> StackedEffect {
             .get("max_stacks")
             .and_then(Value::as_u64)
             .map(|n| u32::try_from(n).expect("max_stacks fits u32")),
-        when_kind: node.get("when_kind").map(|k| {
-            DamageKind::parse(k.as_str().expect("when_kind is a string"))
-                .expect("known damage kind")
+        when_tag: node.get("when_tag").map(|k| {
+            DamageTag::parse(k.as_str().expect("when_tag is a string")).expect("known damage kind")
         }),
     }
 }
@@ -355,10 +354,18 @@ fn strike(node: &Value) -> Strike {
         // kind the case names. Nothing caught it until a case existed that
         // gates on one — the third field this reader has quietly stopped
         // checking, and the reason it must be kept level with `Strike`.
-        kind: node
-            .get("kind")
-            .and_then(Value::as_str)
-            .map(|k| DamageKind::parse(k).expect("known damage kind")),
+        tags: node
+            .get("tags")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .map(|t| {
+                        DamageTag::parse(t.as_str().expect("a tag is a string"))
+                            .expect("known damage tag")
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         // The vector's exchanges name no weapon, so nothing looks up a
         // swing time and time-to-kill stays absent — which is what the
         // mirror computes too.

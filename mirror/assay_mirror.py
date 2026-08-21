@@ -329,11 +329,11 @@ def resolve(dataset: dict, loadout: dict) -> dict:
     for effect in effects:
         if effect["value"]["kind"] != "derived_bonus":
             continue
-        if effect["value"].get("when_kind") is not None:
+        if effect["value"].get("when_tag") is not None:
             conditional.append(
                 {
                     "stat": effect["value"]["target"],
-                    "kind": effect["value"]["when_kind"],
+                    "tag": effect["value"]["when_tag"],
                     "value": {**effect, "value": effect["value"]["micro"]},
                 }
             )
@@ -466,7 +466,7 @@ def _pdr_at(dataset: dict, defender: dict, armor: int, reduction_id: str = "deri
     return map_conf(d["curve"], apply)
 
 
-def gated(who: dict, stat_id: str, swing_kind, value: dict) -> dict:
+def gated(who: dict, stat_id: str, swing_tags, value: dict) -> dict:
     """A stat, plus whatever gates this swing switches on.
 
     The gates live beside the resolved block rather than inside its numbers
@@ -476,10 +476,10 @@ def gated(who: dict, stat_id: str, swing_kind, value: dict) -> dict:
     A swing whose kind is unknown switches nothing on. A bonus that fired
     because we could not tell would land in a number nobody can check.
     """
-    if swing_kind is None:
+    if not swing_tags:
         return value
     for bonus in who.get("conditional", []):
-        if bonus["kind"] != swing_kind or bonus["stat"] != stat_id:
+        if bonus["tag"] not in swing_tags or bonus["stat"] != stat_id:
             continue
         value = zip_with(value, bonus["value"], lambda a, b: a + b)
     return value
@@ -518,9 +518,9 @@ def exchange_damage(
     # 3: + the type's power bonus, with the situational adjustment. The
     # gates fire here, at the read, for the same reason the type chooses the
     # stat here: nothing about the nine steps changes, only what they read.
-    swing_kind = strike.get("kind")
+    swing_tags = set(strike.get("tags") or [])
     power = zip_with(
-        gated(attacker, power_id, swing_kind, attacker["derived"][power_id]),
+        gated(attacker, power_id, swing_tags, attacker["derived"][power_id]),
         context["power_bonus_adjust"],
         lambda p, a: p + a,
     )

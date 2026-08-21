@@ -741,7 +741,7 @@ fn build_situation(
         // The page hands over whatever the fields say; overriding the blow
         // itself means the chain is no longer the question being asked.
         pinned: fixed("strike", "scaling")?.is_some() || fixed("strike", "base")?.is_some(),
-        kind: basic.kind,
+        tags: basic.tags.clone(),
         weapon: basic.weapon.clone(),
         damage_type: match node.get("type").and_then(Value::as_str) {
             Some("magic") => DamageType::Magic,

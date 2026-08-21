@@ -292,54 +292,6 @@ pub enum DamageType {
     Magic,
 }
 
-/// What kind of physical damage a swing deals.
-///
-/// Underneath the Physical/Magic type, and it does **not** change the
-/// number: the weapon decides that, and the same weapon at the same combo
-/// position hits for the same amount whichever kind it is. Armour does not
-/// resist the kinds differently.
-///
-/// The kind exists so perks and skills can condition on it — Cleric's Blunt
-/// Weapon Mastery adds 5% attack power "when attacking with a blunt
-/// weapon". See the ADR-006 damage-kind amendment.
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum DamageKind {
-    /// A cut.
-    Slash,
-    /// A thrust.
-    Pierce,
-    /// An impact.
-    Blunt,
-}
-
-impl DamageKind {
-    /// The name used in files and readouts.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            DamageKind::Slash => "slash",
-            DamageKind::Pierce => "pierce",
-            DamageKind::Blunt => "blunt",
-        }
-    }
-
-    /// Reads the name a data file writes.
-    ///
-    /// `None` for anything else, and the caller names the offender: a kind
-    /// nobody recognises must not become a swing that quietly matches no
-    /// gate, because a gate that never fires looks exactly like a perk that
-    /// does nothing.
-    #[must_use]
-    pub fn parse(text: &str) -> Option<Self> {
-        match text {
-            "slash" => Some(DamageKind::Slash),
-            "pierce" => Some(DamageKind::Pierce),
-            "blunt" => Some(DamageKind::Blunt),
-            _ => None,
-        }
-    }
-}
-
 impl DamageType {
     /// The name used in files and readouts.
     #[must_use]
@@ -375,6 +327,121 @@ impl DamageType {
             DamageType::Physical => crate::derived::well_known::PDR,
             DamageType::Magic => crate::derived::well_known::MAGICAL_DAMAGE_REDUCTION,
         }
+    }
+}
+
+/// What flavour a blow carries, on either side of the damage type.
+///
+/// Physical damage has a kind — Slash, Pierce, Blunt. Magical damage has a
+/// school — Fire, Ice and ten more. They are the same idea and so they are
+/// one type: neither changes the number (the weapon decides physical damage
+/// and the spell decides magical, exactly as a card's `20(1.0)` says), and
+/// both exist so that perks and skills can condition on them. Blunt Weapon
+/// Mastery and Fire Mastery are the same sentence with a different word in
+/// it (ADR-014).
+///
+/// Two tag types would have meant two fields on `Strike`, two on
+/// `StackedEffect`, two gate checks and two probes, to say one thing twice.
+/// Nothing here stops `Blunt` reaching a magical strike; the loader does,
+/// which is where every other invalid value in this dataset is caught.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum DamageTag {
+    /// A cut.
+    Slash,
+    /// A thrust.
+    Pierce,
+    /// An impact.
+    Blunt,
+    /// Fire.
+    Fire,
+    /// Ice.
+    Ice,
+    /// Lightning.
+    Lightning,
+    /// Earth.
+    Earth,
+    /// Arcane.
+    Arcane,
+    /// Light.
+    Light,
+    /// Dark.
+    Dark,
+    /// Evil.
+    Evil,
+    /// Curse.
+    Curse,
+    /// Divine.
+    Divine,
+    /// Air.
+    Air,
+    /// Spirit.
+    Spirit,
+}
+
+impl DamageTag {
+    /// Every tag, so a caller can enumerate them without repeating the list.
+    pub const ALL: [DamageTag; 15] = [
+        DamageTag::Slash,
+        DamageTag::Pierce,
+        DamageTag::Blunt,
+        DamageTag::Fire,
+        DamageTag::Ice,
+        DamageTag::Lightning,
+        DamageTag::Earth,
+        DamageTag::Arcane,
+        DamageTag::Light,
+        DamageTag::Dark,
+        DamageTag::Evil,
+        DamageTag::Curse,
+        DamageTag::Divine,
+        DamageTag::Air,
+        DamageTag::Spirit,
+    ];
+
+    /// The name used in files and readouts.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DamageTag::Slash => "slash",
+            DamageTag::Pierce => "pierce",
+            DamageTag::Blunt => "blunt",
+            DamageTag::Fire => "fire",
+            DamageTag::Ice => "ice",
+            DamageTag::Lightning => "lightning",
+            DamageTag::Earth => "earth",
+            DamageTag::Arcane => "arcane",
+            DamageTag::Light => "light",
+            DamageTag::Dark => "dark",
+            DamageTag::Evil => "evil",
+            DamageTag::Curse => "curse",
+            DamageTag::Divine => "divine",
+            DamageTag::Air => "air",
+            DamageTag::Spirit => "spirit",
+        }
+    }
+
+    /// Which side of the type this tag belongs to.
+    ///
+    /// A blunt spell and a fiery sword-swing are both nonsense, and this is
+    /// what lets the loader say so by name instead of accepting a gate that
+    /// can never fire.
+    #[must_use]
+    pub fn damage_type(self) -> DamageType {
+        match self {
+            DamageTag::Slash | DamageTag::Pierce | DamageTag::Blunt => DamageType::Physical,
+            _ => DamageType::Magic,
+        }
+    }
+
+    /// Reads the name a data file writes.
+    ///
+    /// `None` for anything else, and the caller names the offender: a tag
+    /// nobody recognises must not become a swing that quietly matches no
+    /// gate, because a gate that never fires looks exactly like a perk that
+    /// does nothing.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        DamageTag::ALL.into_iter().find(|t| t.as_str() == text)
     }
 }
 

@@ -210,7 +210,7 @@ EXCHANGES = [
             "flat_bonus": graded_micro("0"),
             "armor_pen": graded_micro("0"),
             "true_damage": graded_micro("0"),
-            "kind": "blunt",
+            "tags": ["blunt"],
         },
         "context": {
             "power_bonus_adjust": graded_micro("0"),
@@ -231,7 +231,7 @@ EXCHANGES = [
             "flat_bonus": graded_micro("0"),
             "armor_pen": graded_micro("0"),
             "true_damage": graded_micro("0"),
-            "kind": "slash",
+            "tags": ["slash"],
         },
         "context": {
             "power_bonus_adjust": graded_micro("0"),
@@ -343,7 +343,7 @@ def build_vector() -> str:
         # chooses which stats the steps read, and the kind is what a perk
         # gates on. Everything else in a strike is a value with a grade.
         strike = {
-            k: (v if k in ("type", "kind") else graded_from(v))
+            k: (v if k in ("type", "tags") else graded_from(v))
             for k, v in case["strike"].items()
         }
         context = {

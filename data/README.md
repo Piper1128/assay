@@ -388,10 +388,18 @@ schools, not one. Whether that means one blow with two schools or a spell
 dealing two blows is unmeasured — Flamefrost Spear's `30/30` reads either way
 — and a set is safe against both readings.
 
-Designed in `docs/adr/ADR-014-damage-schools.md`, and the finding there is
+Built (ADR-014). `DamageKind` is now `DamageTag` and carries all fifteen —
+three kinds and twelve schools — a strike holds a *set* of them, and
+`when_kind` on an effect is `when_tag`. The finding behind it is
 that this is not a new mechanism: physical damage has a kind, magical damage
 has a school, and both are a tag on the strike that perks gate on. The gate
-was simply built narrower than the thing it models. The Undead/Demon axis is
+was simply built narrower than the thing it models.
+
+Two things the loader now refuses by name, because Rust cannot: a tag nobody
+recognises, and a tag on the wrong side of the type — `fire` gating Physical
+Power Bonus, or `blunt` gating Magic Power Bonus. Both would be a gate that
+can never fire, which is indistinguishable from a perk that does nothing.
+Each has a probe. The Undead/Demon axis is
 different — it is a property of who is being hit, not of the blow — and is
 deferred until there are monsters to gate on.
 

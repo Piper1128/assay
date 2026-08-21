@@ -1,9 +1,10 @@
 # ADR-014: damage schools
 
-Status: Proposed
+Status: Accepted
 Amends: ADR-006 damage-kind amendment (generalises its gate)
 Relates to: ADR-006 (exchange model), ADR-012 (derived stats as ratings)
 Date: 2026-08-22
+Locked: 2026-08-22
 
 ## The evidence: six cards, and a documented list
 

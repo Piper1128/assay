@@ -47,7 +47,7 @@
           "kind": "derived_bonus",
           "target": "derived.physical_power_bonus",
           "micro": 10000000,
-          "when_kind": "blunt"
+          "when_tag": "blunt"
         }
       ]
     }

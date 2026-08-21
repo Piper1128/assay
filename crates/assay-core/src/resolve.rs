@@ -42,7 +42,7 @@ use crate::fixed::Fixed;
 use crate::ids::{ClassId, DerivedStatId, ItemId, PerkId, SkillId};
 use crate::loadout::{Loadout, Roll, Slot};
 use crate::schema::{AttributeBlock, AttributeKind, DatasetSource, Effect, StackedEffect};
-use crate::stats::{DamageKind, apply_item_armor_bonus};
+use crate::stats::{DamageTag, apply_item_armor_bonus};
 
 /// Why a loadout could not be resolved against a dataset. An unknown entity
 /// is useful information in itself (ADR-009: an id can vanish in a later
@@ -397,11 +397,11 @@ pub fn resolve(loadout: &Loadout, data: &impl DatasetSource) -> Result<Resolved,
             let value = *value;
             // A gated bonus is not a property of the character, so it must
             // not reach the curve or the clamp. It waits for a strike.
-            if let Some(kind) = sourced.when_kind {
+            if let Some(tag) = sourced.when_tag {
                 conditional.push(ConditionalBonus {
                     source: sourced.name.clone(),
                     stat: id.clone(),
-                    kind,
+                    tag,
                     value: sourced.effect.clone().map(|_| value),
                 });
                 continue;
@@ -606,7 +606,7 @@ struct SourcedEffect {
     effect: Confidence<Effect>,
     /// Carried through from the dataset entry, because the gate travels
     /// with the effect and not with the ability.
-    when_kind: Option<DamageKind>,
+    when_tag: Option<DamageTag>,
 }
 
 /// Resolves one dataset effect against the loadout's stack counts.
@@ -662,8 +662,9 @@ pub struct ConditionalBonus {
     pub source: String,
     /// The stat it adds to.
     pub stat: DerivedStatId,
-    /// The kind of swing that switches it on.
-    pub kind: DamageKind,
+    /// The tag that switches it on — a kind for a physical effect, a
+    /// school for a magical one.
+    pub tag: DamageTag,
     /// How much, at the stack count already resolved.
     pub value: Confidence<Fixed>,
 }
@@ -727,7 +728,7 @@ fn collect_effects(
             out.push(SourcedEffect {
                 name: name.clone(),
                 effect,
-                when_kind: entry.when_kind,
+                when_tag: entry.when_tag,
             });
         }
         Ok::<(), ResolveError>(())
@@ -758,7 +759,7 @@ fn collect_effects(
             out.push(SourcedEffect {
                 name: name.clone(),
                 effect,
-                when_kind: entry.when_kind,
+                when_tag: entry.when_tag,
             });
         }
         Ok::<(), ResolveError>(())

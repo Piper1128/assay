@@ -2266,7 +2266,7 @@
             "kind": "derived_bonus",
             "target": "derived.physical_power_bonus",
             "micro": 10000000,
-            "when_kind": "blunt"
+            "when_tag": "blunt"
           }
         ]
       }
@@ -2510,7 +2510,9 @@
           "confidence": "verified",
           "micro": 0
         },
-        "kind": "blunt"
+        "tags": [
+          "blunt"
+        ]
       },
       "context": {
         "power_bonus_adjust": {
@@ -2553,7 +2555,9 @@
           "confidence": "verified",
           "micro": 0
         },
-        "kind": "slash"
+        "tags": [
+          "slash"
+        ]
       },
       "context": {
         "power_bonus_adjust": {

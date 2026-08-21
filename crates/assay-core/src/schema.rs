@@ -22,7 +22,7 @@ use crate::ids::{ClassId, CurveId, DerivedStatId, ItemId, PerkId, SkillId};
 use alloc::collections::BTreeMap;
 
 use crate::loadout::Slot;
-use crate::stats::{Attribute, DamageKind, Rarity};
+use crate::stats::{Attribute, DamageTag, Rarity};
 
 /// A sparse set of attribute contributions: what a piece of gear adds,
 /// not a whole character's block. Absence means "grants none", which is
@@ -188,7 +188,7 @@ pub struct ComboHit {
     ///
     /// It does not change the damage — the weapon's number does that. It
     /// is what perks and skills gate on.
-    pub kind: DamageKind,
+    pub kind: DamageTag,
     /// This swing's share of base damage, in percentage points.
     pub scaling: Confidence<Fixed>,
 }
@@ -337,7 +337,7 @@ pub struct StackedEffect {
     /// Weapon Mastery's 5% is worth nothing while its holder is swinging a
     /// sword — so it is held out of the resolved sheet and applied at the
     /// strike instead (ADR-006 damage-kind amendment).
-    pub when_kind: Option<DamageKind>,
+    pub when_tag: Option<DamageTag>,
 }
 
 impl StackedEffect {
@@ -347,7 +347,7 @@ impl StackedEffect {
         StackedEffect {
             effect,
             max_stacks: None,
-            when_kind: None,
+            when_tag: None,
         }
     }
 }

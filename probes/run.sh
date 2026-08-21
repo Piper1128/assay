@@ -52,7 +52,7 @@ verdict() {
 
 require_clean crates/assay-core/src/lib.rs crates/assay-core/src/confidence.rs \n    crates/assay-core/src/derived.rs \
     crates/assay-core/src/resolve.rs crates/assay-core/src/exchange.rs \
-    crates/assay-core/src/stats.rs crates/assay-diff/src/lib.rs \n    crates/assay-data/Cargo.toml crates/assay-cli/src/situation.rs \
+    crates/assay-core/src/stats.rs crates/assay-diff/src/lib.rs \n    crates/assay-data/Cargo.toml crates/assay-cli/src/situation.rs \n    crates/assay-data/src/lib.rs \
     crates/assay-data/src/attestations.rs
 
 # ── no_std_violation ─────────────────────────────────────────────────────────
@@ -245,19 +245,19 @@ fi
 git checkout --quiet -- crates/assay-cli/src/situation.rs
 verdict combo_counts_from_zero "$gate_rejected"
 
-# ── gate_ignores_kind ────────────────────────────────────────────────────────
+# ── gate_ignores_tag ────────────────────────────────────────────────────────
 # A gate that fires on every swing (ADR-006 damage-kind amendment) must fail:
 # Blunt Weapon Mastery would pay out while its holder swings a sword, which is
 # the exact wrong answer the gate exists to avoid — and an easy one to write,
 # because it looks like the condition is still there.
-mutate crates/assay-core/src/exchange.rs '/probe: gate-checks-kind/ s/bonus.kind == kind;/true;/'
+mutate crates/assay-core/src/exchange.rs '/probe: gate-checks-tag/ s/self.strike.tags.contains(&bonus.tag);/true;/'
 if cargo test --quiet -p assay-core >/dev/null 2>&1; then
     gate_rejected=1
 else
     gate_rejected=0
 fi
 git checkout --quiet -- crates/assay-core/src/exchange.rs
-verdict gate_ignores_kind "$gate_rejected"
+verdict gate_ignores_tag "$gate_rejected"
 
 # ── wiki_corroborates ────────────────────────────────────────────────────────
 # Letting `documented` count toward corroboration (ADR-013 independence rule)
@@ -272,6 +272,20 @@ else
 fi
 git checkout --quiet -- crates/assay-data/src/attestations.rs
 verdict wiki_corroborates "$gate_rejected"
+
+# ── tag_crosses_side ─────────────────────────────────────────────────────────
+# Accepting a school on a physical stat, or a kind on a magical one (ADR-014),
+# must fail: Rust cannot refuse `Fire` on Physical Power Bonus, so the loader
+# is the only thing standing between that and a gate which can never fire —
+# and a gate that never fires reads exactly like a perk that does nothing.
+mutate crates/assay-data/src/lib.rs '/probe: tag-matches-side/ s/side.is_some_and(|s| s != tag.damage_type());/false;/'
+if cargo test --quiet -p assay-data >/dev/null 2>&1; then
+    gate_rejected=1
+else
+    gate_rejected=0
+fi
+git checkout --quiet -- crates/assay-data/src/lib.rs
+verdict tag_crosses_side "$gate_rejected"
 
 # ── final tree check ─────────────────────────────────────────────────────────
 if ! git diff --quiet -- crates/; then
