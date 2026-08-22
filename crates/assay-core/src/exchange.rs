@@ -374,7 +374,7 @@ impl<'a, D: DatasetSource> Exchange<'a, D> {
                 stage,
                 label: "gated bonus",
                 detail: format!(
-                    "{} applies to a {} swing: {id} {before} +{} → {}",
+                    "{} applies to a {} blow: {id} {before} +{} → {}",
                     bonus.source,
                     bonus.tag.as_str(),
                     bonus.value.value(),
@@ -1598,7 +1598,7 @@ mod tests {
             hit.damage.value().value(),
             miss.damage.value().value()
         );
-        assert!(explain(&hit).contains("Test Mastery applies to a blunt swing"));
+        assert!(explain(&hit).contains("Test Mastery applies to a blunt blow"));
         assert!(!explain(&miss).contains("gated bonus"));
     }
 

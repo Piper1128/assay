@@ -2220,16 +2220,36 @@
     ],
     "perks": [
       {
-        "id": "perk.rogue.jokester",
-        "name": "Jokester",
+        "id": "perk.cleric.blunt_weapon_mastery",
+        "name": "Blunt Weapon Mastery",
         "required_classes": [
-          "class.rogue"
+          "class.cleric"
         ],
         "effects": [
           {
-            "confidence": "unverified",
-            "kind": "all_attributes",
-            "points": 2
+            "confidence": "unknown",
+            "note": "Card reads 'While using a blunt weapon, gain 10% physical damage bonus.' Modelled as a bonus to Physical Power Bonus, which is the sheet row an item's Physical Damage Bonus is believed to land in — that belief is still unmeasured and is recorded in data/README.md. Community reports also say it applies only to Maces rather than to all Blunt damage.",
+            "kind": "derived_bonus",
+            "target": "derived.physical_power_bonus",
+            "micro": 10000000,
+            "when_tag": "blunt"
+          }
+        ]
+      },
+      {
+        "id": "perk.cleric.faithfulness",
+        "name": "Faithfulness",
+        "required_classes": [
+          "class.cleric"
+        ],
+        "effects": [
+          {
+            "confidence": "unknown",
+            "note": "Card reads 'Gain 15% divine magical damage bonus. When a divine attack is successful, reduce their move speed bonus by 15% for 1 seconds. Does not inflict while on cooldown.' Only the first clause is modelled: the debuff carries a duration, which ADR-014 defers. Modelled as a bonus to Magic Power Bonus on the same unmeasured belief as Blunt Weapon Mastery.",
+            "kind": "derived_bonus",
+            "target": "derived.magic_power_bonus",
+            "micro": 15000000,
+            "when_tag": "divine"
           }
         ]
       },
@@ -2254,19 +2274,33 @@
         ]
       },
       {
-        "id": "perk.cleric.blunt_weapon_mastery",
-        "name": "Blunt Weapon Mastery",
+        "id": "perk.rogue.jokester",
+        "name": "Jokester",
         "required_classes": [
-          "class.cleric"
+          "class.rogue"
+        ],
+        "effects": [
+          {
+            "confidence": "unverified",
+            "kind": "all_attributes",
+            "points": 2
+          }
+        ]
+      },
+      {
+        "id": "perk.wizard.fire_mastery",
+        "name": "Fire Mastery",
+        "required_classes": [
+          "class.wizard"
         ],
         "effects": [
           {
             "confidence": "unknown",
-            "note": "Card reads 'While using a blunt weapon, gain 10% physical damage bonus.' Modelled as a bonus to Physical Power Bonus, which is the sheet row an item's Physical Damage Bonus is believed to land in — that belief is still unmeasured and is recorded in data/README.md. Community reports also say it applies only to Maces rather than to all Blunt damage.",
+            "note": "Card reads 'Gain 5% fire magical damage bonus. The duration of applied burns are increased by 2 seconds, and a burned target reduces incoming physical healing by 50% and incoming magical healing by 50% for 4 seconds.' Only the first clause is modelled: burn and the healing reduction both carry a duration, which ADR-014 defers. Modelled as a bonus to Magic Power Bonus on the same unmeasured belief as Blunt Weapon Mastery.",
             "kind": "derived_bonus",
-            "target": "derived.physical_power_bonus",
-            "micro": 10000000,
-            "when_tag": "blunt"
+            "target": "derived.magic_power_bonus",
+            "micro": 5000000,
+            "when_tag": "fire"
           }
         ]
       }
@@ -2425,6 +2459,20 @@
         "skills": []
       },
       "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":24,\"dexterity\":20,\"knowledge\":10,\"resourcefulness\":25,\"strength\":10,\"vigor\":6,\"will\":10}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":7500000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":25000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":109000000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-27000000},\"derived.magic_power_bonus\":{\"confidence\":\"unknown\",\"micro\":-11000000,\"note\":\"assumed to be the Physical Power Bonus curve. The character sheet reads -11% for Physical Power 10 and -11% for Magic Power 10 on the same character, which is one point of agreement and not a proof that the curves are identical\"},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":1500000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":-25000000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":4000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":305400000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":20000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":10000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-11000000},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":-15000000}}"
+    },
+    {
+      "name": "wizard-fire-mastery",
+      "class": "class.wizard",
+      "perks": [
+        "perk.wizard.fire_mastery"
+      ],
+      "skills": [],
+      "gear": [],
+      "party": {
+        "perks": [],
+        "skills": []
+      },
+      "expected_canonical": "{\"attributes\":{\"confidence\":\"verified\",\"points\":{\"agility\":15,\"dexterity\":17,\"knowledge\":25,\"resourcefulness\":15,\"strength\":6,\"vigor\":7,\"will\":20}},\"derived.action_speed\":{\"confidence\":\"unverified\",\"micro\":1875000},\"derived.armor_rating\":{\"confidence\":\"verified\",\"micro\":0},\"derived.buff_duration_bonus\":{\"confidence\":\"unverified\",\"micro\":5000000},\"derived.cooldown_reduction_bonus\":{\"confidence\":\"unverified\",\"micro\":0},\"derived.equip_speed\":{\"confidence\":\"unverified\",\"micro\":10000000},\"derived.health\":{\"confidence\":\"unverified\",\"micro\":108500000},\"derived.health_recovery_bonus\":{\"confidence\":\"unverified\",\"micro\":-24000000},\"derived.magic_power_bonus\":{\"confidence\":\"unknown\",\"micro\":5000000,\"note\":\"assumed to be the Physical Power Bonus curve. The character sheet reads -11% for Physical Power 10 and -11% for Magic Power 10 on the same character, which is one point of agreement and not a proof that the curves are identical\"},\"derived.magic_resistance\":{\"confidence\":\"unverified\",\"micro\":50000000},\"derived.magical_damage_reduction\":{\"confidence\":\"unverified\",\"micro\":14100000},\"derived.magical_interaction_speed\":{\"confidence\":\"unverified\",\"micro\":35000000},\"derived.magical_power\":{\"confidence\":\"verified\",\"micro\":20000000},\"derived.manual_dexterity\":{\"confidence\":\"unverified\",\"micro\":6000000},\"derived.memory_capacity\":{\"confidence\":\"unverified\",\"micro\":19000000},\"derived.move_speed\":{\"confidence\":\"unverified\",\"micro\":300000000},\"derived.pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000},\"derived.persuasiveness\":{\"confidence\":\"unverified\",\"micro\":15000000},\"derived.physical_power\":{\"confidence\":\"verified\",\"micro\":6000000},\"derived.physical_power_bonus\":{\"confidence\":\"unverified\",\"micro\":-25000000},\"derived.spell_casting_speed\":{\"confidence\":\"unverified\",\"micro\":21000000}}"
     },
     {
       "name": "cleric-mastery",
@@ -2671,6 +2719,98 @@
         }
       },
       "expected_canonical": "{\"damage\":{\"confidence\":\"unverified\",\"micro\":22448000},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":-22000000}}"
+    },
+    {
+      "name": "gated-fire-cast",
+      "attacker": "wizard-fire-mastery",
+      "defender": "naked-rogue",
+      "strike": {
+        "base": {
+          "confidence": "verified",
+          "micro": 30000000
+        },
+        "scaling": {
+          "confidence": "verified",
+          "micro": 100000000
+        },
+        "flat_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "armor_pen": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "true_damage": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "type": "magic",
+        "tags": [
+          "fire"
+        ]
+      },
+      "context": {
+        "power_bonus_adjust": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "pdr_mod": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "hit_location_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        }
+      },
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unknown\",\"micro\":32505000,\"note\":\"assumed to be the Physical Power Bonus curve. The character sheet reads -11% for Physical Power 10 and -11% for Magic Power 10 on the same character, which is one point of agreement and not a proof that the curves are identical; Card reads 'Gain 5% fire magical damage bonus. The duration of applied burns are increased by 2 seconds, and a burned target reduces incoming physical healing by 50% and incoming magical healing by 50% for 4 seconds.' Only the first clause is modelled: burn and the healing reduction both carry a duration, which ADR-014 defers. Modelled as a bonus to Magic Power Bonus on the same unmeasured belief as Blunt Weapon Mastery.\"},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":1500000}}"
+    },
+    {
+      "name": "gated-ice-cast",
+      "attacker": "wizard-fire-mastery",
+      "defender": "naked-rogue",
+      "strike": {
+        "base": {
+          "confidence": "verified",
+          "micro": 30000000
+        },
+        "scaling": {
+          "confidence": "verified",
+          "micro": 100000000
+        },
+        "flat_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "armor_pen": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "true_damage": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "type": "magic",
+        "tags": [
+          "ice"
+        ]
+      },
+      "context": {
+        "power_bonus_adjust": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "pdr_mod": {
+          "confidence": "verified",
+          "micro": 0
+        },
+        "hit_location_bonus": {
+          "confidence": "verified",
+          "micro": 0
+        }
+      },
+      "expected_canonical": "{\"damage\":{\"confidence\":\"unknown\",\"micro\":31027500,\"note\":\"assumed to be the Physical Power Bonus curve. The character sheet reads -11% for Physical Power 10 and -11% for Magic Power 10 on the same character, which is one point of agreement and not a proof that the curves are identical\"},\"effective_pdr\":{\"confidence\":\"unverified\",\"micro\":1500000}}"
     },
     {
       "name": "sneak-attack-from-hide",

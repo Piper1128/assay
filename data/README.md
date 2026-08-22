@@ -466,3 +466,32 @@ to look up — but a spell carries its own. A caster is now a complete strike
 with empty hands, and what is required is that *something* says what the blow
 is: a weapon, a named skill, or an explicit base. With none of them the answer
 is an error, because a zero would look like an answer.
+
+## Two school-gated perks, and the hole they closed
+
+ADR-014 named twelve schools, taught the loader to validate them and added a
+guard refusing a tag on the wrong side of the type. Then nothing used one.
+Twelve schools, a validator and a guard, agreeing with each other and
+exercised by no data at all — which is the failure this file has now recorded
+five times, arriving four hours after the mechanism did.
+
+Two cards close it with no measurement needed:
+
+| | card | modelled as |
+| --- | --- | --- |
+| Faithfulness (Cleric) | Gain 15% **divine** magical damage bonus | `derived_bonus` on Magic Power Bonus, gated on Divine |
+| Fire Mastery (Wizard) | Gain 5% **fire** magical damage bonus | same, gated on Fire |
+
+A Wizard holding Fire Mastery casts Fireball for **32.505** and Ice Bolt for
+**31.0275** — same perk, same caster, and the gate only fires for one of
+them. The vector now carries both, next to the blunt/slash pair, so the
+magical half is tested rather than merely agreed upon.
+
+**Only the first clause of each card is modelled.** Faithfulness also takes
+15% move speed bonus for one second; Fire Mastery lengthens burns by two
+seconds and cuts incoming healing of both kinds by half for four. Every one
+of those carries a duration, deferred by ADR-014.
+
+Both rest on the same unmeasured belief as Blunt Weapon Mastery — that an
+effect's *Damage Bonus* lands in the sheet's *Power Bonus* row. **Four things
+now depend on one screenshot.**

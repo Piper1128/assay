@@ -85,6 +85,17 @@ LOADOUTS = [
         "party": {"perks": [], "skills": []},
     },
     {
+        # The magical half of the same gate (ADR-014). Until this existed the
+        # twelve schools were validated, guarded and used by nothing — the
+        # mechanism agreed with itself without being exercised.
+        "name": "wizard-fire-mastery",
+        "class": "class.wizard",
+        "perks": ["perk.wizard.fire_mastery"],
+        "skills": [],
+        "gear": [],
+        "party": {"perks": [], "skills": []},
+    },
+    {
         # The gated perk (ADR-006 damage-kind amendment). Blunt Weapon
         # Mastery's bonus must stay OFF this sheet — it depends on the swing,
         # not the character — so this loadout pins the divert, and the
@@ -232,6 +243,47 @@ EXCHANGES = [
             "armor_pen": graded_micro("0"),
             "true_damage": graded_micro("0"),
             "tags": ["slash"],
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("0"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+        },
+    },
+    {
+        # A fire blow by the holder of a fire-gated perk, and the same blow
+        # in ice. The pair again: either alone would pass with the gate
+        # wired to nothing.
+        "name": "gated-fire-cast",
+        "attacker": "wizard-fire-mastery",
+        "defender": "naked-rogue",
+        "strike": {
+            "base": graded_micro("30"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("0"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("0"),
+            "type": "magic",
+            "tags": ["fire"],
+        },
+        "context": {
+            "power_bonus_adjust": graded_micro("0"),
+            "pdr_mod": graded_micro("0"),
+            "hit_location_bonus": graded_micro("0"),
+        },
+    },
+    {
+        "name": "gated-ice-cast",
+        "attacker": "wizard-fire-mastery",
+        "defender": "naked-rogue",
+        "strike": {
+            "base": graded_micro("30"),
+            "scaling": graded_micro("100"),
+            "flat_bonus": graded_micro("0"),
+            "armor_pen": graded_micro("0"),
+            "true_damage": graded_micro("0"),
+            "type": "magic",
+            "tags": ["ice"],
         },
         "context": {
             "power_bonus_adjust": graded_micro("0"),

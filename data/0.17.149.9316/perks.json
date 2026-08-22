@@ -1,16 +1,36 @@
 {
   "perks": [
     {
-      "id": "perk.rogue.jokester",
-      "name": "Jokester",
+      "id": "perk.cleric.blunt_weapon_mastery",
+      "name": "Blunt Weapon Mastery",
       "required_classes": [
-        "class.rogue"
+        "class.cleric"
       ],
       "effects": [
         {
-          "confidence": "unverified",
-          "kind": "all_attributes",
-          "points": 2
+          "confidence": "unknown",
+          "note": "Card reads 'While using a blunt weapon, gain 10% physical damage bonus.' Modelled as a bonus to Physical Power Bonus, which is the sheet row an item's Physical Damage Bonus is believed to land in \u2014 that belief is still unmeasured and is recorded in data/README.md. Community reports also say it applies only to Maces rather than to all Blunt damage.",
+          "kind": "derived_bonus",
+          "target": "derived.physical_power_bonus",
+          "micro": 10000000,
+          "when_tag": "blunt"
+        }
+      ]
+    },
+    {
+      "id": "perk.cleric.faithfulness",
+      "name": "Faithfulness",
+      "required_classes": [
+        "class.cleric"
+      ],
+      "effects": [
+        {
+          "confidence": "unknown",
+          "note": "Card reads 'Gain 15% divine magical damage bonus. When a divine attack is successful, reduce their move speed bonus by 15% for 1 seconds. Does not inflict while on cooldown.' Only the first clause is modelled: the debuff carries a duration, which ADR-014 defers. Modelled as a bonus to Magic Power Bonus on the same unmeasured belief as Blunt Weapon Mastery.",
+          "kind": "derived_bonus",
+          "target": "derived.magic_power_bonus",
+          "micro": 15000000,
+          "when_tag": "divine"
         }
       ]
     },
@@ -35,19 +55,33 @@
       ]
     },
     {
-      "id": "perk.cleric.blunt_weapon_mastery",
-      "name": "Blunt Weapon Mastery",
+      "id": "perk.rogue.jokester",
+      "name": "Jokester",
       "required_classes": [
-        "class.cleric"
+        "class.rogue"
+      ],
+      "effects": [
+        {
+          "confidence": "unverified",
+          "kind": "all_attributes",
+          "points": 2
+        }
+      ]
+    },
+    {
+      "id": "perk.wizard.fire_mastery",
+      "name": "Fire Mastery",
+      "required_classes": [
+        "class.wizard"
       ],
       "effects": [
         {
           "confidence": "unknown",
-          "note": "Card reads 'While using a blunt weapon, gain 10% physical damage bonus.' Modelled as a bonus to Physical Power Bonus, which is the sheet row an item's Physical Damage Bonus is believed to land in \u2014 that belief is still unmeasured and is recorded in data/README.md. Community reports also say it applies only to Maces rather than to all Blunt damage.",
+          "note": "Card reads 'Gain 5% fire magical damage bonus. The duration of applied burns are increased by 2 seconds, and a burned target reduces incoming physical healing by 50% and incoming magical healing by 50% for 4 seconds.' Only the first clause is modelled: burn and the healing reduction both carry a duration, which ADR-014 defers. Modelled as a bonus to Magic Power Bonus on the same unmeasured belief as Blunt Weapon Mastery.",
           "kind": "derived_bonus",
-          "target": "derived.physical_power_bonus",
-          "micro": 10000000,
-          "when_tag": "blunt"
+          "target": "derived.magic_power_bonus",
+          "micro": 5000000,
+          "when_tag": "fire"
         }
       ]
     }
